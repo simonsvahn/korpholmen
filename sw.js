@@ -1,11 +1,12 @@
-const CACHE = 'slaktlandskap-shell-2026-08-01-4';
+const CACHE = 'slaktlandskap-shell-2026-08-01-5';
 const SHELL = [
   './',
   './index.html',
-  './styles.css',
+  './styles.css?v=2026-08-01-5',
   './manifest.webmanifest',
   './icons/icon.svg',
-  './src/app.js?v=2026-08-01-4',
+  './src/app.js?v=2026-08-01-5',
+  './src/landscape-model.js',
   './src/config.js',
   './src/data-layer.js',
   './src/domain/canonical.js',
