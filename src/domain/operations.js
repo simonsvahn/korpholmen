@@ -1,5 +1,5 @@
-import { canonicalStringify, cloneJson } from './canonical.js?v=2026-08-01-8';
-import { parseHLC } from './hlc.js?v=2026-08-01-8';
+import { canonicalStringify, cloneJson } from './canonical.js?v=2026-08-01-9';
+import { parseHLC } from './hlc.js?v=2026-08-01-9';
 
 export const DELETE_FIELD = '__deleted';
 export const RESET_FIELD = '__reset';

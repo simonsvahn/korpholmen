@@ -1,6 +1,6 @@
-import { compareHLC, createClock } from './hlc.js?v=2026-08-01-8';
-import { Materializer } from './materializer.js?v=2026-08-01-8';
-import { createDeleteOperation, createResetOperation, createRestoreOperation, createSetOperation, validateOperation } from './operations.js?v=2026-08-01-8';
+import { compareHLC, createClock } from './hlc.js?v=2026-08-01-9';
+import { Materializer } from './materializer.js?v=2026-08-01-9';
+import { createDeleteOperation, createResetOperation, createRestoreOperation, createSetOperation, validateOperation } from './operations.js?v=2026-08-01-9';
 
 export class Repository {
   constructor({ store, deviceId, now = () => Date.now() }) {

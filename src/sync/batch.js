@@ -1,5 +1,5 @@
-import { cloneJson } from '../domain/canonical.js?v=2026-08-01-8';
-import { validateOperation } from '../domain/operations.js?v=2026-08-01-8';
+import { cloneJson } from '../domain/canonical.js?v=2026-08-01-9';
+import { validateOperation } from '../domain/operations.js?v=2026-08-01-9';
 
 export function batchPath(deviceId, fromSeq, toSeq) {
   return `/ops/${encodeURIComponent(deviceId)}-${String(fromSeq).padStart(10, '0')}-${String(toSeq).padStart(10, '0')}.json`;

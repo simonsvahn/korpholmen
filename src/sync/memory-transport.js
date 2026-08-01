@@ -1,6 +1,6 @@
-import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-8';
-import { batchPath, validateBatch } from './batch.js?v=2026-08-01-8';
-import { CursorResetError } from './errors.js?v=2026-08-01-8';
+import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-9';
+import { batchPath, validateBatch } from './batch.js?v=2026-08-01-9';
+import { CursorResetError } from './errors.js?v=2026-08-01-9';
 
 const normalizePath = value => {
   const path = String(value || '');

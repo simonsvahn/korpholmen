@@ -8,8 +8,8 @@ import {
   createBatch,
   openSlaktlandskapDB,
   validateOperation,
-} from './data-layer.js?v=2026-08-01-8';
-import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-8';
+} from './data-layer.js?v=2026-08-01-9';
+import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-9';
 import {
   buildGraph,
   clanBase,
@@ -28,9 +28,9 @@ import {
   resolvedIslands,
   shownName,
   visiblePersonIds,
-} from './landscape-model.js?v=2026-08-01-8';
-import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-8';
-import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-8';
+} from './landscape-model.js?v=2026-08-01-9';
+import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-9';
+import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-9';
 
 const $ = (selector) => document.querySelector(selector);
 const statusNode = $('#sync-status');
@@ -372,19 +372,31 @@ function renderPropertyLandscape(visible, relatedIds) {
   return groupPeopleByProperty(currentPeople, currentProperties).map((group) => {
     const people = group.people.filter((person) => visible.has(person.id));
     if (!people.length) return '';
-    const families = new Map();
-    for (const person of people) {
-      const family = person.family || 'Utan känd familj/släkt';
-      if (!families.has(family)) families.set(family, []);
-      families.get(family).push(person);
-    }
+    const components = componentSets(group.people, currentRelations)
+      .filter((component) => [...component].some((id) => visible.has(id)));
+    const connected = components.filter((component) => component.size > 1);
+    const isolated = components.filter((component) => component.size === 1)
+      .flatMap((component) => [...component])
+      .filter((id) => visible.has(id))
+      .map((id) => graph.byId.get(id))
+      .filter(Boolean)
+      .sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv'));
     const property = group.property;
     const island = group.id === '__none__'
       ? unique(people.flatMap(islandNames)).join(' · ')
       : property.island;
     return `<section class="property-group" id="property-${slug(group.id)}">
       <header class="property-header"><div><p class="property-kicker">${group.id === '__none__' ? 'Ofullständig koppling' : 'Fastighet'}</p><h2>${escapeHtml(group.id === '__none__' ? property.display_name : property.id)}</h2>${group.id !== '__none__' && property.label ? `<p>${escapeHtml(property.label)}</p>` : ''}</div><div class="property-meta">${people.length} personer${island ? ` · ${escapeHtml(island)}` : ''}</div></header>
-      <div class="property-families">${[...families.entries()].sort(([a], [b]) => a.localeCompare(b, 'sv')).map(([family, entries]) => `<section class="property-family"><h3>${escapeHtml(family)} <small>${entries.length}</small></h3><div class="unlinked-grid">${entries.sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv')).map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>`).join('')}</div>
+      <div class="property-families">
+        ${connected.map((component) => {
+          const visibleIds = [...component].filter((id) => visible.has(id));
+          const familyNames = unique([...component]
+            .map((id) => graph.byId.get(id)?.family || 'Utan känd familj/släkt'))
+            .sort((a, b) => a.localeCompare(b, 'sv'));
+          return `<section class="property-family"><h3>${escapeHtml(familyNames.join(' · '))} <small>${visibleIds.length}</small></h3><div class="forest">${renderComponent(component, visible, relatedIds)}</div></section>`;
+        }).join('')}
+        ${isolated.length ? `<section class="property-family property-unlinked"><h3>Personer utan registrerad relation på fastigheten <small>${isolated.length}</small></h3><div class="unlinked-grid">${isolated.map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>` : ''}
+      </div>
     </section>`;
   }).join('');
 }

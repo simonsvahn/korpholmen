@@ -1,5 +1,5 @@
-import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-8';
-import { operationFingerprint, validateOperation } from '../domain/operations.js?v=2026-08-01-8';
+import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-9';
+import { operationFingerprint, validateOperation } from '../domain/operations.js?v=2026-08-01-9';
 
 export class MemoryStore {
   constructor() {
