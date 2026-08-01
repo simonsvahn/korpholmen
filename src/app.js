@@ -178,15 +178,21 @@ async function syncNow() {
     const token = await currentAccessToken();
     if (!token) {
       setStatus(DROPBOX_CLIENT_ID ? 'Lokalt sparat · Dropbox ej ansluten' : 'Lokalt sparat · Dropbox-app återstår', 'warning');
+      connectButton.textContent = DROPBOX_CLIENT_ID ? 'Anslut Dropbox' : 'Dropbox-konfiguration återstår';
       return;
     }
+    connectButton.textContent = 'Synka Dropbox';
     setStatus('Synkar…');
     const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-slaktlandskap' });
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
     render();
-    setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
+    if (personRecords().length === 0) {
+      setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
+    } else {
+      setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
+    }
   })().catch(error => {
     console.error(error);
     setStatus(`Åtgärd krävs · ${error.message}`, 'error');
@@ -205,6 +211,12 @@ async function connectDropbox() {
     scopes: DROPBOX_SCOPES
   });
   location.assign(attempt.url);
+}
+
+async function connectOrSyncDropbox() {
+  const token = await currentAccessToken();
+  if (token) return syncNow();
+  return connectDropbox();
 }
 
 async function bootstrapLocal() {
@@ -232,7 +244,7 @@ async function init() {
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: deviceId() }).init();
   bootstrapButton.hidden = !isLocal || personRecords().length > 0;
-  connectButton.textContent = DROPBOX_CLIENT_ID ? 'Anslut eller synka Dropbox' : 'Dropbox-konfiguration återstår';
+  connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
   connectButton.disabled = !DROPBOX_CLIENT_ID;
   render();
   await completeOAuthCallback();
@@ -241,7 +253,10 @@ async function init() {
 }
 
 searchNode.addEventListener('input', render);
-connectButton.addEventListener('click', connectDropbox);
+connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(error => {
+  console.error(error);
+  setStatus(`Åtgärd krävs · ${error.message}`, 'error');
+}));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
 contentNode.addEventListener('click', event => {
   const personButton = event.target.closest('[data-person-id]');

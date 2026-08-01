@@ -1,4 +1,4 @@
-const CACHE = 'slaktlandskap-shell-2026-08-01-3';
+const CACHE = 'slaktlandskap-shell-2026-08-01-4';
 const SHELL = [
   './',
   './index.html',
