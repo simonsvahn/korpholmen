@@ -16,12 +16,16 @@ async function test(name,action){try{await action();passed+=1;console.log(`✓ $
 
 const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
 const imageManifest=await readJson(resolve(PRIVATE,'bildmanifest.json'));
+const decisions=await readJson(resolve(ROOT,'privat/kallkopior/byggkit/godkanda-kopplingar-2026-08-01.json'));
 const state=materialize(document.operations);
 
 await test('startmastern innehåller 168 båtar och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
   assert.equal(state.listEntities('boat').length,168);
-  assert.equal(state.listEntities('boat-person-link').length,146);
+  assert.equal(state.listEntities('boat-person-link').length,173);
+  assert.ok(state.listEntities('family').length>4);
+  assert.equal(state.listEntities('boat-family-link').length,8);
+  for(const family of decisions.families)assert.ok(state.listEntities('family').some(entity=>entity.entity_id===family.id),family.id);
 });
 
 await test('alla säkra båt-person-länkar pekar på en person i Matrikeln',async()=>{
@@ -30,6 +34,21 @@ await test('alla säkra båt-person-länkar pekar på en person i Matrikeln',asy
   const matrikel=materialize(docs.flatMap(item=>item.operations));
   const people=new Set(matrikel.listEntities('person').map(person=>person.entity_id));
   for(const link of state.listEntities('boat-person-link'))assert.ok(people.has(link.fields.person_id),link.fields.person_id);
+  for(const family of state.listEntities('family'))for(const personId of family.fields.explicit_person_ids||[])assert.ok(people.has(personId),personId);
+});
+
+await test('godkända och avvisade kopplingar hålls isär',()=>{
+  const links=new Set(state.listEntities('boat-person-link').map(link=>`${link.fields.boat_id}--${link.fields.person_id}`));
+  for(const link of decisions.approved_person_links)assert.ok(links.has(`${link.boat_id}--${link.person_id}`),`Godkänd länk saknas: ${link.boat_id} → ${link.person_id}`);
+  for(const link of decisions.rejected_person_suggestions)assert.ok(!links.has(`${link.boat_id}--${link.person_id}`),`Avvisad länk återkom: ${link.boat_id} → ${link.person_id}`);
+  assert.ok(links.has('gerry--lisaböving'));
+  assert.ok(!links.has('gerry--lisalifilipåkerman'));
+  assert.ok(links.has('eos--nissehedströmyngre'));
+  assert.ok(links.has('goggelmoggel--nissehedströmyngre'));
+  assert.ok(!links.has('eos--nilshenrikhedström'));
+  assert.ok(!links.has('goggelmoggel--nilshenrikhedström'));
+  const lillaManasse=state.listEntities('boat').find(boat=>boat.entity_id==='lillamanasse');
+  assert.equal(lillaManasse.fields.island_connection,'före ön');
 });
 
 await test('bildmanifestet är komplett och kryptografiskt låst',async()=>{
@@ -50,6 +69,9 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   assert.ok(app.includes("repository.setField('boat'"));
   assert.ok(app.includes("entityType:'boat-person-link'"));
+  assert.ok(app.includes("entityType:'boat-family-link'"));
+  assert.ok(app.includes('person:${escapeHtml(person.id)}'));
+  assert.ok(app.includes('family:${escapeHtml(family.id)}'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
 });

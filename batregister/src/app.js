@@ -97,6 +97,18 @@ async function registerServiceWorker() {
 function boatRecords() { return repository.listEntities('boat').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.namn).localeCompare(String(b.namn),'sv')); }
 function linkRecords() { return repository.listEntities('boat-person-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
 function linksForBoat(id) { return linkRecords().filter(link => link.boat_id === id); }
+function familyRecords() { return repository.listEntities('family').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'sv')); }
+function familyLinkRecords() { return repository.listEntities('boat-family-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
+function familyLinksForBoat(id) { return familyLinkRecords().filter(link => link.boat_id === id); }
+function familyMembers(family) {
+  const ids = new Set(family.explicit_person_ids || []);
+  for (const person of matrikelPeople) if ((family.match_family_labels || []).includes(person.family)) ids.add(person.id);
+  return [...ids].map(id => matrikelPeople.find(person => person.id === id)).filter(Boolean).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
+}
+function linkedFamilyNames(boatId) { return familyLinksForBoat(boatId).map(link => link.family_name).filter(Boolean); }
+function linkedNames(boatId) {
+  return [...linksForBoat(boatId).map(link => link.person_display_name), ...linkedFamilyNames(boatId)].filter(Boolean);
+}
 
 function optionList(select, values, label) {
   const current = select.value;
@@ -108,10 +120,10 @@ function filteredBoats() {
   const query = normalize(ui.search);
   return boatRecords().filter(boat => {
     if (ui.type && boat.typ !== ui.type) return false;
-    if (ui.family && boat.slakt !== ui.family) return false;
+    if (ui.family && ![boat.slakt, ...linkedFamilyNames(boat.id)].includes(ui.family)) return false;
     if (ui.nameStatus && boat.namnstatus !== ui.nameStatus) return false;
     if (ui.imageOnly && !(boat.images || []).length) return false;
-    if (query && !normalize([boat.namn, boat.dopnamn, boat.modell, boat.agare, boat.motor, boat.slakt, ...(boat.kallor_text || [])].join(' ')).includes(query)) return false;
+    if (query && !normalize([boat.namn, boat.dopnamn, boat.modell, boat.agare, boat.motor, boat.slakt, boat.island_connection, ...linkedNames(boat.id), ...(boat.kallor_text || [])].join(' ')).includes(query)) return false;
     return true;
   });
 }
@@ -123,7 +135,7 @@ function era(boat) {
 }
 
 function groupBoats(boats) {
-  const key = ui.grouping === 'family' ? boat => boat.slakt || 'Övriga och okända'
+  const key = ui.grouping === 'family' ? boat => linkedFamilyNames(boat.id).join(' / ') || boat.slakt || 'Övriga och okända'
     : ui.grouping === 'type' ? boat => boat.typ || 'Typ okänd'
       : ui.grouping === 'era' ? era : () => 'Alla båtar';
   const groups = new Map();
@@ -148,12 +160,14 @@ function imageMarkup(boat) {
 
 function card(boat) {
   const links = linksForBoat(boat.id);
+  const familyLinks = familyLinksForBoat(boat.id);
+  const connectionCount = links.length + familyLinks.length;
   return `<button class="boat-card" type="button" data-boat-id="${escapeHtml(boat.id)}">
-    ${imageMarkup(boat)}${links.length ? `<span class="linked-count">${links.length} person${links.length === 1 ? '' : 'er'}</span>` : ''}
+    ${imageMarkup(boat)}${connectionCount ? `<span class="linked-count">${connectionCount} koppl.</span>` : ''}
     <span class="boat-copy"><h3>${escapeHtml(boat.namn || 'Namn okänt')}</h3>
       <p>${escapeHtml([boat.modell, boat.ar].filter(Boolean).join(' · ') || 'Modell och år saknas')}</p>
       <p>${escapeHtml(boat.agare || 'Ägare/anknytning saknas')}</p>
-      <span class="chips">${boat.typ ? `<span class="chip">${escapeHtml(boat.typ)}</span>` : ''}${boat.slakt ? `<span class="chip">${escapeHtml(boat.slakt)}</span>` : ''}${boat.namnstatus === 'dopnamn' ? '<span class="chip warn">Endast dopnamn</span>' : ''}</span>
+      <span class="chips">${boat.typ ? `<span class="chip">${escapeHtml(boat.typ)}</span>` : ''}${boat.slakt ? `<span class="chip">${escapeHtml(boat.slakt)}</span>` : ''}${familyLinks.map(link=>`<span class="chip family-chip">${escapeHtml(link.family_name)}</span>`).join('')}${boat.island_connection ? `<span class="chip context-chip">${escapeHtml(boat.island_connection)}</span>` : ''}${boat.namnstatus === 'dopnamn' ? '<span class="chip warn">Endast dopnamn</span>' : ''}</span>
     </span></button>`;
 }
 
@@ -228,7 +242,7 @@ async function uploadPendingImages(transport) {
 function render() {
   const all = boatRecords();
   optionList($('#type-filter'), unique(all.map(boat=>boat.typ)).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla typer');
-  optionList($('#family-filter'), unique(all.map(boat=>boat.slakt)).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla släkter');
+  optionList($('#family-filter'), unique([...all.map(boat=>boat.slakt), ...familyLinkRecords().map(link=>link.family_name)]).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla släkter/familjer');
   const shown = filteredBoats();
   $('#filter-count').textContent = `${shown.length} av ${all.length} båtar`;
   if (!all.length) {
@@ -247,6 +261,8 @@ function renderDrawer(id) {
   const boat = boatRecords().find(item => item.id === id);
   if (!boat) return closeDrawer();
   const links = linksForBoat(id);
+  const familyLinks = familyLinksForBoat(id);
+  const families = familyRecords();
   const fullRef = imageRef(boat, 'full');
   const local = isSourceTree && fullRef?.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(fullRef.filename)}` : '';
   const cached = fullRef?.dropbox_path ? imageUrls.get(fullRef.dropbox_path) : '';
@@ -263,10 +279,14 @@ function renderDrawer(id) {
       ${textField('Tidigare namn, kommaseparerade','tidigare_namn',(boat.tidigare_namn||[]).join(', '),'span-2')}
       ${textField('Senare namn, kommaseparerade','senare_namn',(boat.senare_namn||[]).join(', '),'span-2')}
     </div>
-    <section class="drawer-section"><h3>Personkopplingar</h3>
-      <div class="link-list">${links.map(link=>`<div class="link-row"><span><b>${escapeHtml(link.person_display_name || link.person_id)}</b><br><small>${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}">Ta bort</button></div>`).join('') || '<p>Ingen person är kopplad ännu.</p>'}</div>
-      <label class="full-field">Lägg till person<select id="person-link-select"><option value="">Välj person ur Matrikeln …</option>${matrikelPeople.map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.display_name)}${person.club_name ? ` · ${escapeHtml(person.club_name)}` : ''}</option>`).join('')}</select></label>
-      <label class="full-field">Roll<input id="person-link-role" value="ägare/anknuten"></label>
+    <section class="drawer-section"><h3>Person- och familjekopplingar</h3>
+      <div class="link-list">
+        ${links.map(link=>`<div class="link-row"><span><b>${escapeHtml(link.person_display_name || link.person_id)}</b><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
+        ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familj · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
+        ${links.length || familyLinks.length ? '' : '<p>Ingen person eller familj är kopplad ännu.</p>'}
+      </div>
+      <label class="full-field">Lägg till koppling<select id="relation-link-select"><option value="">Välj person eller familj …</option><optgroup label="Personer">${matrikelPeople.map(person=>`<option value="person:${escapeHtml(person.id)}">${escapeHtml(person.display_name)}${person.club_name ? ` · ${escapeHtml(person.club_name)}` : ''}</option>`).join('')}</optgroup><optgroup label="Familjer">${families.map(family=>`<option value="family:${escapeHtml(family.id)}">${escapeHtml(family.name)}</option>`).join('')}</optgroup></select></label>
+      <label class="full-field">Roll<input id="relation-link-role" value="ägare/anknuten"></label>
       <div class="button-row"><button class="secondary" type="button" data-action="add-link">Lägg till koppling</button><button class="secondary" type="button" data-action="refresh-people">Hämta personer från Matrikeln</button></div>
     </section>
     <section class="drawer-section"><h3>Bilder</h3><p>${(boat.images||[]).length} bildposter. Nya bilder lagras privat i Dropbox.</p><input id="image-upload" type="file" accept="image/*"><div class="button-row"><button class="danger" type="button" data-action="delete-boat">Ta bort båten</button></div></section>`;
@@ -306,25 +326,41 @@ async function addBoat() {
 async function deleteBoat() {
   const boat = boatRecords().find(item=>item.id===selectedBoatId); if(!boat)return;
   const links=linksForBoat(boat.id);
-  if(!confirm(`Ta bort ${boat.namn} och ${links.length} personkopplingar? Historiken finns kvar som tombstones.`))return;
-  await syncEdit(()=>repository.deleteEntities([...links.map(link=>({entityType:'boat-person-link',entityId:link.id})),{entityType:'boat',entityId:boat.id}]));
+  const familyLinks=familyLinksForBoat(boat.id);
+  if(!confirm(`Ta bort ${boat.namn} och ${links.length+familyLinks.length} kopplingar? Historiken finns kvar som tombstones.`))return;
+  await syncEdit(()=>repository.deleteEntities([...links.map(link=>({entityType:'boat-person-link',entityId:link.id})),...familyLinks.map(link=>({entityType:'boat-family-link',entityId:link.id})),{entityType:'boat',entityId:boat.id}]));
   closeDrawer();
 }
 
-async function addPersonLink() {
-  const personId=$('#person-link-select')?.value; if(!personId)return;
-  const person=matrikelPeople.find(item=>item.id===personId); if(!person)return;
-  const id=`${selectedBoatId}--${person.id}`;
-  await syncEdit(()=>repository.setFields([
-    {entityType:'boat-person-link',entityId:id,field:'boat_id',value:selectedBoatId},
-    {entityType:'boat-person-link',entityId:id,field:'person_id',value:person.id},
-    {entityType:'boat-person-link',entityId:id,field:'person_display_name',value:person.display_name},
-    {entityType:'boat-person-link',entityId:id,field:'role',value:$('#person-link-role').value.trim()||'ägare/anknuten'},
-    {entityType:'boat-person-link',entityId:id,field:'confidence',value:'godkänd i appen'},
-  ]));
+async function addRelationLink() {
+  const value=$('#relation-link-select')?.value; if(!value)return;
+  const [kind,id]=value.split(':'); const role=$('#relation-link-role').value.trim()||'ägare/anknuten';
+  if(kind==='person'){
+    const person=matrikelPeople.find(item=>item.id===id); if(!person)return;
+    const linkId=`${selectedBoatId}--${person.id}`;
+    await syncEdit(()=>repository.setFields([
+      {entityType:'boat-person-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
+      {entityType:'boat-person-link',entityId:linkId,field:'person_id',value:person.id},
+      {entityType:'boat-person-link',entityId:linkId,field:'person_display_name',value:person.display_name},
+      {entityType:'boat-person-link',entityId:linkId,field:'role',value:role},
+      {entityType:'boat-person-link',entityId:linkId,field:'confidence',value:'godkänd i appen'},
+    ]));
+    return;
+  }
+  if(kind==='family'){
+    const family=familyRecords().find(item=>item.id===id); if(!family)return;
+    const linkId=`${selectedBoatId}--family--${family.id}`;
+    await syncEdit(()=>repository.setFields([
+      {entityType:'boat-family-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
+      {entityType:'boat-family-link',entityId:linkId,field:'family_id',value:family.id},
+      {entityType:'boat-family-link',entityId:linkId,field:'family_name',value:family.name},
+      {entityType:'boat-family-link',entityId:linkId,field:'role',value:role},
+      {entityType:'boat-family-link',entityId:linkId,field:'confidence',value:'godkänd i appen'},
+    ]));
+  }
 }
 
-async function deleteLink(id) { await syncEdit(()=>repository.deleteEntity('boat-person-link',id)); }
+async function deleteLink(type,id) { await syncEdit(()=>repository.deleteEntity(type,id)); }
 
 async function uploadImage(file) {
   if (!file || !selectedBoatId) return;
@@ -410,7 +446,7 @@ async function bootstrapLocal() {
 
 content.addEventListener('click',event=>{const target=event.target.closest('[data-boat-id]');if(target)openDrawer(target.dataset.boatId)});
 backdrop.addEventListener('click',closeDrawer);
-drawer.addEventListener('click',event=>{if(event.target.closest('[data-action="close"]'))closeDrawer();const remove=event.target.closest('[data-delete-link]');if(remove)deleteLink(remove.dataset.deleteLink);if(event.target.closest('[data-action="add-link"]'))addPersonLink();if(event.target.closest('[data-action="delete-boat"]'))deleteBoat();if(event.target.closest('[data-action="refresh-people"]'))currentAccessToken().then(loadMatrikelPeople)});
+drawer.addEventListener('click',event=>{if(event.target.closest('[data-action="close"]'))closeDrawer();const remove=event.target.closest('[data-delete-link]');if(remove)deleteLink(remove.dataset.linkType,remove.dataset.deleteLink);if(event.target.closest('[data-action="add-link"]'))addRelationLink();if(event.target.closest('[data-action="delete-boat"]'))deleteBoat();if(event.target.closest('[data-action="refresh-people"]'))currentAccessToken().then(loadMatrikelPeople)});
 drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
 $('#search').addEventListener('input',event=>{ui.search=event.target.value;render()});
 $('#type-filter').addEventListener('change',event=>{ui.type=event.target.value;render()});

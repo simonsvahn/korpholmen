@@ -1,4 +1,4 @@
-const CACHE='korpholmen-batregister-2026-08-01-4';
+const CACHE='korpholmen-batregister-2026-08-01-5';
 const CORE=self.location.pathname.includes('/apps/batregister/')?'../../packages/core':'./core';
 const SHELL=['./','./index.html','./styles.css?v=2026-08-01-1','./manifest.webmanifest','./icons/icon.svg','./src/app.js?v=2026-08-01-3','./src/config.js',`${CORE}/data-layer.js`,`${CORE}/domain/canonical.js`,`${CORE}/domain/hlc.js`,`${CORE}/domain/materializer.js`,`${CORE}/domain/operations.js`,`${CORE}/domain/repository.js`,`${CORE}/storage/indexeddb.js`,`${CORE}/storage/memory.js`,`${CORE}/sync/batch.js`,`${CORE}/sync/dropbox-transport.js`,`${CORE}/sync/errors.js`,`${CORE}/sync/memory-transport.js`,`${CORE}/sync/oauth-flow.js`,`${CORE}/sync/oauth-pkce.js`,`${CORE}/sync/sync-engine.js`];
 self.addEventListener('install',event=>{const fresh=SHELL.map(path=>new Request(new URL(path,self.location.href),{cache:'reload'}));event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(fresh)).then(()=>self.skipWaiting()))});

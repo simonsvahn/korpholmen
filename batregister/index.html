@@ -8,7 +8,7 @@
   <title>Båtregister · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-01-1">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-01-2">
 </head>
 <body>
   <header class="site-header">
@@ -30,14 +30,14 @@
     <label class="field">Typ
       <select id="type-filter"><option value="">Alla typer</option></select>
     </label>
-    <label class="field">Släkt
-      <select id="family-filter"><option value="">Alla släkter</option></select>
+    <label class="field">Släkt/familj
+      <select id="family-filter"><option value="">Alla släkter/familjer</option></select>
     </label>
     <label class="field">Namnstatus
       <select id="name-filter"><option value="">Alla</option><option value="namn">Känt namn</option><option value="dopnamn">Endast dopnamn</option></select>
     </label>
     <label class="field">Gruppera
-      <select id="grouping"><option value="none">Ingen gruppering</option><option value="family">Släkt</option><option value="type">Typ</option><option value="era">Epok</option></select>
+      <select id="grouping"><option value="none">Ingen gruppering</option><option value="family">Släkt/familj</option><option value="type">Typ</option><option value="era">Epok</option></select>
     </label>
     <label class="check"><input id="image-only" type="checkbox"> Bara med bild</label>
     <button id="add-boat" type="button" class="primary">Ny båt</button>
@@ -53,6 +53,6 @@
   </aside>
   <div id="backdrop" hidden></div>
 
-  <script type="module" src="./src/app.js?v=2026-08-01-3"></script>
+  <script type="module" src="./src/app.js?v=2026-08-01-4"></script>
 </body>
 </html>
