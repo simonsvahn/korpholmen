@@ -1,0 +1,10 @@
+{
+  "name": "korpholmen-matrikel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/harness.mjs",
+    "build:publish": "node verktyg/bygg-publicering.mjs",
+    "build:approved-data": "node verktyg/bygg-godkand-excelimport.mjs"
+  }
+}

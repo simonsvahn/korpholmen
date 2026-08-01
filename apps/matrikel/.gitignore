@@ -1,0 +1,4 @@
+privat/**
+!privat/**/
+!privat/**/README.md
+publicering/

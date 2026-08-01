@@ -2,114 +2,38 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#18395d">
-  <meta name="description" content="Privat släkt- och ölandskap för Korpholmen">
-  <title>Släktlandskapet · Korpholmen</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-01-9">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#173e35">
+  <title>Korpholmens appar</title>
+  <link rel="stylesheet" href="./styles.css?v=2026-08-01-1">
 </head>
 <body>
-  <header class="site-header">
-    <div class="header-line">
-      <div>
-        <p class="eyebrow">Korpholmen</p>
-        <h1>Släktlandskapet</h1>
-      </div>
-      <div class="sync-panel">
-        <span id="sync-status" role="status">Startar lokalt lager…</span>
-        <button id="connect-dropbox" type="button">Anslut Dropbox</button>
-      </div>
+  <main class="hub">
+    <p class="eyebrow">Korpholmen</p>
+    <h1>Klubbens appar</h1>
+    <p class="lead">Två separata verktyg med gemensam säker Dropbox-anslutning.</p>
+    <div class="app-grid">
+      <a class="app-card" href="./matrikel/"><span class="number">01</span><h2>Matrikel</h2><p>Medlemmar, släktingar, klubbnamn, relationer, öar och fastigheter.</p><b>Öppna Matrikeln →</b></a>
+      <a class="app-card" href="./batregister/"><span class="number">02</span><h2>Båtregister</h2><p>Båtar, namn, ägare, personkopplingar och bilder.</p><b>Öppna Båtregister →</b></a>
     </div>
-    <p class="intro">Alla klubbmedlemmar — plus de anhöriga som behövs för sambanden — i ett sammanhängande landskap: klan → storfamilj → familj → person.</p>
-  </header>
-
-  <nav class="toolbar" aria-label="Navigering i släktlandskapet">
-    <div class="toolbar-inner">
-      <div class="field search-field">
-        <label for="person-search">Sök och hoppa till person</label>
-        <div class="search-wrap">
-          <input type="search" id="person-search" list="person-options" placeholder="Namn eller klubbnamn …" autocomplete="off">
-          <button type="button" class="action" id="find-person">Hitta</button>
-        </div>
-      </div>
-      <div class="field">
-        <label for="clan-jump">Hoppa till klan</label>
-        <select id="clan-jump"><option value="">Välj klan …</option></select>
-      </div>
-      <button type="button" class="toggle" id="toggle-names" aria-pressed="false">Visa klubbnamn först</button>
-      <button type="button" class="toggle" id="toggle-gaps" aria-pressed="false">Markera relationsluckor</button>
-      <div class="field">
-        <label for="island-filter">Ö</label>
-        <select id="island-filter"><option value="">Alla öar</option></select>
-      </div>
-      <div class="field">
-        <label for="living-filter">Livsstatus</label>
-        <select id="living-filter"><option value="">Alla</option><option value="ja">Levande</option><option value="nej">Avlidna</option><option value="okänt">Okänt</option></select>
-      </div>
-      <div class="field property-filter-field">
-        <label for="property-filter">Fastighet</label>
-        <select id="property-filter"><option value="">Alla fastigheter</option></select>
-      </div>
-      <div class="field relation-field">
-        <label for="rel-a">Hur är de släkt?</label>
-        <div class="relation-search">
-          <input type="search" id="rel-a" list="person-options" placeholder="Person …" autocomplete="off">
-          <input type="search" id="rel-b" list="person-options" placeholder="… och person" autocomplete="off">
-          <button type="button" class="action" id="find-rel">Visa vägen</button>
-        </div>
-      </div>
-    </div>
-    <div class="filter-row year-row">
-      <label class="filter-label" for="year-slider">Levde år <output id="year-out">alla år</output></label>
-      <input type="range" id="year-slider" min="1850" max="2026" step="1" value="2026" disabled>
-      <button type="button" class="toggle" id="year-on" aria-pressed="false">Slå på årsvy</button>
-    </div>
-    <div class="filter-row">
-      <div class="generation-filter" role="group" aria-labelledby="generation-label">
-        <span class="filter-label" id="generation-label">Generationer <small>välj en eller flera</small></span>
-        <div class="generation-buttons" id="generation-buttons"></div>
-      </div>
-      <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
-      <button type="button" class="toggle" id="toggle-lonely" aria-pressed="false">Bara utan kända band</button>
-      <button type="button" class="toggle" id="review-button" aria-pressed="false">Granska</button>
-      <button type="button" class="toggle" id="group-toggle" aria-pressed="false">Gruppera per fastighet</button>
-      <button type="button" class="toggle" id="view-toggle" aria-pressed="false">Visa personregister</button>
-      <output class="filter-count" id="filter-count" aria-live="polite"></output>
-    </div>
-    <div class="edit-status-row">
-      <span id="edit-status">Ändringar sparas lokalt direkt och synkas med Dropbox.</span>
-      <button type="button" id="bootstrap-local" hidden>Aktivera godkänd startkopia</button>
-    </div>
-    <div id="relation-path" class="relation-path" hidden></div>
-  </nav>
-
-  <datalist id="person-options"></datalist>
-  <datalist id="drawer-person-options"></datalist>
-
-  <main>
-    <div class="legend" aria-label="Teckenförklaring">
-      <span><b>—</b> partner</span>
-      <span><b>+</b> har barn tillsammans</span>
-      <span><span class="line-sample"></span>föräldraband</span>
-      <span><span class="line-sample uncertain"></span>osäker uppgift</span>
-      <span><span class="member-symbol">●</span> aktuell</span>
-      <span><span class="member-symbol previous">○</span> tidigare</span>
-      <span><span class="member-symbol expected">◐</span> förväntad</span>
-      <span><b>†</b> avliden</span>
-      <span><b>?</b> livsstatus okänd</span>
-      <span><b>≈</b> generation uppskattad</span>
-      <span><b>⚑</b> relevant föräldrakoppling saknas</span>
-    </div>
-    <div id="content" aria-live="polite"></div>
   </main>
-
-  <aside id="person-drawer" aria-hidden="true" aria-label="Personpanel">
-    <button type="button" class="drawer-close" data-action="close-drawer" aria-label="Stäng personpanelen">×</button>
-    <div id="drawer-content"></div>
-  </aside>
-
-  <script type="module" src="./src/app.js?v=2026-08-01-9"></script>
+  <script>
+    (() => {
+      const url = new URL(location.href);
+      const isCallback = url.searchParams.has('code') || url.searchParams.has('error');
+      if (isCallback) {
+        const base = new URL('./', url).pathname;
+        const saved = sessionStorage.getItem('korpholmen:oauth-return');
+        const targetPath = saved && saved.startsWith(base) ? saved : `${base}matrikel/`;
+        sessionStorage.removeItem('korpholmen:oauth-return');
+        const target = new URL(targetPath, url.origin);
+        target.search = url.search;
+        target.hash = url.hash;
+        location.replace(target.href);
+        return;
+      }
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
+    })();
+  </script>
 </body>
 </html>

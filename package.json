@@ -1,0 +1,9 @@
+{
+  "name": "korpholmen",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix apps/matrikel test && npm --prefix apps/batregister test",
+    "build": "npm --prefix apps/matrikel run build:publish && npm --prefix apps/batregister run build:publish"
+  }
+}

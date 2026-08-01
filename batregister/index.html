@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173e35">
+  <meta name="description" content="Privat båtregister för Korpholmens Båtklubb">
+  <title>Båtregister · Korpholmen</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-01-1">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Korpholmen</p>
+      <h1>Båtregister</h1>
+      <p class="intro">Master för klubbens båtar, namn, ägare, personkopplingar och bilder.</p>
+    </div>
+    <div class="sync-panel">
+      <span id="sync-status" role="status">Startar lokalt lager…</span>
+      <button id="connect-dropbox" type="button">Anslut Dropbox</button>
+    </div>
+  </header>
+
+  <nav class="toolbar" aria-label="Filtrera båtregistret">
+    <label class="field wide">Sök
+      <input id="search" type="search" placeholder="Båtnamn, ägare, modell eller källa …">
+    </label>
+    <label class="field">Typ
+      <select id="type-filter"><option value="">Alla typer</option></select>
+    </label>
+    <label class="field">Släkt
+      <select id="family-filter"><option value="">Alla släkter</option></select>
+    </label>
+    <label class="field">Namnstatus
+      <select id="name-filter"><option value="">Alla</option><option value="namn">Känt namn</option><option value="dopnamn">Endast dopnamn</option></select>
+    </label>
+    <label class="field">Gruppera
+      <select id="grouping"><option value="none">Ingen gruppering</option><option value="family">Släkt</option><option value="type">Typ</option><option value="era">Epok</option></select>
+    </label>
+    <label class="check"><input id="image-only" type="checkbox"> Bara med bild</label>
+    <button id="add-boat" type="button" class="primary">Ny båt</button>
+    <button id="bootstrap-local" type="button" hidden>Aktivera godkänd startkopia</button>
+    <output id="filter-count" aria-live="polite"></output>
+  </nav>
+
+  <main id="content" aria-live="polite"></main>
+
+  <aside id="boat-drawer" aria-hidden="true" aria-label="Redigera båt">
+    <button class="drawer-close" type="button" data-action="close" aria-label="Stäng">×</button>
+    <div id="drawer-content"></div>
+  </aside>
+  <div id="backdrop" hidden></div>
+
+  <script type="module" src="./src/app.js?v=2026-08-01-1"></script>
+</body>
+</html>

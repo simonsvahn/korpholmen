@@ -1,0 +1,11 @@
+{
+  "name": "Båtregister · Korpholmen",
+  "short_name": "Båtregister",
+  "description": "Privat båtregister för Korpholmens Båtklubb",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f0e6",
+  "theme_color": "#173e35",
+  "icons": [{"src":"./icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
