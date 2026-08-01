@@ -40,6 +40,15 @@ export function generationFor(person) {
   return 5;
 }
 
+export function personPropertyIds(person) {
+  return Array.isArray(person?.property_ids) ? person.property_ids.filter(Boolean) : [];
+}
+
+export function resolvedIslands(person) {
+  const fromProperties = Array.isArray(person?.property_islands) ? person.property_islands.filter(Boolean) : [];
+  return [...new Set([...fromProperties, person?.legacy_island].filter(Boolean))];
+}
+
 export function membership(person) {
   const status = person?.membership_status || 'ej';
   if (status === 'aktuell') return { symbol: '●', label: 'Aktuell medlem', className: '' };
@@ -111,6 +120,34 @@ export function groupPeople(people) {
       const special = (group) => /Utan känd|Endast i/.test(group.name) ? 1 : 0;
       return special(a) - special(b) || b.count - a.count || a.name.localeCompare(b.name, 'sv');
     });
+}
+
+export function groupPeopleByProperty(people, properties) {
+  const propertyById = new Map(properties.map((property) => [property.id, property]));
+  const groups = new Map();
+  const withoutProperty = [];
+  for (const person of people) {
+    const propertyIds = personPropertyIds(person);
+    if (!propertyIds.length) {
+      withoutProperty.push(person);
+      continue;
+    }
+    for (const propertyId of propertyIds) {
+      if (!groups.has(propertyId)) groups.set(propertyId, []);
+      groups.get(propertyId).push(person);
+    }
+  }
+  const result = [...groups.entries()].map(([propertyId, entries]) => ({
+    id: propertyId,
+    property: propertyById.get(propertyId) || { id: propertyId, display_name: propertyId, island: null },
+    people: entries,
+  })).sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
+  if (withoutProperty.length) result.push({
+    id: '__none__',
+    property: { id: '__none__', display_name: 'Utan fastighetskoppling', island: null },
+    people: withoutProperty,
+  });
+  return result;
 }
 
 export function componentSets(people, relations) {
@@ -198,13 +235,17 @@ export function lineageIds(personId, graph) {
 export function visiblePersonIds(people, graph, filters) {
   const selectedGenerations = filters.generations || new Set();
   return new Set(people.filter((person) => {
-    if (filters.island && person.legacy_island !== filters.island) return false;
+    const propertyIds = personPropertyIds(person);
+    if (filters.island && !resolvedIslands(person).includes(filters.island)) return false;
+    if (filters.property === '__none__' && propertyIds.length) return false;
+    if (filters.property && filters.property !== '__none__' && !propertyIds.includes(filters.property)) return false;
+    if (filters.living && (person.living || 'okänt') !== filters.living) return false;
     if (!filters.includeInlaws && person.ui_is_inlaw) return false;
     if (filters.onlyUnlinked && (graph.all.get(person.id) || []).length) return false;
     if (selectedGenerations.size && !selectedGenerations.has(String(generationFor(person) ?? 'okand'))) return false;
     if (filters.yearOn) {
-      const birth = Number(person.birth);
-      const death = Number(person.death);
+      const birth = Number(String(person.birth ?? '').slice(0, 4));
+      const death = Number(String(person.death ?? '').slice(0, 4));
       if (Number.isFinite(birth) && birth > filters.year) return false;
       if (Number.isFinite(death) && death < filters.year) return false;
     }

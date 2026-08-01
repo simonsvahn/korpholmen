@@ -1,5 +1,5 @@
-import { canonicalStringify, cloneJson } from '../domain/canonical.js';
-import { operationFingerprint, validateOperation } from '../domain/operations.js';
+import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-8';
+import { operationFingerprint, validateOperation } from '../domain/operations.js?v=2026-08-01-8';
 
 const DB_VERSION = 1;
 

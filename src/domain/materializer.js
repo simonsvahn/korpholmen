@@ -1,6 +1,6 @@
-import { canonicalStringify, cloneJson } from './canonical.js';
-import { compareHLC, parseHLC } from './hlc.js';
-import { DELETE_FIELD, RESET_FIELD, operationFingerprint, validateOperation } from './operations.js';
+import { canonicalStringify, cloneJson } from './canonical.js?v=2026-08-01-8';
+import { compareHLC, parseHLC } from './hlc.js?v=2026-08-01-8';
+import { DELETE_FIELD, RESET_FIELD, operationFingerprint, validateOperation } from './operations.js?v=2026-08-01-8';
 
 const entityKey = (type, id) => `${type}\u0000${id}`;
 const cloneCell = cell => ({ value: cloneJson(cell.value), hlc: cell.hlc, op_id: cell.op_id });

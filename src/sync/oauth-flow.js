@@ -3,7 +3,7 @@ import {
   createOAuthState,
   createPkcePair,
   exchangeDropboxCode
-} from './oauth-pkce.js';
+} from './oauth-pkce.js?v=2026-08-01-8';
 
 const PENDING_KEY = 'slaktlandskap:dropbox-oauth-pending';
 

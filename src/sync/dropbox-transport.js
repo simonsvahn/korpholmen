@@ -1,6 +1,6 @@
-import { canonicalStringify, cloneJson } from '../domain/canonical.js';
-import { batchPath, validateBatch } from './batch.js';
-import { CursorResetError, TransportError } from './errors.js';
+import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-8';
+import { batchPath, validateBatch } from './batch.js?v=2026-08-01-8';
+import { CursorResetError, TransportError } from './errors.js?v=2026-08-01-8';
 
 const API = 'https://api.dropboxapi.com/2';
 const CONTENT = 'https://content.dropboxapi.com/2';

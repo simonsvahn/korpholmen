@@ -8,7 +8,7 @@
   <title>Släktlandskapet · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-01-5">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-01-8">
 </head>
 <body>
   <header class="site-header">
@@ -44,6 +44,14 @@
         <label for="island-filter">Ö</label>
         <select id="island-filter"><option value="">Alla öar</option></select>
       </div>
+      <div class="field">
+        <label for="living-filter">Livsstatus</label>
+        <select id="living-filter"><option value="">Alla</option><option value="ja">Levande</option><option value="nej">Avlidna</option><option value="okänt">Okänt</option></select>
+      </div>
+      <div class="field property-filter-field">
+        <label for="property-filter">Fastighet</label>
+        <select id="property-filter"><option value="">Alla fastigheter</option></select>
+      </div>
       <div class="field relation-field">
         <label for="rel-a">Hur är de släkt?</label>
         <div class="relation-search">
@@ -66,6 +74,7 @@
       <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
       <button type="button" class="toggle" id="toggle-lonely" aria-pressed="false">Bara utan kända band</button>
       <button type="button" class="toggle" id="review-button" aria-pressed="false">Granska</button>
+      <button type="button" class="toggle" id="group-toggle" aria-pressed="false">Gruppera per fastighet</button>
       <button type="button" class="toggle" id="view-toggle" aria-pressed="false">Visa personregister</button>
       <output class="filter-count" id="filter-count" aria-live="polite"></output>
     </div>
@@ -88,6 +97,8 @@
       <span><span class="member-symbol">●</span> aktuell</span>
       <span><span class="member-symbol previous">○</span> tidigare</span>
       <span><span class="member-symbol expected">◐</span> förväntad</span>
+      <span><b>†</b> avliden</span>
+      <span><b>?</b> livsstatus okänd</span>
       <span><b>≈</b> generation uppskattad</span>
       <span><b>⚑</b> relevant föräldrakoppling saknas</span>
     </div>
@@ -99,6 +110,6 @@
     <div id="drawer-content"></div>
   </aside>
 
-  <script type="module" src="./src/app.js?v=2026-08-01-5"></script>
+  <script type="module" src="./src/app.js?v=2026-08-01-8"></script>
 </body>
 </html>

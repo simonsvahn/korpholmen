@@ -37,7 +37,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #sync-status[data-tone="error"] { color: #ffb9b2; }
 
 .toolbar { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 96%, transparent); box-shadow: 0 2px 7px rgba(35, 28, 20, .08); }
-.toolbar-inner { max-width: 1500px; margin: auto; padding: .55rem 1rem; display: grid; grid-template-columns: minmax(15rem, 1.2fr) minmax(10rem, .65fr) auto auto minmax(8rem, .55fr) minmax(20rem, 1.4fr); gap: .5rem; align-items: end; }
+.toolbar-inner { max-width: 1500px; margin: auto; padding: .55rem 1rem; display: grid; grid-template-columns: minmax(15rem, 1.2fr) minmax(10rem, .65fr) auto auto minmax(7rem, .45fr) minmax(7rem, .45fr) minmax(10rem, .65fr) minmax(20rem, 1.4fr); gap: .5rem; align-items: end; }
 .field { display: grid; gap: .15rem; min-width: 0; }
 .field label, .filter-label { font: 700 .65rem/1.2 Helvetica, Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .search-wrap { display: grid; grid-template-columns: 1fr auto; gap: .3rem; }
@@ -73,7 +73,7 @@ main { max-width: 1500px; margin: 0 auto; padding: 1rem 1rem 5rem; }
 .member-symbol.expected { color: var(--amber); }
 .member-symbol.outside { color: var(--purple); }
 
-.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin-bottom: 1rem; }
+.summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .6rem; margin-bottom: 1rem; }
 .summary div { display: flex; gap: .4rem; align-items: baseline; padding: .65rem .8rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--surface); }
 .summary strong { color: var(--navy); font-size: 1.25rem; }
 .summary span { color: var(--muted); font: .75rem Helvetica, Arial, sans-serif; }
@@ -105,6 +105,7 @@ main { max-width: 1500px; margin: 0 auto; padding: 1rem 1rem 5rem; }
 .person-card.is-selected { z-index: 2; outline: 3px solid var(--navy); outline-offset: 2px; }
 .person-card.is-related { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 55%, transparent); }
 .person-card.is-path { z-index: 3; outline: 3px solid #b8860b; outline-offset: 2px; }
+.person-card.living-nej { background: color-mix(in srgb, var(--surface) 86%, var(--surface-2)); }
 body.has-selection .person-card { opacity: .18; transition: opacity .15s; }
 body.has-selection .person-card.is-selected, body.has-selection .person-card.is-related, body.has-selection .person-card.is-path { opacity: 1; }
 .family-name { overflow: hidden; color: var(--muted); font: 700 .55rem/1.1 Helvetica, Arial, sans-serif; letter-spacing: .05em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
@@ -114,6 +115,8 @@ body.has-selection .person-card.is-selected, body.has-selection .person-card.is-
 .secondary-name, .years { overflow: hidden; color: var(--muted); font-size: .67rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .secondary-name { flex: 1; font-style: italic; }
 .years { flex: 0 0 auto; }
+.living-mark { color: var(--muted); font: 700 .72rem Helvetica, Arial, sans-serif; }
+.living-mark.unknown { color: var(--amber); }
 .provenance { color: var(--cyan); font: 700 .65rem Helvetica, Arial, sans-serif; }
 .gap-mark { display: none; position: absolute; top: 1.12rem; right: .3rem; color: var(--amber); font: 700 .72rem Helvetica, Arial, sans-serif; }
 body.show-gaps .person-card.has-gap { box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 70%, transparent); }
@@ -126,6 +129,17 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 .bridge-row { display: block; max-width: 21rem; margin: .12rem 0; padding: .16rem .5rem; }
 .bridge-chip { display: inline-block; padding: .12rem .45rem; }
 .empty-note { color: var(--muted); font-size: .8rem; font-style: italic; }
+
+.property-group { margin-bottom: 1.4rem; border: 1px solid var(--line); border-radius: .65rem; background: color-mix(in srgb, var(--surface) 72%, transparent); overflow: hidden; }
+.property-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem .85rem; border-bottom: 3px double var(--navy-2); background: var(--surface); }
+.property-header h2 { margin: 0; color: var(--navy); font-size: 1.28rem; }
+.property-header p { margin: .08rem 0 0; color: var(--muted); font-size: .76rem; }
+.property-kicker { font: 700 .6rem/1.2 Helvetica, Arial, sans-serif; letter-spacing: .09em; text-transform: uppercase; }
+.property-meta { color: var(--muted); font: .72rem/1.3 Helvetica, Arial, sans-serif; text-align: right; }
+.property-families { display: grid; gap: .7rem; padding: .8rem; }
+.property-family { padding-left: .7rem; border-left: 3px solid var(--line-strong); }
+.property-family h3 { margin: 0 0 .35rem; color: var(--navy); font-size: .92rem; }
+.property-family h3 small { color: var(--muted); font: .68rem Helvetica, Arial, sans-serif; }
 
 .register { overflow: auto; border: 1px solid var(--line); border-radius: .6rem; background: var(--surface); box-shadow: var(--shadow); }
 .register table { width: 100%; border-collapse: collapse; }
@@ -148,6 +162,11 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 .editor-field input, .editor-field select, .editor-field textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: .35rem; background: var(--surface); padding: .35rem .45rem; font-size: .82rem; }
 .editor-field textarea { min-height: 5rem; resize: vertical; }
 .relation-list { list-style: none; margin: 0; padding: 0; }
+.property-link-list { list-style: none; margin: 0; padding: 0; }
+.property-link-row { display: grid; grid-template-columns: 1fr auto; gap: .35rem; align-items: center; padding: .32rem 0; border-bottom: 1px solid var(--line); font-size: .82rem; }
+.add-property { display: grid; grid-template-columns: 1fr auto; gap: .35rem; margin-top: .5rem; }
+.add-property select, .add-property button { padding: .32rem .42rem; font-size: .78rem; }
+.add-property button { border: 1px solid var(--navy); border-radius: .35rem; background: var(--navy); color: #fff; }
 .relation-row { display: grid; grid-template-columns: 1fr auto auto; gap: .3rem; align-items: center; padding: .28rem 0; border-bottom: 1px solid var(--line); font-size: .84rem; }
 .relation-row .relation-person { border: 0; background: transparent; color: var(--navy); text-align: left; }
 .relation-row select { width: auto; padding: .18rem .25rem; font-size: .7rem; }
@@ -157,6 +176,7 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 .add-relation select, .add-relation button { padding: .28rem .4rem; font-size: .76rem; }
 .add-relation button { border: 1px solid var(--navy); border-radius: .35rem; background: var(--navy); color: #fff; }
 .drawer-note { padding: .65rem; border-radius: .4rem; background: var(--surface-2); color: var(--muted); font-size: .76rem; }
+.drawer-note.warning { border: 1px solid color-mix(in srgb, var(--amber) 60%, var(--line)); background: color-mix(in srgb, var(--surface) 75%, var(--amber)); color: var(--text); }
 .danger-zone { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid var(--line); }
 .danger-button { border: 1px solid #d6aaaa; border-radius: .35rem; background: #fff5f3; color: var(--danger); padding: .35rem .55rem; font-size: .76rem; }
 .review-list { display: grid; gap: .8rem; }
@@ -167,7 +187,7 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 
 @media (max-width: 1100px) {
   .toolbar-inner { grid-template-columns: 1fr 1fr auto auto; }
-  .relation-field { grid-column: 1 / -1; }
+  .property-filter-field, .relation-field { grid-column: span 2; }
 }
 @media (max-width: 640px) {
   html { scroll-padding-top: 1rem; }
@@ -187,6 +207,8 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
   .edit-status-row { justify-content: flex-start; padding: .38rem .65rem; }
   main { padding: .75rem .6rem 4rem; }
   .summary { grid-template-columns: 1fr; }
+  .property-header { display: block; }
+  .property-meta { margin-top: .25rem; text-align: left; }
   .clan-header { display: block; }
   .clan-meta { margin-top: .2rem; text-align: left; }
   .storfamily { padding-left: .5rem; border-left-width: 3px; }

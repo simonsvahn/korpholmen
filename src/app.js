@@ -6,11 +6,10 @@ import {
   beginDropboxOAuth,
   completeDropboxOAuth,
   createBatch,
-  exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
   validateOperation,
-} from './data-layer.js';
-import { relationEntityId } from './domain/slakt-schema.js';
+} from './data-layer.js?v=2026-08-01-8';
+import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-8';
 import {
   buildGraph,
   clanBase,
@@ -19,15 +18,19 @@ import {
   familyHue,
   generationFor,
   groupPeople,
+  groupPeopleByProperty,
   lineageIds,
   membership,
   normalizeText,
+  personPropertyIds,
   relationDescription,
   relationshipPath,
+  resolvedIslands,
   shownName,
   visiblePersonIds,
-} from './landscape-model.js';
-import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL, LOCAL_UI_METADATA_URL } from './config.js';
+} from './landscape-model.js?v=2026-08-01-8';
+import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-8';
+import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-8';
 
 const $ = (selector) => document.querySelector(selector);
 const statusNode = $('#sync-status');
@@ -40,6 +43,8 @@ const drawerContent = $('#drawer-content');
 const personSearch = $('#person-search');
 const clanJump = $('#clan-jump');
 const islandFilter = $('#island-filter');
+const livingFilter = $('#living-filter');
+const propertyFilter = $('#property-filter');
 const generationButtons = $('#generation-buttons');
 const relationPathNode = $('#relation-path');
 const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
@@ -54,18 +59,24 @@ let syncPromise = null;
 let graph = null;
 let currentPeople = [];
 let currentRelations = [];
+let currentProperties = [];
+let currentPropertyLinks = [];
+let propertyById = new Map();
 
 const ui = {
   selectedPersonId: null,
   clubNamesFirst: false,
   showGaps: false,
   island: '',
+  living: '',
+  property: '',
   generations: new Set(),
   includeInlaws: true,
   onlyUnlinked: false,
   yearOn: false,
   year: new Date().getFullYear(),
   view: 'landscape',
+  grouping: 'clan',
   review: false,
   pathIds: new Set(),
 };
@@ -116,11 +127,52 @@ function relationRecords() {
     .map((entity) => ({ id: entity.entity_id, ...entity.fields }));
 }
 
+function propertyRecords() {
+  return repository.listEntities('property')
+    .map((entity) => ({ id: entity.entity_id, ...entity.fields }))
+    .sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
+}
+
+function propertyLinkRecords() {
+  return repository.listEntities('property-link')
+    .map((entity) => ({ id: entity.entity_id, ...entity.fields }));
+}
+
 function refreshData() {
-  currentPeople = personRecords();
+  const people = personRecords();
   currentRelations = relationRecords();
+  currentProperties = propertyRecords();
+  currentPropertyLinks = propertyLinkRecords();
+  propertyById = new Map(currentProperties.map((property) => [property.id, property]));
+  const linksByPerson = new Map();
+  for (const link of currentPropertyLinks) {
+    if (!linksByPerson.has(link.person_id)) linksByPerson.set(link.person_id, []);
+    linksByPerson.get(link.person_id).push(link);
+  }
+  currentPeople = people.map((person) => {
+    const links = (linksByPerson.get(person.id) || []).filter((link) => propertyById.has(link.property_id));
+    const propertyIds = links.map((link) => link.property_id);
+    return {
+      ...person,
+      property_ids: propertyIds,
+      property_islands: unique(propertyIds.map((propertyId) => propertyById.get(propertyId)?.island).filter(Boolean)),
+    };
+  });
   graph = buildGraph(currentPeople, currentRelations);
   if (ui.selectedPersonId && !graph.byId.has(ui.selectedPersonId)) ui.selectedPersonId = null;
+}
+
+function propertyNames(person) {
+  return personPropertyIds(person).map((propertyId) => propertyById.get(propertyId)?.display_name || propertyId);
+}
+
+function islandNames(person) {
+  return resolvedIslands(person);
+}
+
+function islandPropertyConflict(person) {
+  const propertyIslands = Array.isArray(person.property_islands) ? person.property_islands.filter(Boolean) : [];
+  return Boolean(person.legacy_island && propertyIslands.length && !propertyIslands.includes(person.legacy_island));
 }
 
 function years(person) {
@@ -169,11 +221,25 @@ function refreshControls() {
   clanJump.innerHTML = '<option value="">Välj klan …</option>' + groups
     .map((group) => `<option value="${escapeAttribute(group.name)}">${escapeHtml(group.name)}</option>`).join('');
   if (groups.some((group) => group.name === selectedClan)) clanJump.value = selectedClan;
+  clanJump.disabled = ui.grouping === 'property';
 
-  const islands = unique(currentPeople.map((person) => person.legacy_island).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
+  const islands = unique(currentPeople.flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
   islandFilter.innerHTML = '<option value="">Alla öar</option>' + islands
     .map((island) => `<option value="${escapeAttribute(island)}">${escapeHtml(island)}</option>`).join('');
   islandFilter.value = islands.includes(ui.island) ? ui.island : '';
+
+  livingFilter.value = ui.living;
+  const propertyCounts = new Map(currentProperties.map((property) => [property.id, 0]));
+  let withoutProperty = 0;
+  for (const person of currentPeople) {
+    const propertyIds = personPropertyIds(person);
+    if (!propertyIds.length) withoutProperty += 1;
+    for (const propertyId of propertyIds) propertyCounts.set(propertyId, (propertyCounts.get(propertyId) || 0) + 1);
+  }
+  propertyFilter.innerHTML = '<option value="">Alla fastigheter</option>'
+    + currentProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.id)} · ${propertyCounts.get(property.id) || 0}</option>`).join('')
+    + `<option value="__none__">Utan fastighet · ${withoutProperty}</option>`;
+  propertyFilter.value = ui.property && (ui.property === '__none__' || propertyById.has(ui.property)) ? ui.property : '';
 
   const generations = unique(currentPeople.map((person) => generationFor(person) ?? 'okand'))
     .sort((a, b) => String(a).localeCompare(String(b), 'sv', { numeric: true }));
@@ -191,6 +257,7 @@ function relevantGap(person) {
 function cardClasses(person, relatedIds) {
   return [
     'person-card',
+    `living-${person.living || 'okänt'}`,
     relevantGap(person) ? 'has-gap' : '',
     ui.selectedPersonId === person.id ? 'is-selected' : '',
     relatedIds.has(person.id) && ui.selectedPersonId !== person.id ? 'is-related' : '',
@@ -204,11 +271,13 @@ function renderPersonCard(person, relatedIds) {
   const primary = shownName(person, ui.clubNamesFirst);
   const secondary = ui.clubNamesFirst && club ? person.display_name : club;
   const generation = generationFor(person);
+  const livingLabel = person.living === 'ja' ? 'Levande' : person.living === 'nej' ? 'Avliden' : 'Livsstatus okänd';
+  const livingMark = person.living === 'nej' ? '<span class="living-mark" title="Avliden">†</span>' : person.living === 'okänt' || !person.living ? '<span class="living-mark unknown" title="Livsstatus okänd">?</span>' : '';
   const approximate = generation && person.ui_generation_source !== 'kedja' && person.ui_generation_source !== 'gifte';
-  return `<button type="button" class="${cardClasses(person, relatedIds)}" data-person-id="${escapeAttribute(person.id)}" style="--family-accent:${familyColor(person)}" aria-label="${escapeAttribute(`${primary}. ${member.label}. Generation ${generation ?? 'okänd'}. Familj ${person.family || 'okänd'}.`)}">
+  return `<button type="button" class="${cardClasses(person, relatedIds)}" data-person-id="${escapeAttribute(person.id)}" style="--family-accent:${familyColor(person)}" aria-label="${escapeAttribute(`${primary}. ${livingLabel}. ${member.label}. Generation ${generation ?? 'okänd'}. Familj ${person.family || 'okänd'}.`)}">
     <span class="family-name">${escapeHtml(person.family || 'utan familjegrupp')}</span>
     <span class="name-line"><span class="member-symbol ${member.className}" aria-hidden="true">${member.symbol}</span><span class="primary-name">${escapeHtml(primary)}</span><span class="gap-mark" aria-label="Relevant föräldrakoppling saknas">⚑</span></span>
-    <span class="meta-line"><span class="secondary-name">${escapeHtml(secondary || ' ')}</span><span class="years">${escapeHtml(years(person))}</span>${approximate ? '<span class="provenance" title="Generation uppskattad">≈</span>' : ''}</span>
+    <span class="meta-line"><span class="secondary-name">${escapeHtml(secondary || ' ')}</span><span class="years">${escapeHtml(years(person))}</span>${livingMark}${approximate ? '<span class="provenance" title="Generation uppskattad">≈</span>' : ''}</span>
   </button>`;
 }
 
@@ -291,7 +360,7 @@ function renderLandscape(visible, relatedIds) {
     const people = [...group.families.values()].flat();
     const visibleCount = people.filter((person) => visible.has(person.id)).length;
     if (!visibleCount) return '';
-    const islands = unique(people.filter((person) => visible.has(person.id)).map((person) => person.legacy_island).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
+    const islands = unique(people.filter((person) => visible.has(person.id)).flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
     return `<section class="clan" id="clan-${slug(group.name)}" style="--clan-accent:hsl(${accents[index % accents.length]} 42% 42%)">
       <header class="clan-header"><h2>${escapeHtml(group.name)}</h2><div class="clan-meta">${visibleCount} personer${islands.length ? ` · ${escapeHtml(islands.join(' · '))}` : ''}</div></header>
       ${[...group.families.entries()].map(([name, entries]) => renderStorfamily(name, entries, visible, relatedIds)).join('')}
@@ -299,20 +368,47 @@ function renderLandscape(visible, relatedIds) {
   }).join('');
 }
 
+function renderPropertyLandscape(visible, relatedIds) {
+  return groupPeopleByProperty(currentPeople, currentProperties).map((group) => {
+    const people = group.people.filter((person) => visible.has(person.id));
+    if (!people.length) return '';
+    const families = new Map();
+    for (const person of people) {
+      const family = person.family || 'Utan känd familj/släkt';
+      if (!families.has(family)) families.set(family, []);
+      families.get(family).push(person);
+    }
+    const property = group.property;
+    const island = group.id === '__none__'
+      ? unique(people.flatMap(islandNames)).join(' · ')
+      : property.island;
+    return `<section class="property-group" id="property-${slug(group.id)}">
+      <header class="property-header"><div><p class="property-kicker">${group.id === '__none__' ? 'Ofullständig koppling' : 'Fastighet'}</p><h2>${escapeHtml(group.id === '__none__' ? property.display_name : property.id)}</h2>${group.id !== '__none__' && property.label ? `<p>${escapeHtml(property.label)}</p>` : ''}</div><div class="property-meta">${people.length} personer${island ? ` · ${escapeHtml(island)}` : ''}</div></header>
+      <div class="property-families">${[...families.entries()].sort(([a], [b]) => a.localeCompare(b, 'sv')).map(([family, entries]) => `<section class="property-family"><h3>${escapeHtml(family)} <small>${entries.length}</small></h3><div class="unlinked-grid">${entries.sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv')).map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>`).join('')}</div>
+    </section>`;
+  }).join('');
+}
+
 function renderRegister(visible) {
   const rows = currentPeople.filter((person) => visible.has(person.id)).map((person) => `<tr>
     <td><button type="button" data-person-id="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button>${person.club_name ? `<small>${escapeHtml(person.club_name)}</small>` : ''}</td>
-    <td>${escapeHtml(years(person))}</td><td>${escapeHtml(person.family || '—')}</td><td>${escapeHtml(person.legacy_island || '—')}</td><td>${escapeHtml(person.membership_status || '—')}</td>
+    <td>${escapeHtml(person.living || 'okänt')}</td><td>${escapeHtml(years(person))}</td><td>${escapeHtml(person.family || '—')}</td><td>${escapeHtml(propertyNames(person).join(' · ') || '—')}</td><td>${escapeHtml(islandNames(person).join(' · ') || '—')}</td><td>${escapeHtml(person.membership_status || '—')}</td>
   </tr>`).join('');
-  return `<section class="register"><table><thead><tr><th>Person</th><th>År</th><th>Familj</th><th>Ö</th><th>Medlemsläge</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+  return `<section class="register"><table><thead><tr><th>Person</th><th>Lever</th><th>År</th><th>Familj</th><th>Fastighet</th><th>Ö</th><th>Medlemsläge</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 
 function renderReview() {
   const inlaws = currentPeople.filter((person) => person.ui_is_inlaw);
   const gaps = currentPeople.filter(relevantGap);
   const estimated = currentPeople.filter((person) => generationFor(person) != null && !['kedja', 'gifte'].includes(person.ui_generation_source));
+  const unknownLiving = currentPeople.filter((person) => !person.living || person.living === 'okänt');
+  const islandWithoutProperty = currentPeople.filter((person) => islandNames(person).length && !personPropertyIds(person).length);
+  const islandConflicts = currentPeople.filter(islandPropertyConflict);
   const section = (title, description, people) => `<section class="review-section"><h2>${escapeHtml(title)} (${people.length})</h2><p>${escapeHtml(description)}</p>${people.map((person) => `<div class="review-row"><span><b>${escapeHtml(person.display_name)}</b> · ${escapeHtml(person.family || '—')}</span><button type="button" data-person-id="${escapeAttribute(person.id)}">Öppna</button></div>`).join('') || '<p>Inga.</p>'}</section>`;
   return `<div class="review-list">
+    ${section('Okänd livsstatus', 'Komplettera levande eller avliden direkt i personpanelen.', unknownLiving)}
+    ${section('Ö och fastighet säger olika', 'Båda uppgifterna bevaras tills motsägelsen är avgjord.', islandConflicts)}
+    ${section('Ö men ingen fastighet', 'Ö-kopplingen är bevarad manuellt tills en fastighet kan anges.', islandWithoutProperty)}
     ${section('Ingifta enligt presentationsdata', 'Kontrollera genom att öppna personen och ändra presentationsrollen om den är fel.', inlaws)}
     ${section('Relevanta relationsluckor', 'Personer utan kända föräldrar trots att de ligger efter första generationen.', gaps)}
     ${section('Uppskattade generationer', 'Generationer som inte vilar på en fullständig föräldra–barn-kedja.', estimated)}
@@ -329,13 +425,21 @@ function render() {
   }
   const visible = visiblePersonIds(currentPeople, graph, ui);
   const relatedIds = ui.selectedPersonId ? lineageIds(ui.selectedPersonId, graph) : new Set();
-  const body = ui.review ? renderReview() : ui.view === 'register' ? renderRegister(visible) : renderLandscape(visible, relatedIds);
-  contentNode.innerHTML = `<section class="summary" aria-label="Datasammanfattning"><div><strong>${currentPeople.length}</strong><span>personer</span></div><div><strong>${currentRelations.length}</strong><span>relationer</span></div><div><strong>${visible.size}</strong><span>visas</span></div></section>${body || '<p class="empty-note">Inga personer matchar filtren.</p>'}`;
+  const body = ui.review
+    ? renderReview()
+    : ui.view === 'register'
+      ? renderRegister(visible)
+      : ui.grouping === 'property'
+        ? renderPropertyLandscape(visible, relatedIds)
+        : renderLandscape(visible, relatedIds);
+  contentNode.innerHTML = `<section class="summary" aria-label="Datasammanfattning"><div><strong>${currentPeople.length}</strong><span>personer</span></div><div><strong>${currentRelations.length}</strong><span>relationer</span></div><div><strong>${currentProperties.length}</strong><span>fastigheter</span></div><div><strong>${currentPropertyLinks.length}</strong><span>fastighetsband</span></div><div><strong>${visible.size}</strong><span>visas</span></div></section>${body || '<p class="empty-note">Inga personer matchar filtren.</p>'}`;
   $('#filter-count').textContent = `${visible.size} av ${currentPeople.length} personer`;
   document.body.classList.toggle('show-gaps', ui.showGaps);
   document.body.classList.toggle('has-selection', Boolean(ui.selectedPersonId));
   $('#view-toggle').textContent = ui.view === 'register' ? 'Visa släktlandskap' : 'Visa personregister';
   $('#view-toggle').setAttribute('aria-pressed', String(ui.view === 'register'));
+  $('#group-toggle').textContent = ui.grouping === 'property' ? 'Gruppera per släkt' : 'Gruppera per fastighet';
+  $('#group-toggle').setAttribute('aria-pressed', String(ui.grouping === 'property'));
   $('#review-button').setAttribute('aria-pressed', String(ui.review));
   if (ui.selectedPersonId) renderDrawer(ui.selectedPersonId);
 }
@@ -364,8 +468,15 @@ function renderDrawer(personId) {
   const parents = graph.parents.get(person.id) || [];
   const partners = (graph.partners.get(person.id) || []).filter((link) => !link.relation.derived);
   const children = graph.children.get(person.id) || [];
-  const islands = unique(currentPeople.map((entry) => entry.legacy_island).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
-  drawerContent.innerHTML = `<h2>${escapeHtml(person.display_name)}</h2><p class="drawer-meta">${escapeHtml([person.club_name, years(person), person.family, person.legacy_island].filter(Boolean).join(' · '))}</p>
+  const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id && propertyById.has(link.property_id));
+  const linkedPropertyIds = new Set(propertyLinks.map((link) => link.property_id));
+  const availableProperties = currentProperties.filter((property) => !linkedPropertyIds.has(property.id));
+  const islands = unique([...currentProperties.map((property) => property.island), ...currentPeople.map((entry) => entry.legacy_island)].filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
+  const propertyRows = propertyLinks.map((link) => {
+    const property = propertyById.get(link.property_id);
+    return `<li class="property-link-row"><span><b>${escapeHtml(property.id)}</b>${property.island ? ` · ${escapeHtml(property.island)}` : ''}</span><button type="button" class="icon-button" data-delete-property-link="${escapeAttribute(link.id)}" aria-label="Ta bort fastighetskopplingen till ${escapeAttribute(property.id)}">×</button></li>`;
+  }).join('');
+  drawerContent.innerHTML = `<h2>${escapeHtml(person.display_name)}</h2><p class="drawer-meta">${escapeHtml([person.club_name, years(person), person.family, ...islandNames(person)].filter(Boolean).join(' · '))}</p>
     <h3>Personuppgifter</h3>
     <div class="editor-grid">
       <label class="editor-field wide"><span>Visningsnamn</span><input data-person-field="display_name" value="${escapeAttribute(person.display_name || '')}"></label>
@@ -379,12 +490,17 @@ function renderDrawer(personId) {
       <label class="editor-field wide"><span>Klan i landskapet</span><input data-person-field="ui_clan" value="${escapeAttribute(person.ui_clan || person.family || '')}"></label>
       <label class="editor-field"><span>Presentationsroll</span><select data-person-field="ui_is_inlaw" data-value-type="boolean">${selectOptions([['false', 'född i/fristående'], ['true', 'ingift']], String(Boolean(person.ui_is_inlaw)))}</select></label>
       <label class="editor-field"><span>Generation</span><select data-person-field="ui_generation" data-value-type="number">${selectOptions([['', 'okänd'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], person.ui_generation ?? '')}</select></label>
-      <label class="editor-field"><span>Ö, äldre modell</span><select data-person-field="legacy_island"><option value="">Ingen angiven</option>${islands.map((island) => `<option value="${escapeAttribute(island)}" ${person.legacy_island === island ? 'selected' : ''}>${escapeHtml(island)}</option>`).join('')}</select></label>
+      <label class="editor-field"><span>Manuell ö utan fastighet</span><select data-person-field="legacy_island"><option value="">Ingen angiven</option>${islands.map((island) => `<option value="${escapeAttribute(island)}" ${person.legacy_island === island ? 'selected' : ''}>${escapeHtml(island)}</option>`).join('')}</select></label>
       <label class="editor-field"><span>Ö-status</span><select data-person-field="residence_status">${selectOptions([['okänt', 'okänt'], ['bor', 'bor'], ['avflyttad', 'avflyttad']], person.residence_status || 'okänt')}</select></label>
       <label class="editor-field wide"><span>Roll</span><input data-person-field="role" value="${escapeAttribute(person.role || '')}"></label>
       <label class="editor-field wide"><span>Not</span><textarea data-person-field="note">${escapeHtml(person.note || '')}</textarea></label>
     </div>
-    <p class="drawer-note">Fältet “Ö, äldre modell” finns kvar tills fastighetskopplingarna är godkända. Därefter härleds ön från fastigheten.</p>
+    <p class="drawer-note${islandPropertyConflict(person) ? ' warning' : ''}">${islandPropertyConflict(person)
+      ? `Motsägelse: godkänd ö är ${escapeHtml(person.legacy_island)}, men fastigheten ligger på ${escapeHtml(person.property_islands.join(' · '))}. Båda uppgifterna bevaras tills detta är rättat.`
+      : 'Om personen har en fastighet hämtas ön automatiskt därifrån. Den manuella ön ligger kvar som reservuppgift.'}</p>
+    <h3>Fastigheter</h3>
+    <ul class="property-link-list">${propertyRows || '<li class="empty-note">Ingen fastighet registrerad</li>'}</ul>
+    <div class="add-property"><select data-new-property-id><option value="">Välj fastighet …</option>${availableProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.id)}${property.island ? ` · ${escapeHtml(property.island)}` : ''}</option>`).join('')}</select><button type="button" data-action="add-property">Lägg till</button></div>
     <h3>Föräldrar</h3><ul class="relation-list">${relationRows(parents, 'parent')}</ul>
     <h3>Partner</h3><ul class="relation-list">${relationRows(partners, 'partner')}</ul>
     <h3>Barn</h3><ul class="relation-list">${relationRows(children, 'child')}</ul>
@@ -447,6 +563,38 @@ async function syncEdit(action) {
   }
 }
 
+async function addPropertyLink() {
+  const select = drawerContent.querySelector('[data-new-property-id]');
+  const propertyId = select?.value;
+  const personId = ui.selectedPersonId;
+  if (!propertyId || !propertyById.has(propertyId) || !graph.byId.has(personId)) {
+    setEditStatus('Välj en fastighet ur listan.', 'error');
+    return;
+  }
+  const id = propertyLinkEntityId(personId, propertyId);
+  if (currentPropertyLinks.some((link) => link.id === id)) {
+    setEditStatus('Fastighetskopplingen finns redan.', 'error');
+    return;
+  }
+  await syncEdit(async () => {
+    await repository.restoreEntity('property-link', id);
+    await repository.setFields([
+      { entityType: 'property-link', entityId: id, field: 'person_id', value: personId },
+      { entityType: 'property-link', entityId: id, field: 'property_id', value: propertyId },
+      { entityType: 'property-link', entityId: id, field: 'confirmed', value: true },
+      { entityType: 'property-link', entityId: id, field: 'source', value: 'Direkt i Släktlandskapet' },
+    ]);
+  });
+}
+
+async function deletePropertyLink(id) {
+  const link = currentPropertyLinks.find((entry) => entry.id === id);
+  if (!link) return;
+  const person = graph.byId.get(link.person_id)?.display_name || link.person_id;
+  if (!window.confirm(`Ta bort fastighetskopplingen mellan ${person} och ${link.property_id}?`)) return;
+  await syncEdit(() => repository.deleteEntity('property-link', id));
+}
+
 async function addRelation() {
   const input = drawerContent.querySelector('[data-new-relation-person]');
   const kindNode = drawerContent.querySelector('[data-new-relation-kind]');
@@ -500,10 +648,12 @@ async function deleteRelation(id) {
 async function deletePerson() {
   const person = graph.byId.get(ui.selectedPersonId);
   if (!person) return;
-  if (!window.confirm(`Ta bort ${person.display_name} och personens ${graph.all.get(person.id)?.length || 0} relationer? Borttagningen sparas som återställningsbar historik.`)) return;
   const related = currentRelations.filter((relation) => relation.from_person_id === person.id || relation.to_person_id === person.id);
+  const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id);
+  if (!window.confirm(`Ta bort ${person.display_name}, personens ${related.length} relationer och ${propertyLinks.length} fastighetskopplingar? Borttagningen sparas som återställningsbar historik.`)) return;
   await syncEdit(() => repository.deleteEntities([
     ...related.map((relation) => ({ entityType: 'relation', entityId: relation.id })),
+    ...propertyLinks.map((link) => ({ entityType: 'property-link', entityId: link.id })),
     { entityType: 'person', entityId: person.id },
   ]));
   ui.selectedPersonId = null;
@@ -600,8 +750,14 @@ async function bootstrapLocal() {
       metadata.operations.forEach(validateOperation);
       await repository.applyRemoteOps(metadata.operations);
     }
+    const approvedResponse = await fetch(LOCAL_APPROVED_DATA_URL, { cache: 'no-store' });
+    if (approvedResponse.ok) {
+      const approved = await approvedResponse.json();
+      approved.operations.forEach(validateOperation);
+      await repository.applyRemoteOps(approved.operations);
+    }
   } catch (error) {
-    console.warn('Presentationsmetadata kunde inte läsas lokalt', error);
+    console.warn('Kompletterande godkända data kunde inte läsas lokalt', error);
   }
   await store.putMeta(BOOTSTRAP_META, { pending: true, device_id: document.device_id, migration_id: document.migration_id, operations: document.operations.length });
   bootstrapButton.hidden = true;
@@ -648,7 +804,10 @@ drawer.addEventListener('click', (event) => {
   if (open) selectPerson(open.dataset.openPerson, true);
   const remove = event.target.closest('[data-delete-relation]');
   if (remove) deleteRelation(remove.dataset.deleteRelation);
+  const removeProperty = event.target.closest('[data-delete-property-link]');
+  if (removeProperty) deletePropertyLink(removeProperty.dataset.deletePropertyLink);
   if (event.target.closest('[data-action="add-relation"]')) addRelation();
+  if (event.target.closest('[data-action="add-property"]')) addPropertyLink();
   if (event.target.closest('[data-action="delete-person"]')) deletePerson();
 });
 
@@ -688,6 +847,8 @@ $('#toggle-gaps').addEventListener('click', (event) => {
   render();
 });
 islandFilter.addEventListener('change', () => { ui.island = islandFilter.value; render(); });
+livingFilter.addEventListener('change', () => { ui.living = livingFilter.value; render(); });
+propertyFilter.addEventListener('change', () => { ui.property = propertyFilter.value; render(); });
 generationButtons.addEventListener('click', (event) => {
   const button = event.target.closest('[data-generation]');
   if (!button) return;
@@ -712,6 +873,7 @@ $('#year-on').addEventListener('click', (event) => {
 });
 $('#year-slider').addEventListener('input', (event) => { ui.year = Number(event.currentTarget.value); $('#year-out').textContent = ui.year; render(); });
 $('#view-toggle').addEventListener('click', () => { ui.view = ui.view === 'register' ? 'landscape' : 'register'; ui.review = false; render(); });
+$('#group-toggle').addEventListener('click', () => { ui.grouping = ui.grouping === 'property' ? 'clan' : 'property'; ui.view = 'landscape'; ui.review = false; render(); });
 $('#review-button').addEventListener('click', () => { ui.review = !ui.review; render(); });
 connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(() => {}));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) => setStatus(error.message, 'error')));

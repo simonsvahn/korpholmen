@@ -17,6 +17,12 @@ export function relationEntityId(kind, fromPersonId, toPersonId) {
   return `relation:${kind}:${endpoints[0]}:${endpoints[1]}`;
 }
 
+export function propertyLinkEntityId(personId, propertyId) {
+  requiredText(personId, 'Person-id');
+  requiredText(propertyId, 'Fastighets-id');
+  return `property-link:${personId}:${propertyId}`;
+}
+
 export function validateArchive(archive) {
   if (!archive || archive.schema_version !== 1) throw new TypeError('Arkivet har fel schemaversion');
   if (!Array.isArray(archive.persons) || !Array.isArray(archive.relations)) throw new TypeError('Arkivet saknar personer eller relationer');
