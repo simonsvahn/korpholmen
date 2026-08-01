@@ -253,6 +253,16 @@ await test('Dropbox-knappen synkar befintlig anslutning och tom master rapporter
   assert.equal(appSource.includes("connectButton.addEventListener('click', connectDropbox)"), false);
 });
 
+await test('Matrikeln startar och sparar lokalt utan nät efter första anslutningen', async () => {
+  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  const serviceWorker = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
+  assert.ok(appSource.includes("navigator.onLine === false"));
+  assert.ok(appSource.includes("Offline · lokalt sparat · synkas automatiskt"));
+  assert.ok(appSource.includes('const serviceWorkerPromise = registerServiceWorker()'));
+  assert.ok(serviceWorker.includes("return cached || network"));
+  assert.ok(serviceWorker.includes("cache: 'reload'"));
+});
+
 await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', async () => {
   const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
   const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');

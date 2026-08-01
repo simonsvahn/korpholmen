@@ -47,7 +47,7 @@ const livingFilter = $('#living-filter');
 const propertyFilter = $('#property-filter');
 const generationButtons = $('#generation-buttons');
 const relationPathNode = $('#relation-path');
-const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const isSourceTree = location.pathname.includes('/apps/matrikel/');
 const TOKEN_META = 'dropbox:refresh-token-v1';
 const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
 
@@ -91,6 +91,26 @@ const escapeHtml = (value) => String(value ?? '')
 const escapeAttribute = escapeHtml;
 const unique = (items) => [...new Set(items)];
 const slug = (value) => normalizeText(value).replace(/\s+/g, '-') || 'grupp';
+const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
+  try {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    if (hadController) {
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return;
+        reloading = true;
+        location.reload();
+      }, { once: true });
+    }
+    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  } catch (error) {
+    console.warn('Appskalet kunde inte uppdateras', error);
+    return null;
+  }
+}
 
 function setStatus(text, tone = '') {
   statusNode.textContent = text;
@@ -103,8 +123,7 @@ function setEditStatus(text, tone = '') {
 }
 
 function redirectUri() {
-  const fromSourceTree = location.pathname.includes('/apps/matrikel/');
-  return new URL(fromSourceTree ? '../../' : '../', location.href).href;
+  return new URL(isSourceTree ? '../../' : '../', location.href).href;
 }
 
 function deviceId() {
@@ -564,7 +583,7 @@ async function syncEdit(action) {
     try {
       const result = await syncNow();
       if (result) setEditStatus('Sparad lokalt och synkad med Dropbox.', 'ok');
-      else setEditStatus('Sparad lokalt · anslut Dropbox för synk.', 'warning');
+      else setEditStatus(navigator.onLine === false ? 'Sparad lokalt · offline · synkas automatiskt senare.' : 'Sparad lokalt · anslut Dropbox för synk.', 'warning');
     } catch (syncError) {
       console.error(syncError);
       setEditStatus('Sparad lokalt · Dropbox-synken misslyckades och försöker igen senare.', 'warning');
@@ -688,9 +707,11 @@ async function currentAccessToken() {
   if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken;
   const refreshToken = await store.getMeta(TOKEN_META);
   if (!refreshToken || !DROPBOX_CLIENT_ID) return null;
+  if (navigator.onLine === false) return null;
   const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken });
   accessToken = token.access_token;
   accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000;
+  if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token);
   return accessToken;
 }
 
@@ -711,6 +732,12 @@ async function uploadBootstrapIfNeeded(transport) {
 async function syncNow() {
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
+    const hasCredential = Boolean(await store.getMeta(TOKEN_META));
+    if (navigator.onLine === false) {
+      setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning');
+      connectButton.textContent = hasCredential ? 'Offline · Dropbox ansluten' : 'Anslut Dropbox när du är online';
+      return null;
+    }
     const token = await currentAccessToken();
     if (!token) {
       setStatus(DROPBOX_CLIENT_ID ? 'Lokalt sparat · Dropbox ej ansluten' : 'Lokalt sparat · Dropbox-app återstår', 'warning');
@@ -723,12 +750,17 @@ async function syncNow() {
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
+    if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     render();
     if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
     else setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
     return result;
   })().catch((error) => {
     console.error(error);
+    if (isOfflineError(error)) {
+      setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer', 'warning');
+      return null;
+    }
     setStatus(`Åtgärd krävs · ${error.message}`, 'error');
     throw error;
   }).finally(() => { syncPromise = null; });
@@ -749,7 +781,7 @@ async function connectOrSyncDropbox() {
 }
 
 async function bootstrapLocal() {
-  if (!isLocal) throw new Error('Startkopian kan bara aktiveras från den lokala arbetskopian');
+  if (!isSourceTree) throw new Error('Startkopian kan bara aktiveras från källappen');
   setStatus('Läser den låsta startkopian…');
   const response = await fetch(LOCAL_BOOTSTRAP_URL, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Startkopian kunde inte läsas (${response.status})`);
@@ -893,13 +925,15 @@ connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(() =>
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) => setStatus(error.message, 'error')));
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {}));
+window.addEventListener('offline', () => syncNow().catch(() => {}));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow().catch(() => {}); });
 
 async function init() {
+  const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB();
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: deviceId() }).init();
-  bootstrapButton.hidden = !isLocal || personRecords().length > 0;
+  bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
   connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
   connectButton.disabled = !DROPBOX_CLIENT_ID;
   $('#year-slider').max = new Date().getFullYear();
@@ -907,7 +941,7 @@ async function init() {
   render();
   await completeOAuthCallback();
   await syncNow();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
+  await serviceWorkerPromise;
 }
 
 init().catch((error) => {

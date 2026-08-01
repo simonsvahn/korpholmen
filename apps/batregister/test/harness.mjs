@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import { MemoryStore, materialize, validateOperation } from '../../../packages/core/data-layer.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -54,9 +54,39 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes("repository.deleteEntities"));
 });
 
+await test('båtbilder kan köas och läsas lokalt utan Dropbox',async()=>{
+  const store=new MemoryStore();
+  const blob=new Blob(['offline-bild'],{type:'image/jpeg'});
+  await store.putBlob('/batregister/bilder/offline.jpg',blob,{pendingUpload:true});
+  assert.equal(await (await store.getBlob('/batregister/bilder/offline.jpg')).text(),'offline-bild');
+  assert.equal((await store.listPendingBlobs()).length,1);
+  await store.markBlobUploaded('/batregister/bilder/offline.jpg');
+  assert.equal((await store.listPendingBlobs()).length,0);
+});
+
+await test('webbappen lagrar hela bildbeståndet och nya bilder för offlinebruk',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  const storage=await readFile(resolve(REPO,'packages/core/storage/indexeddb.js'),'utf8');
+  assert.ok(storage.includes("createObjectStore('blobs'"));
+  assert.ok(app.includes('cacheAllBoatImages'));
+  assert.ok(app.includes('uploadPendingImages'));
+  assert.ok(app.includes("store.putBlob(path,file,{pendingUpload:true})"));
+  assert.ok(app.includes("Offline · lokalt sparat · synkas automatiskt"));
+});
+
 await test('publiceringsbygget är datafritt',()=>{
   const result=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(result.status,0,result.stderr||result.stdout);
+});
+
+await test('publiceringspaketet har en egen offlinebar kopia av kärnan',async()=>{
+  const publishedApp=await readFile(resolve(REPO,'batregister/src/app.js'),'utf8');
+  const publishedCore=await readFile(resolve(REPO,'batregister/core/data-layer.js'),'utf8');
+  const serviceWorker=await readFile(resolve(ROOT,'sw.js'),'utf8');
+  assert.ok(publishedApp.includes("../core/data-layer.js"));
+  assert.ok(publishedCore.includes("./storage/indexeddb.js"));
+  assert.ok(serviceWorker.includes("?'../../packages/core':'./core'"));
+  assert.ok(serviceWorker.includes("'./src/config.js'"));
 });
 
 await test('OAuth-returen kan skickas till båda apparna',async()=>{
@@ -66,8 +96,8 @@ await test('OAuth-returen kan skickas till båda apparna',async()=>{
   assert.ok(root.includes('korpholmen:oauth-return'));
   assert.ok(root.includes('matrikel/'));
   assert.ok(root.includes('batregister/'));
-  assert.ok(matrikel.includes("fromSourceTree ? '../../' : '../'"));
-  assert.ok(boats.includes("fromSourceTree ? '../../' : '../'"));
+  assert.ok(matrikel.includes("isSourceTree ? '../../' : '../'"));
+  assert.ok(boats.includes("isSourceTree ? '../../' : '../'"));
 });
 
 await test('service workers rensar bara sina egna cacher',async()=>{
@@ -75,6 +105,8 @@ await test('service workers rensar bara sina egna cacher',async()=>{
   const boats=await readFile(resolve(ROOT,'sw.js'),'utf8');
   assert.ok(matrikel.includes("key.startsWith('korpholmen-matrikel-')"));
   assert.ok(boats.includes("key.startsWith('korpholmen-batregister-')"));
+  assert.ok(matrikel.includes("return cached || network"));
+  assert.ok(boats.includes("return cached||network"));
 });
 
 console.log(`\n${passed} Båtregister-kontrakt godkända.`);

@@ -5,6 +5,12 @@ datafritt på GitHub Pages. Privat båtdata ligger lokalt i IndexedDB och synkas
 som oföränderliga operationsbatcher till `/batregister/ops` i samma Dropbox
 App Folder som Matrikeln. Bilder ligger separat i `/batregister/bilder`.
 
+Efter första fullständiga synken finns alla båtposter, Matrikelns personlista
+och samtliga båtbildsvarianter i enhetens IndexedDB. Appen kan därefter
+startas, läsas och redigeras offline. Nya bilder lagras först lokalt och ligger
+i en beständig uppladdningskö tills Dropbox kan nås igen. Service workern
+cachar bara det datafria appskalet; privat data blandas aldrig in i webb-cachen.
+
 Den låsta startkopian byggs av arbetskopiorna i `privat/kallkopior/`:
 
 ```sh

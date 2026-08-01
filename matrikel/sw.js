@@ -1,11 +1,11 @@
-const CACHE = 'korpholmen-matrikel-2026-08-01-10';
+const CACHE = 'korpholmen-matrikel-2026-08-01-11';
 const SHELL = [
   './',
   './index.html',
   './styles.css?v=2026-08-01-10',
   './manifest.webmanifest',
   './icons/icon.svg',
-  './src/app.js?v=2026-08-01-10',
+  './src/app.js?v=2026-08-01-11',
   './src/landscape-model.js?v=2026-08-01-10',
   './src/config.js?v=2026-08-01-10',
   './src/data-layer.js?v=2026-08-01-10',
@@ -27,8 +27,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
-  self.skipWaiting();
+  const freshShell = SHELL.map(path => new Request(new URL(path, self.location.href), { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(freshShell)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
@@ -40,8 +40,13 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || url.pathname.includes('/privat/')) return;
-  event.respondWith(fetch(event.request).then(response => {
-    if (response.ok) caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
-    return response;
-  }).catch(() => caches.match(event.request)));
+  const isNavigation = event.request.mode === 'navigate';
+  const cacheKey = isNavigation ? './index.html' : event.request;
+  event.respondWith(caches.match(cacheKey).then(cached => {
+    const network = fetch(event.request, { cache: 'no-store' }).then(response => {
+      if (response.ok) caches.open(CACHE).then(cache => cache.put(cacheKey, response.clone()));
+      return response;
+    }).catch(() => cached || Response.error());
+    return cached || network;
+  }));
 });

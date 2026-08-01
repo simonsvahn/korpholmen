@@ -10,7 +10,7 @@ import {
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
   validateOperation,
-} from '../../packages/core/data-layer.js';
+} from '../core/data-layer.js';
 import {
   DROPBOX_CLIENT_ID,
   DROPBOX_SCOPES,
@@ -27,11 +27,13 @@ const backdrop = $('#backdrop');
 const statusNode = $('#sync-status');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
-const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+const isSourceTree = location.pathname.includes('/apps/batregister/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:batregister-2026-08-01';
 const IMAGE_BOOTSTRAP_META = 'bootstrap:batregister-images-2026-08-01';
+const MATRIKEL_PEOPLE_META = 'cache:matrikel-people';
 const imageUrls = new Map();
+const imageLoads = new Map();
 
 let store;
 let repository;
@@ -46,6 +48,17 @@ const escapeHtml = value => String(value ?? '').replaceAll('&','&amp;').replaceA
 const unique = values => [...new Set(values.filter(Boolean))];
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
 const slug = value => normalize(value).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'bat';
+const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
+
+async function mapConcurrent(values, limit, mapper) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (next < values.length) {
+      const index = next++;
+      await mapper(values[index], index);
+    }
+  }));
+}
 
 function setStatus(text, tone = '') {
   statusNode.textContent = text;
@@ -60,8 +73,26 @@ function deviceId() {
 }
 
 function redirectUri() {
-  const fromSourceTree = location.pathname.includes('/apps/batregister/');
-  return new URL(fromSourceTree ? '../../' : '../', location.href).href;
+  return new URL(isSourceTree ? '../../' : '../', location.href).href;
+}
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
+  try {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    if (hadController) {
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return;
+        reloading = true;
+        location.reload();
+      }, { once: true });
+    }
+    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  } catch (error) {
+    console.warn('Appskalet kunde inte uppdateras', error);
+    return null;
+  }
 }
 function boatRecords() { return repository.listEntities('boat').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.namn).localeCompare(String(b.namn),'sv')); }
 function linkRecords() { return repository.listEntities('boat-person-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
@@ -109,7 +140,7 @@ function imageRef(boat, role = 'thumb') {
 function imageMarkup(boat) {
   const ref = imageRef(boat, 'thumb');
   if (!ref) return '<div class="image-placeholder">Bild saknas</div>';
-  const local = isLocal && ref.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(ref.filename)}` : '';
+  const local = isSourceTree && ref.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(ref.filename)}` : '';
   const cached = imageUrls.get(ref.dropbox_path);
   const source = local || cached || '';
   return `<img class="boat-image" alt="${escapeHtml(boat.namn || 'Båt')}" ${source ? `src="${escapeHtml(source)}"` : ''} data-image-path="${escapeHtml(ref.dropbox_path || '')}" style="${boat.images?.[0]?.focus ? `object-position:${escapeHtml(boat.images[0].focus)}` : ''}">`;
@@ -126,18 +157,72 @@ function card(boat) {
     </span></button>`;
 }
 
+async function cachedBlob(path, transport = null) {
+  if (!path) return null;
+  if (imageLoads.has(path)) return imageLoads.get(path);
+  const promise = (async () => {
+    let blob = await store.getBlob(path);
+    if (!blob && transport) {
+      blob = await transport.getBlob(path);
+      await store.putBlob(path, blob);
+    }
+    return blob;
+  })().finally(() => imageLoads.delete(path));
+  imageLoads.set(path, promise);
+  return promise;
+}
+
+function objectUrl(path, blob) {
+  let url = imageUrls.get(path);
+  if (!url && blob) {
+    url = URL.createObjectURL(blob);
+    imageUrls.set(path, url);
+  }
+  return url || '';
+}
+
 async function hydrateImages(scope = document) {
-  if (!accessToken || isLocal) return;
+  if (isSourceTree) return;
   const nodes = [...scope.querySelectorAll('img[data-image-path]')].filter(node => node.dataset.imagePath && !node.src);
-  const transport = new DropboxTransport({ accessToken, id: 'dropbox-batregister-images', opsRoot: '/batregister/ops' });
-  await Promise.all(nodes.map(async node => {
+  const transport = accessToken && navigator.onLine !== false
+    ? new DropboxTransport({ accessToken, id: 'dropbox-batregister-images', opsRoot: '/batregister/ops' })
+    : null;
+  await mapConcurrent(nodes, 6, async node => {
     const path = node.dataset.imagePath;
     try {
-      let url = imageUrls.get(path);
-      if (!url) { url = URL.createObjectURL(await transport.getBlob(path)); imageUrls.set(path, url); }
-      node.src = url;
-    } catch (error) { node.alt = `Bild kunde inte hämtas: ${error.message}`; }
-  }));
+      const blob = await cachedBlob(path, transport);
+      if (blob && node.isConnected) node.src = objectUrl(path, blob);
+    } catch (error) {
+      if (!isOfflineError(error)) node.alt = `Bild kunde inte hämtas: ${error.message}`;
+    }
+  });
+}
+
+function allImagePaths() {
+  return unique(boatRecords().flatMap(boat => (boat.images || []).flatMap(image => [image.thumb?.dropbox_path, image.full?.dropbox_path])));
+}
+
+async function cacheAllBoatImages(transport) {
+  const paths = allImagePaths();
+  let downloaded = 0;
+  await mapConcurrent(paths, 4, async path => {
+    if (await store.getBlob(path)) return;
+    await cachedBlob(path, transport);
+    downloaded += 1;
+    if (downloaded === 1 || downloaded % 10 === 0) setStatus(`Säkrar bilder för offline-läge · ${downloaded}/${paths.length}`);
+  });
+  return { total: paths.length, downloaded };
+}
+
+async function uploadPendingImages(transport) {
+  const pending = await store.listPendingBlobs();
+  let uploaded = 0;
+  for (const entry of pending) {
+    await transport.putBlobImmutable(entry.key, entry.value);
+    await store.markBlobUploaded(entry.key);
+    uploaded += 1;
+  }
+  return uploaded;
 }
 
 function render() {
@@ -163,7 +248,7 @@ function renderDrawer(id) {
   if (!boat) return closeDrawer();
   const links = linksForBoat(id);
   const fullRef = imageRef(boat, 'full');
-  const local = isLocal && fullRef?.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(fullRef.filename)}` : '';
+  const local = isSourceTree && fullRef?.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(fullRef.filename)}` : '';
   const cached = fullRef?.dropbox_path ? imageUrls.get(fullRef.dropbox_path) : '';
   const image = fullRef ? `<img class="drawer-image" alt="${escapeHtml(boat.namn)}" ${local || cached ? `src="${escapeHtml(local || cached)}"` : ''} data-image-path="${escapeHtml(fullRef.dropbox_path || '')}">` : '';
   drawerContent.innerHTML = `<h2 class="drawer-title">${escapeHtml(boat.namn || 'Namn okänt')}</h2>${image}
@@ -243,14 +328,12 @@ async function deleteLink(id) { await syncEdit(()=>repository.deleteEntity('boat
 
 async function uploadImage(file) {
   if (!file || !selectedBoatId) return;
-  const token=await currentAccessToken();
-  if(!token){alert('Anslut Dropbox innan du lägger till en bild.');return;}
   const hashBytes=new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()));
   const hash=[...hashBytes].map(byte=>byte.toString(16).padStart(2,'0')).join('');
   const extension=(file.type.split('/')[1]||'bin').replace('jpeg','jpg');
   const path=`/batregister/bilder/${hash}.${extension}`;
-  const transport=new DropboxTransport({accessToken:token,id:'dropbox-batregister-images',opsRoot:'/batregister/ops'});
-  setStatus('Laddar upp bild…'); await transport.putBlobImmutable(path,file);
+  await store.putBlob(path,file,{pendingUpload:true});
+  objectUrl(path,file);
   const boat=boatRecords().find(item=>item.id===selectedBoatId);
   const images=[...(boat.images||[]),{id:crypto.randomUUID(),thumb:{dropbox_path:path,sha256:hash},full:{dropbox_path:path,sha256:hash},source:`Uppladdad ${new Date().toISOString()}`}];
   await syncEdit(()=>repository.setField('boat',boat.id,'images',images));
@@ -268,8 +351,9 @@ async function completeOAuthCallbackIfNeeded() {
 async function currentAccessToken() {
   if(accessToken&&Date.now()<accessTokenExpiresAt)return accessToken;
   const refreshToken=await store.getMeta(TOKEN_META); if(!refreshToken||!DROPBOX_CLIENT_ID)return null;
+  if(navigator.onLine===false)return null;
   const token=await exchangeDropboxRefreshToken({clientId:DROPBOX_CLIENT_ID,refreshToken});
-  accessToken=token.access_token; accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000; return accessToken;
+  accessToken=token.access_token; accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000;if(token.refresh_token&&token.refresh_token!==refreshToken)await store.putMeta(TOKEN_META,token.refresh_token);return accessToken;
 }
 
 async function uploadBootstrapOps(transport) {
@@ -280,10 +364,10 @@ async function uploadBootstrapOps(transport) {
 }
 
 async function uploadBootstrapImages(transport) {
-  const pending=await store.getMeta(IMAGE_BOOTSTRAP_META); if(!pending?.pending||!isLocal)return 0;
+  const pending=await store.getMeta(IMAGE_BOOTSTRAP_META); if(!pending?.pending||!isSourceTree)return 0;
   const response=await fetch(LOCAL_IMAGE_MANIFEST_URL,{cache:'no-store'}); if(!response.ok)throw new Error('Bildmanifestet kunde inte läsas');
   const manifest=await response.json(); let uploaded=0;
-  for(const file of manifest.image_files){const imageResponse=await fetch(`${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(file.filename)}`,{cache:'no-store'});if(!imageResponse.ok)throw new Error(`Startbild saknas: ${file.filename}`);await transport.putBlobImmutable(file.dropbox_path,await imageResponse.blob());uploaded+=1;if(uploaded%10===0)setStatus(`Laddar upp startbilder · ${uploaded}/${manifest.image_files.length}`)}
+  for(const file of manifest.image_files){const imageResponse=await fetch(`${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(file.filename)}`,{cache:'no-store'});if(!imageResponse.ok)throw new Error(`Startbild saknas: ${file.filename}`);const blob=await imageResponse.blob();await transport.putBlobImmutable(file.dropbox_path,blob);await store.putBlob(file.dropbox_path,blob);uploaded+=1;if(uploaded%10===0)setStatus(`Laddar upp startbilder · ${uploaded}/${manifest.image_files.length}`)}
   await store.putMeta(IMAGE_BOOTSTRAP_META,{...pending,pending:false,uploaded_at:new Date().toISOString()}); return uploaded;
 }
 
@@ -293,16 +377,19 @@ async function loadMatrikelPeople(token) {
   const transport=new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/ops'});
   await new SyncEngine({repository:repo,transport}).downloadRemote();
   matrikelPeople=repo.listEntities('person').map(entity=>({id:entity.entity_id,...entity.fields})).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
+  await store.putMeta(MATRIKEL_PEOPLE_META,matrikelPeople);
   if(selectedBoatId)renderDrawer(selectedBoatId); return matrikelPeople;
 }
 
 async function syncNow() {
   if(syncPromise)return syncPromise;
-  syncPromise=(async()=>{const token=await currentAccessToken();if(!token){setStatus('Lokalt sparat · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}
+  syncPromise=(async()=>{const hasCredential=Boolean(await store.getMeta(TOKEN_META));if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}ändringar sparas lokalt`,'warning');connectButton.textContent=hasCredential?'Offline · Dropbox ansluten':'Anslut Dropbox när du är online';return null}const token=await currentAccessToken();if(!token){setStatus('Lokalt sparat · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}
     connectButton.textContent='Synka Dropbox';setStatus('Synkar…');const transport=new DropboxTransport({accessToken:token,id:'dropbox-batregister',opsRoot:'/batregister/ops'});
-    const images=await uploadBootstrapImages(transport);const bootstrap=await uploadBootstrapOps(transport);const result=await new SyncEngine({repository,transport}).syncOnce();
-    render();setStatus(`Synkad · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned${images?` · ${images} bilder`:''}`,'ok');
-    if(!matrikelPeople.length)loadMatrikelPeople(token).catch(error=>console.warn('Matrikelpersoner kunde inte hämtas',error));return result})().catch(error=>{console.error(error);setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});
+    const images=await uploadBootstrapImages(transport);const bootstrap=await uploadBootstrapOps(transport);const queuedImages=await uploadPendingImages(transport);const result=await new SyncEngine({repository,transport}).syncOnce();
+    const cached=await cacheAllBoatImages(transport);render();
+    if(!matrikelPeople.length)await loadMatrikelPeople(token).catch(error=>console.warn('Matrikelpersoner kunde inte hämtas',error));
+    if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
+    setStatus(`Synkad · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · ${cached.total} bilder offline${images+queuedImages?` · ${images+queuedImages} bilder upp`:''}`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});
   return syncPromise;
 }
 
@@ -313,7 +400,7 @@ async function connectDropbox() {
 async function connectOrSyncDropbox(){return await currentAccessToken()?syncNow():connectDropbox()}
 
 async function bootstrapLocal() {
-  if(!isLocal)throw new Error('Startkopian kan bara aktiveras lokalt');
+  if(!isSourceTree)throw new Error('Startkopian kan bara aktiveras från källappen');
   const response=await fetch(LOCAL_BOOTSTRAP_URL,{cache:'no-store'});if(!response.ok)throw new Error(`Startkopian kunde inte läsas (${response.status})`);
   const document=await response.json();if(document.operations_version!==1||!Array.isArray(document.operations))throw new Error('Startkopian har fel format');document.operations.forEach(validateOperation);
   await repository.applyRemoteOps(document.operations);
@@ -324,7 +411,7 @@ async function bootstrapLocal() {
 content.addEventListener('click',event=>{const target=event.target.closest('[data-boat-id]');if(target)openDrawer(target.dataset.boatId)});
 backdrop.addEventListener('click',closeDrawer);
 drawer.addEventListener('click',event=>{if(event.target.closest('[data-action="close"]'))closeDrawer();const remove=event.target.closest('[data-delete-link]');if(remove)deleteLink(remove.dataset.deleteLink);if(event.target.closest('[data-action="add-link"]'))addPersonLink();if(event.target.closest('[data-action="delete-boat"]'))deleteBoat();if(event.target.closest('[data-action="refresh-people"]'))currentAccessToken().then(loadMatrikelPeople)});
-drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0])});
+drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
 $('#search').addEventListener('input',event=>{ui.search=event.target.value;render()});
 $('#type-filter').addEventListener('change',event=>{ui.type=event.target.value;render()});
 $('#family-filter').addEventListener('change',event=>{ui.family=event.target.value;render()});
@@ -332,7 +419,7 @@ $('#name-filter').addEventListener('change',event=>{ui.nameStatus=event.target.v
 $('#grouping').addEventListener('change',event=>{ui.grouping=event.target.value;render()});
 $('#image-only').addEventListener('change',event=>{ui.imageOnly=event.target.checked;render()});
 $('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
-document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});window.addEventListener('online',()=>syncNow().catch(()=>{}));
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
 
-async function init(){const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();bootstrapButton.hidden=!isLocal||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.error)}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelPeople=await store.getMeta(MATRIKEL_PEOPLE_META)||[];bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

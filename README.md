@@ -13,3 +13,8 @@ som GitHub.
 - `matrikel/` och `batregister/` — datafria publiceringspaket för GitHub Pages.
 
 Repo-roten är OAuth-retur och appväljare. Privat data finns aldrig i GitHub.
+
+Båda apparna är PWA:er med cache-först-appskal. Efter första lyckade
+Dropbox-synken startar de från lokal IndexedDB utan nät, sparar ändringar
+lokalt och skickar dem automatiskt när anslutningen återkommer. Båtregister
+lagrar även hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
