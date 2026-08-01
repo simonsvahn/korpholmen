@@ -20,5 +20,8 @@ npm run build:publish
 ```
 
 På localhost kan startkopian aktiveras och därefter laddas upp till Dropbox.
-Endast entydiga personnamn och klubbnamn länkas automatiskt till Matrikelns
-stabila person-ID. Oklara fall granskas i det separata Excelarket.
+Entydiga personnamn och klubbnamn länkas automatiskt till Matrikelns stabila
+person-ID. Därutöver bygger startmastern reproducerbart på Simons uttryckligen
+godkända och avvisade beslut. Båtar kan kopplas både till en person och till en
+familj; familjens medlemmar hämtas ur Matrikelns lokalt cachade personlista.
+Oklara fall granskas i det separata Excelarket.

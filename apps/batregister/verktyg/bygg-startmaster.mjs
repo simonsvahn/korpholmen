@@ -20,9 +20,10 @@ const padded = value => ` ${norm(value)} `;
 const tokens = value => norm(value).split(/\s+/).filter(Boolean);
 
 await mkdir(IMAGE_OUT, { recursive: true });
-const [boatDb, sourceHtml, initial, metadata, approved] = await Promise.all([
+const [boatDb, sourceHtml, decisions, initial, metadata, approved] = await Promise.all([
   readJson(resolve(SOURCE, 'byggkit/batregister.json')),
   readFile(resolve(SOURCE, 'Båtflottan – bildregistret.html'), 'utf8'),
+  readJson(resolve(SOURCE, 'byggkit/godkanda-kopplingar-2026-08-01.json')),
   readJson(resolve(MATRICLE, 'initial-ops.json')),
   readJson(resolve(MATRICLE, 'ui-metadata-ops.json')),
   readJson(resolve(MATRICLE, 'approved-excel-ops.json')),
@@ -36,6 +37,57 @@ if (visualBoats.length !== boatDb.batar.length) throw new Error('Båtantalet ski
 
 const personState = materialize([...initial.operations, ...metadata.operations, ...approved.operations]);
 const people = personState.listEntities('person').map(entity => ({ id: entity.entity_id, ...entity.fields }));
+const peopleById = new Map(people.map(person => [person.id, person]));
+const boatIds = new Set(boatDb.batar.map(boat => boat.id));
+const familyId = name => norm(name).replace(/ /g, '-') || 'familj';
+const familiesById = new Map();
+for (const person of people) {
+  if (!person.family || person.family === 'Utan känd släktkoppling' || /^Endast i /.test(person.family)) continue;
+  const id = familyId(person.family);
+  const existing = familiesById.get(id);
+  if (existing && existing.name !== person.family) throw new Error(`Familjenamn kolliderar efter normalisering: ${existing.name} / ${person.family}`);
+  familiesById.set(id, {
+    id,
+    name: person.family,
+    match_family_labels: [person.family],
+    explicit_person_ids: [],
+    parent_family_ids: [],
+    source: 'Härledd familjekatalog från Matrikelns godkända familjefält',
+  });
+}
+for (const family of decisions.families) {
+  const existing = familiesById.get(family.id);
+  familiesById.set(family.id, {
+    ...existing,
+    ...family,
+    match_family_labels: [...new Set([...(existing?.match_family_labels || []), ...family.match_family_labels])],
+    explicit_person_ids: [...new Set([...(existing?.explicit_person_ids || []), ...family.explicit_person_ids])],
+    parent_family_ids: [...new Set([...(existing?.parent_family_ids || []), ...family.parent_family_ids])],
+    source: decisions.source,
+  });
+}
+const pairKey = (boatId, personId) => `${boatId}--${personId}`;
+const rejectedPairs = new Set(decisions.rejected_person_suggestions.map(link => pairKey(link.boat_id, link.person_id)));
+
+function requireBoat(id, context) {
+  if (!boatIds.has(id)) throw new Error(`Okänd båt i ${context}: ${id}`);
+}
+function requirePerson(id, context) {
+  if (!peopleById.has(id)) throw new Error(`Okänd matrikelperson i ${context}: ${id}`);
+}
+for (const link of [...decisions.approved_person_links, ...decisions.rejected_person_suggestions]) {
+  requireBoat(link.boat_id, 'personbeslut');
+  requirePerson(link.person_id, 'personbeslut');
+}
+for (const family of decisions.families) {
+  for (const personId of family.explicit_person_ids) requirePerson(personId, `familjen ${family.name}`);
+}
+for (const link of decisions.approved_family_links) {
+  requireBoat(link.boat_id, 'familjebeslut');
+  if (!familiesById.has(link.family_id)) throw new Error(`Okänd familj i familjebeslut: ${link.family_id}`);
+}
+for (const override of decisions.boat_overrides) requireBoat(override.boat_id, 'båtjustering');
+
 const personVariants = people.map(person => ({
   person,
   variants: [person.display_name, person.club_name, ...(person.aliases || [])]
@@ -77,7 +129,7 @@ function securePeople(boat) {
 
 const imageFiles = new Map();
 const boats = [];
-const links = [];
+const links = new Map();
 for (let index = 0; index < boatDb.batar.length; index += 1) {
   const sourceBoat = boatDb.batar[index];
   const visualBoat = visualBoats[index];
@@ -109,10 +161,15 @@ for (let index = 0; index < boatDb.batar.length; index += 1) {
   }
   const fields = { ...sourceBoat, images };
   delete fields.bilder;
+  for (const override of decisions.boat_overrides.filter(item => item.boat_id === sourceBoat.id)) {
+    fields[override.field] = override.value;
+  }
   boats.push({ id: sourceBoat.id, fields });
   for (const match of securePeople(sourceBoat)) {
-    links.push({
-      id: `${sourceBoat.id}--${match.person.id}`,
+    const id = pairKey(sourceBoat.id, match.person.id);
+    if (rejectedPairs.has(id)) continue;
+    links.set(id, {
+      id,
       fields: {
         boat_id: sourceBoat.id,
         person_id: match.person.id,
@@ -124,6 +181,47 @@ for (let index = 0; index < boatDb.batar.length; index += 1) {
     });
   }
 }
+
+for (const approvedLink of decisions.approved_person_links) {
+  const person = peopleById.get(approvedLink.person_id);
+  const id = pairKey(approvedLink.boat_id, approvedLink.person_id);
+  links.set(id, {
+    id,
+    fields: {
+      boat_id: approvedLink.boat_id,
+      person_id: person.id,
+      person_display_name: person.display_name,
+      role: 'ägare/anknuten',
+      confidence: 'godkänd',
+      source: decisions.source,
+    },
+  });
+}
+
+const families = [...familiesById.values()].sort((a,b)=>a.name.localeCompare(b.name,'sv')).map(family => ({
+  id: family.id,
+  fields: {
+    name: family.name,
+    match_family_labels: family.match_family_labels,
+    explicit_person_ids: family.explicit_person_ids,
+    parent_family_ids: family.parent_family_ids,
+    source: family.source,
+  },
+}));
+const familyLinks = decisions.approved_family_links.map(link => {
+  const family = familiesById.get(link.family_id);
+  return {
+    id: `${link.boat_id}--family--${link.family_id}`,
+    fields: {
+      boat_id: link.boat_id,
+      family_id: link.family_id,
+      family_name: family.name,
+      role: 'ägarfamilj/anknuten familj',
+      confidence: 'godkänd',
+      source: decisions.source,
+    },
+  };
+});
 
 let seq = 0;
 const operations = [];
@@ -146,23 +244,32 @@ set('root', 'batregister', 'schema_version', 1);
 set('root', 'batregister', 'migration_id', '2026-08-01-batflottan-bildregistret');
 set('root', 'batregister', 'source_sha256', sha256(sourceHtml));
 for (const boat of boats) for (const [field, value] of Object.entries(boat.fields)) set('boat', boat.id, field, value);
-for (const link of links) for (const [field, value] of Object.entries(link.fields)) set('boat-person-link', link.id, field, value);
+for (const link of links.values()) for (const [field, value] of Object.entries(link.fields)) set('boat-person-link', link.id, field, value);
+for (const family of families) for (const [field, value] of Object.entries(family.fields)) set('family', family.id, field, value);
+for (const link of familyLinks) for (const [field, value] of Object.entries(link.fields)) set('boat-family-link', link.id, field, value);
 
 const document = {
   operations_version: 1,
   dataset: 'batregister',
   device_id: DEVICE,
   migration_id: '2026-08-01-batflottan-bildregistret',
-  counts: { boats: boats.length, boat_person_links: links.length, image_records: boats.reduce((sum, boat) => sum + boat.fields.images.length, 0), image_files: imageFiles.size },
+  counts: {
+    boats: boats.length,
+    boat_person_links: links.size,
+    families: families.length,
+    boat_family_links: familyLinks.length,
+    image_records: boats.reduce((sum, boat) => sum + boat.fields.images.length, 0),
+    image_files: imageFiles.size,
+  },
   operations,
 };
 const manifest = {
   migration_id: document.migration_id,
   source: { path: '../kallkopior/Båtflottan – bildregistret.html', sha256: sha256(sourceHtml) },
-  generated_from: ['byggkit/batregister.json', 'Båtflottan – bildregistret.html'],
+  generated_from: ['byggkit/batregister.json', 'Båtflottan – bildregistret.html', 'byggkit/godkanda-kopplingar-2026-08-01.json'],
   counts: document.counts,
   image_files: [...imageFiles.values()].sort((a, b) => a.filename.localeCompare(b.filename)),
-  principle: 'Båtdata och bildkopior migreras oförändrade. Endast exakta personnamn eller exakta klubbnamn länkas automatiskt.',
+  principle: 'Båtdata och bildkopior migreras oförändrade. Exakta namn länkas automatiskt; Simons godkända och avvisade beslut tillämpas därefter explicit.',
 };
 await writeFile(resolve(OUT, 'initial-ops.json'), JSON.stringify(document, null, 2));
 await writeFile(resolve(OUT, 'bildmanifest.json'), JSON.stringify(manifest, null, 2));
