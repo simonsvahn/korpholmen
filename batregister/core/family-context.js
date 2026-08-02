@@ -380,6 +380,68 @@ export function searchableFamilyTargets(context) {
   });
 }
 
+function familyReferenceCompare(left, right) {
+  return String(left?.reference_code || left?.name || '').localeCompare(
+    String(right?.reference_code || right?.name || ''),
+    'sv',
+    { numeric: true },
+  );
+}
+
+// Gör de stabila grupperna bläddringsbara som ett träd. Varje grupp och
+// familj placeras en gång i navigeringen även om modellen tillåter flera
+// föräldra- eller släktkopplingar. Själva datamodellen ändras inte.
+export function familyBrowseHierarchy(context) {
+  const groups = [...context.kinGroups].sort(familyReferenceCompare);
+  const familyUnits = [...context.familyUnits].sort(familyReferenceCompare);
+  const groupIds = new Set(groups.map(group => group.id));
+  const parentCandidates = new Map(groups.map(group => [group.id, new Set()]));
+
+  for (const group of groups) {
+    for (const parentId of group.parent_group_ids || []) {
+      if (groupIds.has(parentId) && parentId !== group.id) parentCandidates.get(group.id).add(parentId);
+    }
+    for (const childId of group.child_group_ids || []) {
+      if (groupIds.has(childId) && childId !== group.id) parentCandidates.get(childId).add(group.id);
+    }
+  }
+
+  const parentByGroupId = new Map();
+  for (const group of groups) {
+    const parent = [...parentCandidates.get(group.id)]
+      .map(id => context.kinGroupById.get(id))
+      .filter(Boolean)
+      .sort(familyReferenceCompare)[0];
+    if (parent) parentByGroupId.set(group.id, parent.id);
+  }
+
+  const childGroupsByParentId = new Map(groups.map(group => [group.id, []]));
+  for (const group of groups) {
+    const parentId = parentByGroupId.get(group.id);
+    if (parentId) childGroupsByParentId.get(parentId).push(group);
+  }
+  for (const children of childGroupsByParentId.values()) children.sort(familyReferenceCompare);
+
+  const familyUnitsByKinGroupId = new Map(groups.map(group => [group.id, []]));
+  const unlinkedFamilyUnits = [];
+  for (const family of familyUnits) {
+    const primaryGroup = (family.kin_group_ids || [])
+      .map(id => context.kinGroupById.get(id))
+      .filter(Boolean)
+      .sort(familyReferenceCompare)[0];
+    if (primaryGroup) familyUnitsByKinGroupId.get(primaryGroup.id).push(family);
+    else unlinkedFamilyUnits.push(family);
+  }
+
+  return {
+    roots: groups.filter(group => !parentByGroupId.has(group.id)),
+    parentByGroupId,
+    childGroupsByParentId,
+    familyUnitsByKinGroupId,
+    unlinkedFamilyUnits,
+  };
+}
+
 export function searchFamilyTargets(context, value, { limit = 8 } = {}) {
   const query = normalizeFamilyText(value);
   const targets = searchableFamilyTargets(context);

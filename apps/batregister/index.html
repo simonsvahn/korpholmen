@@ -8,7 +8,7 @@
   <title>Båtregister · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-02-2">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-02-3">
 </head>
 <body>
   <header class="site-header">
@@ -39,7 +39,11 @@
         <input id="family-filter" type="hidden" value="">
         <input id="family-filter-search" type="search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="family-filter-results" placeholder="Sök namn, person eller kod …">
         <button id="family-filter-clear" type="button" aria-label="Rensa familje- och släktfiltret" hidden>×</button>
-        <div id="family-filter-results" class="family-results" role="listbox" hidden></div>
+        <div id="family-filter-results" class="family-results" hidden></div>
+      </div>
+      <div class="family-picker-actions">
+        <button id="family-filter-browse" type="button" aria-expanded="false" aria-controls="family-filter-results">Visa hela familjelistan</button>
+        <span id="family-filter-summary" aria-live="polite">Familjedata laddas …</span>
       </div>
     </div>
     <label class="field">Namnstatus
@@ -62,6 +66,6 @@
   </aside>
   <div id="backdrop" hidden></div>
 
-  <script type="module" src="./src/app.js?v=2026-08-02-4"></script>
+  <script type="module" src="./src/app.js?v=2026-08-02-5"></script>
 </body>
 </html>

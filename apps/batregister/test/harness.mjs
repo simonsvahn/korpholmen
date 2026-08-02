@@ -8,6 +8,7 @@ import { MemoryStore, materialize, validateOperation } from '../../../packages/c
 import {
   KIN_GROUP_TYPE,
   buildFamilyContext,
+  familyBrowseHierarchy,
   familySelectionMatches,
   searchFamilyTargets,
 } from '../../../packages/core/family-context.js';
@@ -94,6 +95,7 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes('../matrikel/?person='));
   assert.ok(html.includes('id="person-filter"'));
   assert.ok(html.includes('id="family-filter-search"'));
+  assert.ok(html.includes('id="family-filter-browse"'));
   assert.ok(html.includes('role="combobox"'));
   assert.ok(html.includes('Familj eller släkt'));
   assert.ok(html.includes('stabil FAMILJ'));
@@ -102,18 +104,27 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes("repository.deleteEntities"));
 });
 
-await test('familjefiltret söker stabila grupper utan en lång lista med äldre etiketter', async()=>{
+await test('familjefiltret söker och bläddrar bland stabila grupper utan äldre etiketter', async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   const html=await readFile(resolve(ROOT,'index.html'),'utf8');
   assert.ok(app.includes('searchFamilyTargets'));
   assert.ok(app.includes('{ limit: 8 }'));
   assert.ok(app.includes('searchableFamilyTargets'));
+  assert.ok(app.includes('renderFamilyBrowseResults'));
+  assert.ok(app.includes('Inga individer listas här'));
   assert.equal(html.includes('<select id="family-filter"'),false);
   assert.equal(html.includes('Äldre etiketter'),false);
   assert.equal(app.includes('<optgroup label="Äldre familjeetiketter"'),false);
   const results=searchFamilyTargets(familyContext,'Svahn');
   assert.ok(results.length>0);
   assert.ok(results.every(result=>[KIN_GROUP_TYPE,'family-unit'].includes(result.type)));
+  const hierarchy=familyBrowseHierarchy(familyContext);
+  const visitedGroups=[];
+  const visit=group=>{visitedGroups.push(group.id);for(const child of hierarchy.childGroupsByParentId.get(group.id)||[])visit(child)};
+  hierarchy.roots.forEach(visit);
+  assert.equal(new Set(visitedGroups).size,familyContext.kinGroups.length);
+  const placedFamilies=[...hierarchy.familyUnitsByKinGroupId.values()].flat().length+hierarchy.unlinkedFamilyUnits.length;
+  assert.equal(placedFamilies,familyContext.familyUnits.length);
 });
 
 await test('båtar kan länkas till stabil FAMILJ eller SLÄKT med ärvd synlighet',async()=>{
