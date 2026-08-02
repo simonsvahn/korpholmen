@@ -115,7 +115,8 @@ await test('webbappen kan söka, visa källkontroll och skapa händelser/innehav
   assert.ok(app.includes("entityType: 'holding'"));
   assert.ok(app.includes('contract_date'));
   assert.ok(app.includes('observed_on'));
-  assert.ok(app.includes('Strukturerad historisk kedja'));
+  assert.ok(app.includes('data-section="history"><h3>Historik</h3>'));
+  assert.ok(app.indexOf('${renderStructuredHistorySection(holdingClaims') < app.indexOf('data-section="identity"'));
   assert.ok(app.includes('Historiska händelseuppgifter'));
   assert.ok(html.includes('data-view="timeline"'));
   assert.ok(html.includes('data-view="audit"'));
