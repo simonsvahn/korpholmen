@@ -62,7 +62,7 @@ await test('Dropbox-namnrymden skiljer Båtregister från Matrikeln',async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   assert.ok(transport.includes("opsRoot = '/ops'"));
   assert.ok(app.includes("opsRoot: '/batregister/ops'"));
-  assert.ok(app.includes("opsRoot:'/ops'"));
+  assert.ok(app.includes("opsRoot:'/matrikel/ops'"));
 });
 
 await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{

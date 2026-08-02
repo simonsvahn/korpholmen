@@ -1,7 +1,7 @@
 import { createBatch, validateBatch } from './batch.js?v=2026-08-01-10';
 import { CursorResetError, TransportError } from './errors.js?v=2026-08-01-10';
 
-const isBatchPath = path => /^\/ops\/.+\.json$/.test(path);
+const isBatchPath = path => /\/ops\/.+\.json$/.test(path);
 const defaultSleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function mapConcurrent(values, limit, mapper) {

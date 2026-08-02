@@ -8,7 +8,7 @@ import {
   createBatch,
   openSlaktlandskapDB,
   validateOperation,
-} from './data-layer.js?v=2026-08-01-10';
+} from './data-layer.js?v=2026-08-02-3';
 import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-10';
 import {
   buildGraph,
@@ -69,6 +69,8 @@ const isSourceTree = location.pathname.includes('/apps/matrikel/');
 const TOKEN_META = 'dropbox:refresh-token-v1';
 const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
 const FAMILY_MODEL_META = 'migration:familjemodell-2026-08-02';
+const MATRIKEL_OPS_ROOT = '/matrikel/ops';
+const LEGACY_OPS_ROOT = '/ops';
 
 let repository;
 let store;
@@ -1006,6 +1008,32 @@ async function uploadBootstrapIfNeeded(transport) {
   return uploaded;
 }
 
+async function migrateLateLegacyBatches(primaryTransport, token) {
+  const legacyTransport = new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-matrikel-legacy-read',
+    opsRoot: LEGACY_OPS_ROOT,
+  });
+  let cursor = null;
+  let migratedOps = 0;
+  try {
+    while (true) {
+      const page = await legacyTransport.listChanges(cursor, { createRoot: false });
+      for (const entry of page.entries) {
+        const batch = await legacyTransport.getJson(entry.path);
+        await primaryTransport.putBatch(batch);
+        migratedOps += batch.ops.length;
+      }
+      cursor = page.cursor;
+      if (!page.has_more) break;
+    }
+  } catch (error) {
+    const missingLegacyFolder = error?.status === 409 && String(error?.code || '').includes('not_found');
+    if (!missingLegacyFolder) throw error;
+  }
+  return migratedOps;
+}
+
 async function syncNow() {
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
@@ -1023,7 +1051,10 @@ async function syncNow() {
     }
     connectButton.textContent = 'Synka Dropbox';
     setStatus('Synkar…');
-    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-slaktlandskap' });
+    // Ny transportidentitet gör att en gammal /ops-cursor aldrig återanvänds
+    // mot den nya namnrymden. Oföränderliga batcher tål säker återuppladdning.
+    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-v2', opsRoot: MATRIKEL_OPS_ROOT });
+    const migratedLegacyOps = await migrateLateLegacyBatches(transport, token);
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
@@ -1031,7 +1062,7 @@ async function syncNow() {
     render();
     familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
     if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
-    else setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
+    else setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned${migratedLegacyOps ? ` · ${migratedLegacyOps} äldre operationer flyttade` : ''}`, 'ok');
     return result;
   })().catch((error) => {
     console.error(error);
