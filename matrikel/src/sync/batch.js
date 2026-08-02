@@ -1,8 +1,10 @@
 import { cloneJson } from '../domain/canonical.js?v=2026-08-01-10';
 import { validateOperation } from '../domain/operations.js?v=2026-08-01-10';
 
-export function batchPath(deviceId, fromSeq, toSeq) {
-  return `/ops/${encodeURIComponent(deviceId)}-${String(fromSeq).padStart(10, '0')}-${String(toSeq).padStart(10, '0')}.json`;
+export function batchPath(deviceId, fromSeq, toSeq, rootPath = '/matrikel/ops') {
+  const root = String(rootPath || '/matrikel/ops').replace(/\/$/, '');
+  if (!root.startsWith('/') || root.includes('..')) throw new TypeError('Ogiltig operationsmapp');
+  return `${root}/${encodeURIComponent(deviceId)}-${String(fromSeq).padStart(10, '0')}-${String(toSeq).padStart(10, '0')}.json`;
 }
 
 export function createBatch(ops) {

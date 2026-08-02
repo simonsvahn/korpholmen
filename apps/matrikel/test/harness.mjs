@@ -5,10 +5,12 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
+  DropboxTransport,
   MemoryRemoteTransport,
   MemoryStore,
   Repository,
   SyncEngine,
+  batchPath,
   materialize
 } from '../src/data-layer.js';
 import { propertyLinkEntityId, relationEntityId, validateArchive } from '../src/domain/slakt-schema.js';
@@ -321,6 +323,27 @@ await test('publiceringsbygget innehåller bara det datafria appskalet', async (
   const bundle = (await Promise.all(files.map(file => readFile(file, 'utf8').catch(() => '')))).join('\n');
   const leakedNames = archive.persons.map(person => person.fields.display_name).filter(name => bundle.includes(name));
   assert.deepEqual(leakedNames, []);
+});
+
+await test('Dropbox-namnrymden placerar Matrikeln i matrikel/ops', async () => {
+  assert.equal(batchPath('web-enhet', 1, 2), '/matrikel/ops/web-enhet-0000000001-0000000002.json');
+  const calls = [];
+  const transport = new DropboxTransport({
+    accessToken: 'test-token',
+    opsRoot: '/matrikel/ops',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: JSON.parse(options.body) });
+      return { ok: true, json: async () => ({ entries: [], cursor: 'cursor-1', has_more: false }) };
+    },
+  });
+  await transport.listChanges(null, { createRoot: false });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith('/files/list_folder'));
+  assert.equal(calls[0].body.path, '/matrikel/ops');
+  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(appSource.includes("id: 'dropbox-matrikel-v2'"));
+  assert.ok(appSource.includes("opsRoot: MATRIKEL_OPS_ROOT"));
+  assert.ok(appSource.includes("opsRoot: LEGACY_OPS_ROOT"));
 });
 
 await test('Dropbox-knappen synkar befintlig anslutning och tom master rapporteras ärligt', async () => {

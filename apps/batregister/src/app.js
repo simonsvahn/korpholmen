@@ -482,7 +482,7 @@ async function uploadBootstrapImages(transport) {
 async function loadMatrikelPeople(token) {
   if(!token)return [];
   const repo=await new Repository({store:new MemoryStore(),deviceId:'bat-matrikel-read'}).init();
-  const transport=new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/ops'});
+  const transport=new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/matrikel/ops'});
   await new SyncEngine({repository:repo,transport}).downloadRemote();
   matrikelPeople=repo.listEntities('person').map(entity=>({id:entity.entity_id,...entity.fields})).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
   matrikelRelations=repo.listEntities('relation').map(entity=>({id:entity.entity_id,...entity.fields}));

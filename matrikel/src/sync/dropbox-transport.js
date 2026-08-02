@@ -15,12 +15,13 @@ const normalizePath = value => {
 const parentPath = path => path.slice(0, path.lastIndexOf('/')) || '/';
 
 export class DropboxTransport {
-  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox' }) {
+  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/matrikel/ops' }) {
     if (!accessToken) throw new TypeError('Dropbox access token saknas');
     if (!fetchImpl) throw new TypeError('fetch saknas');
     this.accessToken = accessToken;
     this.fetch = fetchImpl.bind(globalThis);
     this.id = id;
+    this.opsRoot = normalizePath(opsRoot).replace(/\/$/, '') || '/';
     this.knownFolders = new Set(['/']);
   }
 
@@ -52,6 +53,7 @@ export class DropboxTransport {
   async ensureFolder(pathValue) {
     const path = normalizePath(pathValue);
     if (path === '/' || this.knownFolders.has(path)) return;
+    await this.ensureFolder(parentPath(path));
     try {
       await this.rpc('/files/create_folder_v2', { path, autorename: false });
     } catch (error) {
@@ -105,17 +107,17 @@ export class DropboxTransport {
 
   async putBatch(batch) {
     validateBatch(batch);
-    return this.putImmutable(batchPath(batch.device_id, batch.from_seq, batch.to_seq), batch);
+    return this.putImmutable(batchPath(batch.device_id, batch.from_seq, batch.to_seq, this.opsRoot), batch);
   }
 
-  async listChanges(cursor = null) {
+  async listChanges(cursor = null, { createRoot = true } = {}) {
     let result;
     if (cursor) {
       result = await this.rpc('/files/list_folder/continue', { cursor });
     } else {
-      await this.ensureFolder('/ops');
+      if (createRoot) await this.ensureFolder(this.opsRoot);
       result = await this.rpc('/files/list_folder', {
-        path: '/ops', recursive: false, include_deleted: false, include_non_downloadable_files: false
+        path: this.opsRoot, recursive: false, include_deleted: false, include_non_downloadable_files: false
       });
     }
     return {
@@ -128,9 +130,9 @@ export class DropboxTransport {
   }
 
   async getLatestCursor() {
-    await this.ensureFolder('/ops');
+    await this.ensureFolder(this.opsRoot);
     const result = await this.rpc('/files/list_folder/get_latest_cursor', {
-      path: '/ops', recursive: false, include_deleted: false, include_non_downloadable_files: false
+      path: this.opsRoot, recursive: false, include_deleted: false, include_non_downloadable_files: false
     });
     return result.cursor;
   }

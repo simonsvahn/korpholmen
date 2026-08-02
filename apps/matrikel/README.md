@@ -52,6 +52,8 @@ Den separata Dropbox-appen är skapad och dess publika appnyckel ligger i
 `src/config.js`. Den ska vara en Scoped App med App Folder och behörigheterna
 `files.metadata.read`, `files.content.read` och `files.content.write`.
 App-hemlighet läggs aldrig i klienten. OAuth kör code flow med PKCE/S256.
+Matrikelns oföränderliga batcher ligger i `/matrikel/ops`, parallellt med
+Båtregistrets `/batregister/ops`.
 
 Det datafria paketet byggs till repo-rotens `matrikel/` med:
 
