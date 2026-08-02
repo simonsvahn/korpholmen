@@ -5,6 +5,11 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { MemoryStore, materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import {
+  KIN_GROUP_TYPE,
+  buildFamilyContext,
+  familySelectionMatches,
+} from '../../../packages/core/family-context.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -18,6 +23,14 @@ const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
 const imageManifest=await readJson(resolve(PRIVATE,'bildmanifest.json'));
 const decisions=await readJson(resolve(ROOT,'privat/kallkopior/byggkit/godkanda-kopplingar-2026-08-01.json'));
 const state=materialize(document.operations);
+
+const matrikelPrivate=resolve(ROOT,'../matrikel/privat');
+const matrikelMigration=resolve(matrikelPrivate,'migrering-2026-08-01');
+const matrikelDocuments=await Promise.all(['initial-ops.json','ui-metadata-ops.json','approved-excel-ops.json'].map(file=>readJson(resolve(matrikelMigration,file))));
+const familyBatch=await readJson(resolve(matrikelPrivate,'familjemodell-2026-08-02-batch.json'));
+const matrikelState=materialize([...matrikelDocuments.flatMap(item=>item.operations),...familyBatch.ops]);
+const entityRows=type=>matrikelState.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
+const familyContext=buildFamilyContext({people:entityRows('person'),relations:entityRows('relation'),familyUnits:entityRows('family-unit'),kinGroups:entityRows(KIN_GROUP_TYPE)});
 
 await test('startmastern innehåller 168 båtar och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
@@ -89,13 +102,34 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
 await test('båtar kan länkas till stabil FAMILJ eller SLÄKT med ärvd synlighet',async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   const core=await readFile(resolve(REPO,'packages/core/family-context.js'),'utf8');
-  assert.ok(app.includes('associationAppliesToTarget'));
+  assert.ok(app.includes('familySelectionMatches'));
   assert.ok(app.includes('targetMemberDetails'));
   assert.ok(app.includes("field:'target_code'"));
   assert.ok(app.includes("field:'confirmed',value:true"));
   assert.ok(core.includes('anchors_and_descendants'));
   assert.ok(core.includes("return 'FAMILJ'"));
   assert.ok(core.includes("return 'SLÄKT'"));
+});
+
+await test('SLÄKT-filter hittar personlänkar och godkända äldre familjeetiketter',()=>{
+  const targetGroup=familyContext.kinGroups.find(group=>group.reference_code==='SLÄKT-006');
+  assert.equal(targetGroup.name,'Lena–Böving');
+  const target={type:KIN_GROUP_TYPE,id:targetGroup.id};
+  const boats=state.listEntities('boat').map(entity=>({id:entity.entity_id,...entity.fields}));
+  const personLinks=state.listEntities('boat-person-link').map(entity=>({id:entity.entity_id,...entity.fields}));
+  const familyLinks=state.listEntities('boat-family-link').map(entity=>({id:entity.entity_id,...entity.fields}));
+  const groupLinks=state.listEntities('boat-group-link').map(entity=>({id:entity.entity_id,...entity.fields}));
+  assert.equal(groupLinks.length,0);
+  const hits=boats.filter(boat=>familySelectionMatches({
+    target,
+    context:familyContext,
+    structuredAssociations:groupLinks.filter(link=>link.boat_id===boat.id),
+    linkedPersonIds:personLinks.filter(link=>link.boat_id===boat.id).map(link=>link.person_id),
+    legacyFamilyLabels:[boat.slakt,...familyLinks.filter(link=>link.boat_id===boat.id).map(link=>link.family_name)],
+  }));
+  assert.equal(hits.length,29);
+  assert.ok(hits.some(boat=>boat.namn==='Gerry'));
+  assert.ok(hits.some(boat=>boat.namn==='Pancho'));
 });
 
 await test('båtbilder kan köas och läsas lokalt utan Dropbox',async()=>{

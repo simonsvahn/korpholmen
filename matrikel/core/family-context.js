@@ -247,6 +247,33 @@ export function targetMemberIds(target, context) {
   return targetMemberDetails(target, context).map(member => member.person_id);
 }
 
+export function targetFamilyLabels(target, context) {
+  const labels = targetMemberIds(target, context).flatMap(personId => {
+    const person = context.peopleById.get(personId);
+    return [person?.family, ...(person?.family_labels || [])];
+  });
+  return [...new Set(labels.map(value => String(value || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'sv'));
+}
+
+export function familySelectionMatches({
+  target,
+  context,
+  structuredAssociations = [],
+  linkedPersonIds = [],
+  legacyFamilyLabels = [],
+} = {}) {
+  if (!target?.type || !target?.id || !context) return false;
+  if (structuredAssociations.some(association => associationAppliesToTarget(association, target, context))) return true;
+  const memberIds = new Set(targetMemberIds(target, context));
+  if (linkedPersonIds.some(personId => memberIds.has(personId))) return true;
+  // Äldre familjeetiketter beskriver släktgrenar, inte säkert en enskild
+  // familjebildning. De används därför bara som övergång för SLÄKT-filter.
+  if (target.type !== KIN_GROUP_TYPE) return false;
+  const targetLabels = new Set(targetFamilyLabels(target, context).map(normalizeFamilyText));
+  return legacyFamilyLabels.some(label => targetLabels.has(normalizeFamilyText(label)));
+}
+
 export function groupsForPerson(personId, context) {
   const result = [];
   for (const group of context.familyUnits) {
