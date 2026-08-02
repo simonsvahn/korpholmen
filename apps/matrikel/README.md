@@ -1,5 +1,9 @@
 # Matrikel — säker lokal-först-app
 
+Matrikelns roll som identitetsmaster och dess gränser mot övriga appar finns i
+den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md). Familje- och
+släktmodellen fördjupas i [`FAMILJEMODELL.md`](../../FAMILJEMODELL.md).
+
 Ny lokal-först-app enligt samma arkitektur som Packa:
 
 - datafritt appskal för GitHub Pages;

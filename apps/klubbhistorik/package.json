@@ -1,0 +1,10 @@
+{
+  "name": "kbk-klubbhistorik",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:migration": "node verktyg/bygg-startmaster.mjs",
+    "build:publish": "node verktyg/bygg-publicering.mjs",
+    "test": "node test/harness.mjs"
+  }
+}
