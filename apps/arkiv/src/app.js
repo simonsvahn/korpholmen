@@ -19,7 +19,7 @@ const entityNode = $('#entity-list');
 const statusNode = $('#sync-status');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
-const isSourceTree = location.pathname.includes('/apps/dokumentarkiv/');
+const isSourceTree = location.pathname.includes('/apps/arkiv/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:dokumentarkiv-2026-08-02';
 const ENTITY_TYPES = ['person', 'båt', 'plats', 'fastighet', 'hus', 'organisation'];
@@ -45,9 +45,9 @@ function setStatus(text, tone = '') {
 }
 
 function deviceId() {
-  const key = 'korpholmen:dokumentarkiv-device-id';
+  const key = 'korpholmen:arkiv-device-id';
   let id = localStorage.getItem(key);
-  if (!id) { id = `dokumentarkiv-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); }
+  if (!id) { id = `arkiv-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); }
   return id;
 }
 
@@ -196,7 +196,7 @@ async function syncNow() {
     const token = await currentAccessToken();
     if (!token) { setStatus('Lokalt arkiv · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; }
     connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar arkivet…');
-    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-dokumentarkiv', opsRoot: '/dokumentarkiv/ops' });
+    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-arkiv', opsRoot: '/arkiv/ops' });
     const bootstrap = await uploadBootstrapOps(transport);
     const result = await new SyncEngine({ repository, transport }).syncOnce();
     render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
@@ -210,7 +210,7 @@ async function syncNow() {
 }
 
 async function connectDropbox() {
-  sessionStorage.setItem('korpholmen:oauth-return', new URL('dokumentarkiv/', redirectUri()).pathname);
+  sessionStorage.setItem('korpholmen:oauth-return', new URL('arkiv/', redirectUri()).pathname);
   const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES });
   location.assign(attempt.url);
 }
@@ -247,7 +247,7 @@ window.addEventListener('offline', () => syncNow().catch(() => {}));
 
 async function init() {
   const serviceWorkerPromise = registerServiceWorker();
-  const db = await openSlaktlandskapDB({ name: 'korpholmen-dokumentarkiv' });
+  const db = await openSlaktlandskapDB({ name: 'korpholmen-arkiv' });
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: deviceId() }).init();
   bootstrapButton.hidden = !isSourceTree;

@@ -45,8 +45,10 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(html.includes('id="search"'));
   assert.ok(html.includes('id="entity-filter"'));
   assert.ok(html.includes('id="reader"'));
+  assert.ok(html.includes('Korpholmens Båtklubbs arkiv – Protokoll & handlingar'));
+  assert.ok(html.includes('Korpholmens Båtklubbs arkiv'));
   assert.ok(app.includes('document.transcript'));
-  assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
+  assert.ok(app.includes("opsRoot: '/arkiv/ops'"));
   assert.ok(styles.includes('.papper'));
   assert.ok(styles.includes('@media print'));
 });
@@ -58,8 +60,8 @@ await test('publiceringsbygget är datafritt',()=>{
 
 await test('publiceringspaketet har en egen offlinebar kärna utan privata avskrifter',async()=>{
   const [publishedApp,publishedCore,serviceWorker]=await Promise.all([
-    readFile(resolve(REPO,'dokumentarkiv/src/app.js'),'utf8'),
-    readFile(resolve(REPO,'dokumentarkiv/core/data-layer.js'),'utf8'),
+    readFile(resolve(REPO,'arkiv/src/app.js'),'utf8'),
+    readFile(resolve(REPO,'arkiv/core/data-layer.js'),'utf8'),
     readFile(resolve(ROOT,'sw.js'),'utf8'),
   ]);
   assert.ok(publishedApp.includes("../core/data-layer.js"));
@@ -72,7 +74,8 @@ await test('OAuth-returen och appnavigeringen omfattar Dokumentarkivet',async()=
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   assert.ok(root.includes('korpholmen:oauth-return'));
-  assert.ok(root.includes('dokumentarkiv/'));
+  assert.ok(root.includes('arkiv/'));
+  assert.ok(root.includes('Dokumentarkiv'));
   assert.ok(app.includes("isSourceTree ? '../../' : '../'"));
 });
 

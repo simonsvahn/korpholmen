@@ -1,7 +1,7 @@
 {
-  "name": "Dokumentarkiv · Korpholmen",
+  "name": "Korpholmens Båtklubbs arkiv – Protokoll & handlingar",
   "short_name": "Dokumentarkiv",
-  "description": "Sökbara, ordagranna avskrifter ur Korpholmens dokumentarkiv",
+  "description": "Sökbara, ordagranna avskrifter ur Korpholmens Båtklubbs arkiv",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

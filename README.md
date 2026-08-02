@@ -10,11 +10,11 @@ som GitHub.
   bilder och länkar till Matrikelns person-ID.
 - `apps/fastigheter/` — källkod och privat master för registerenheter,
   historiska jordlotter, ägande, bruk, transaktioner och källbelägg.
-- `apps/dokumentarkiv/` — källkod och privat operationsmaster för ordagranna,
+- `apps/arkiv/` — källkod och privat operationsmaster för ordagranna,
   sökbara avskrifter och granskade registerkopplingar.
 - `packages/core/` — gemensam datafri motor för operationer, IndexedDB,
   Dropbox-synk och OAuth.
-- `matrikel/`, `batregister/`, `fastigheter/` och `dokumentarkiv/` — datafria
+- `matrikel/`, `batregister/`, `fastigheter/` och `arkiv/` — datafria
   publiceringspaket för GitHub Pages.
 
 Den gemensamma begrepps- och ansvarsfördelningen för nära familj,
