@@ -63,9 +63,25 @@ const nextNumber = (prefix, records) => records.reduce((highest, record) => {
 const code = (prefix, number) => `${prefix}-${String(number).padStart(3, '0')}`;
 
 const parentsByChild = new Map();
+const childrenByParent = new Map();
 for (const relation of relations.filter(entry => entry.kind === 'foralder-barn')) {
   if (!parentsByChild.has(relation.to_person_id)) parentsByChild.set(relation.to_person_id, []);
   parentsByChild.get(relation.to_person_id).push(relation);
+  if (!childrenByParent.has(relation.from_person_id)) childrenByParent.set(relation.from_person_id, []);
+  childrenByParent.get(relation.from_person_id).push(relation.to_person_id);
+}
+
+function descendantIds(anchorIds) {
+  const result = new Set(anchorIds || []);
+  const queue = [...result];
+  while (queue.length) {
+    for (const childId of childrenByParent.get(queue.shift()) || []) {
+      if (result.has(childId)) continue;
+      result.add(childId);
+      queue.push(childId);
+    }
+  }
+  return result;
 }
 
 const candidates = new Map();
@@ -121,10 +137,17 @@ for (const clan of [...clanMembers.keys()].sort((a, b) => a.localeCompare(b, 'sv
     .filter(([, reference]) => reference !== group.reference_code)
     .map(([label]) => label));
   const familyLabels = ordered(members.map(person => person.family).filter(label => !assignedBranchLabels.has(label)));
+  const anchorPersonIds = appendUnique(group.anchor_person_ids || [], settings.anchor_person_ids || []);
+  const inheritedMemberIds = group.membership_rule === 'anchors_and_descendants'
+    ? descendantIds(anchorPersonIds)
+    : new Set();
+  const explicitMemberIds = group.membership_rule === 'anchors_and_descendants'
+    ? members.map(person => person.id).filter(personId => !inheritedMemberIds.has(personId))
+    : members.map(person => person.id);
   const planned = {
     ...group,
-    anchor_person_ids: appendUnique(group.anchor_person_ids || [], settings.anchor_person_ids || []),
-    explicit_person_ids: ordered([...(group.explicit_person_ids || []), ...members.map(person => person.id)]),
+    anchor_person_ids: anchorPersonIds,
+    explicit_person_ids: ordered([...(group.explicit_person_ids || []), ...explicitMemberIds]),
     legacy_labels: ordered([...(group.legacy_labels || []), clan, ...familyLabels]),
   };
   plannedKinGroups.set(planned.id, planned);

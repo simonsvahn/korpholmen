@@ -23,6 +23,13 @@ Migreringen 2026-08-01 innehåller:
 - 231 relationer;
 - 5 061 fältoperationer i 21 oföränderliga batcher.
 
+Den levande Dropbox-mastern har därefter utökats genom separata, oföränderliga
+batcher. Den 2026-08-02 omfattar den 214 personer, 233 personrelationer, 49
+FAMILJ och 25 SLÄKT. Korrigeringar byggs med
+`verktyg/skapa-korrigeringsbatch.mjs` mot en privat, förhandsgranskad plan.
+Verktyget kontrollerar förväntat startläge och slutläge innan en ny batch får
+skapas; äldre batcher ändras aldrig.
+
 De separata äldre Chrome- och Safari-exporterna slogs inte ihop. Deras
 kontrollsummor och den uttryckliga behandlingen `arkiverad-men-inte-sammanslagen`
 finns kvar i manifestet, så en äldre uppgift eller tidigare borttagen relation

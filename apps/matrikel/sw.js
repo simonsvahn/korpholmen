@@ -1,14 +1,14 @@
-const CACHE = 'korpholmen-matrikel-2026-08-02-4';
+const CACHE = 'korpholmen-matrikel-2026-08-02-5';
 const FAMILY_CORE = self.location.pathname.includes('/apps/matrikel/')
   ? '../../packages/core/family-context.js'
   : './core/family-context.js';
 const SHELL = [
   './',
   './index.html',
-  './styles.css?v=2026-08-02-1',
+  './styles.css?v=2026-08-02-2',
   './manifest.webmanifest',
   './icons/icon.svg',
-  './src/app.js?v=2026-08-02-4',
+  './src/app.js?v=2026-08-02-5',
   FAMILY_CORE,
   './src/landscape-model.js?v=2026-08-01-12',
   './src/config.js?v=2026-08-01-10',

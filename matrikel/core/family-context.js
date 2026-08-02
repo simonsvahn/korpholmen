@@ -155,10 +155,10 @@ function mergeMembership(result, candidate) {
   }
 }
 
-function seedPeople(result, ids, context, confirmed, role = 'uttrycklig medlem') {
+function seedPeople(result, ids, context, confirmed, role = 'uttrycklig medlem', generation = 1) {
   for (const personId of ids || []) {
     if (!context.peopleById.has(personId)) continue;
-    mergeMembership(result, { person_id: personId, generation: 1, confirmed, role });
+    mergeMembership(result, { person_id: personId, generation, confirmed, role });
   }
 }
 
@@ -216,13 +216,13 @@ export function familyUnitMemberDetails(group, context) {
         });
       }
     }
-    seedPeople(result, group?.explicit_person_ids, context, confirmed);
+    seedPeople(result, group?.explicit_person_ids, context, confirmed, 'uttrycklig medlem', null);
     return [...result.values()].sort((a, b) => generationSortValue(a.generation) - generationSortValue(b.generation)
       || String(context.peopleById.get(a.person_id)?.display_name).localeCompare(String(context.peopleById.get(b.person_id)?.display_name), 'sv'));
   }
   const maxDepth = rule === 'anchors_and_children' ? 2 : rule === 'anchors_and_descendants' ? Infinity : 1;
   const result = descendants(group?.anchor_person_ids || [], context, confirmed, maxDepth);
-  seedPeople(result, group?.explicit_person_ids, context, confirmed);
+  seedPeople(result, group?.explicit_person_ids, context, confirmed, 'uttrycklig medlem', null);
   return [...result.values()].sort((a, b) => generationSortValue(a.generation) - generationSortValue(b.generation)
     || String(context.peopleById.get(a.person_id)?.display_name).localeCompare(String(context.peopleById.get(b.person_id)?.display_name), 'sv'));
 }
@@ -234,7 +234,7 @@ export function kinGroupMemberDetails(group, context, trail = new Set()) {
   const maxDepth = rule === 'anchors_and_descendants' ? Infinity : rule === 'anchors_and_children' ? 2 : 1;
   const result = descendants(group.anchor_person_ids || [], context, confirmed, maxDepth);
   const relativeToThisGroup = descendants(group.anchor_person_ids || [], context, confirmed, Infinity);
-  seedPeople(result, group.explicit_person_ids, context, confirmed);
+  seedPeople(result, group.explicit_person_ids, context, confirmed, 'uttrycklig medlem', null);
   const nextTrail = new Set(trail).add(group.id);
   for (const childId of group.child_group_ids || []) {
     const child = context.kinGroupById.get(childId);

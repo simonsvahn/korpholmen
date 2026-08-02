@@ -36,6 +36,17 @@ källmaterialet är ofullständigt. Den äldre unionsregeln
 `anchors_and_children` finns kvar för bakåtkompatibilitet men används inte för
 nya familjer.
 
+En uttryckligt tillagd person får inget automatiskt släktled. Släktled visas
+bara när det finns en faktisk förälder–barn-kedja från gruppens ankare. Det
+gör att ofullständiga uppgifter kan hållas synliga utan att appen hittar på
+vilken generation personen tillhör.
+
+En FAMILJ kan vara kopplad till flera SLÄKT samtidigt. Det behövs när två
+släktgrenar möts, exempelvis genom ett par. Kopplingen placerar den konkreta
+familjebildningen i båda grenarna men gör inte den ena partnerns övriga släkt
+till medlemmar i den andra. Denna gräns är viktig: ett giftermål skapar en
+korsfamilj, inte ett påstående om att hela släkterna är samma grupp.
+
 Den läsbara koden är `FAMILJ-001`, `FAMILJ-002` och så vidare.
 
 ### SLÄKT
@@ -169,6 +180,9 @@ numrerar aldrig om dem.
 De äldre personfälten `ui_clan` och `family` används bara som ett
 övergångsunderlag för att fånga personer som ännu saknar kompletta
 relationer. Meningsfulla äldre namn sparas som sökord på en stabil SLÄKT.
+En äldre klanetikett får aldrig ensam dra in en hel familjegren under en annan
+SLÄKT bara för att en person har gift in sig där. Strukturerade gruppkopplingar
+och uttryckliga personrelationer har företräde framför sådana etiketter.
 Statusrubriker som »utan känd släktkoppling« skapar ingen släktgrupp. De äldre
 etiketterna visas inte som ett parallellt val i apparna och kan avvecklas när
 alla personer är täckta av relationer eller uttryckligt medlemskap.
@@ -180,7 +194,10 @@ skapar endast saknade grupper eller medlemskap. Varje senare körning får ett
 nytt migrerings-id. Därmed kan datan kompletteras i flera omgångar utan att
 båtkopplingar, länkar eller äldre hänvisningar bryts.
 
-Vid totalpasset 2026-08-02 ger den aktuella datan 49 FAMILJ och 24 SLÄKT.
+Efter korrigeringspasset 2026-08-02 ger den aktuella datan 49 FAMILJ och 25
+SLÄKT. Den nya fristående gruppen är `SLÄKT-025 · Näsmark–Ekström–Berlin`.
+Familjen Hanna och Erik är kopplad både till Görvel–Åkerman och till
+Näsmark–Ekström–Berlin; detta är modellens första uttryckliga korsfamilj.
 Det är en modell av vad som finns registrerat nu, inte ett påstående om att
 materialet är slutgiltigt. Ej bekräftade relationer ger ej bekräftade
 familjebildningar och kan rättas eller tas bort med bevarad ändringshistorik.

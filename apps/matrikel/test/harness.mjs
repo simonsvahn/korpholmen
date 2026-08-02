@@ -302,6 +302,7 @@ await test('stabila grupper kan sökas via kod, äldre namn och medlemmar', () =
   const people = [{ id: 'lotta', display_name: 'Lotta Svahn', family: 'Svahn' }];
   const kinGroups = [{ id: 'slakt', reference_code: 'SLÄKT-005', name: 'Inger–Bethge', legacy_labels: ['Svahn'], explicit_person_ids: ['lotta'], membership_rule: 'explicit' }];
   const context = buildFamilyContext({ people, kinGroups });
+  assert.equal(kinGroupMemberDetails(kinGroups[0], context)[0].generation, null);
   assert.equal(searchFamilyTargets(context, 'svahn')[0].id, 'slakt');
   assert.equal(searchFamilyTargets(context, 'SLÄKT-005')[0].id, 'slakt');
   assert.equal(searchFamilyTargets(context, 'Lotta')[0].id, 'slakt');
@@ -421,6 +422,12 @@ await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', a
   assert.ok(appSource.includes('componentSets(group.people, currentRelations)'));
   assert.ok(appSource.includes('nearFamily(person.id, graph)'));
   assert.ok(appSource.includes('addPropertyLink'));
+  assert.ok(appSource.includes('data-family-kin-group'));
+  assert.ok(appSource.includes('updateFamilyKinGroup'));
+  assert.ok(appSource.includes("field: 'child_group_ids'"));
+  assert.ok(appSource.includes('data-new-group-member'));
+  assert.ok(appSource.includes('data-remove-group-member'));
+  assert.ok(appSource.includes('data-person-field="birth_name"'));
   assert.ok(appSource.includes('Okänd livsstatus'));
   assert.ok(appSource.includes('Ö och fastighet säger olika'));
   assert.ok(appSource.includes('Ö men ingen fastighet'));
