@@ -14,9 +14,9 @@ import {
 import {
   FAMILY_UNIT_TYPE,
   KIN_GROUP_TYPE,
-  associationAppliesToTarget,
   buildFamilyContext,
   displayReference,
+  familySelectionMatches,
   familyTargetCatalog,
   targetMemberDetails,
   targetTypeLabel,
@@ -152,7 +152,13 @@ function boatMatchesFamilyTarget(boat, value) {
   const type = value.slice(0, separator);
   const id = value.slice(separator + 1);
   const context = matrikelFamilyContext();
-  return groupLinksForBoat(boat.id).some(link => associationAppliesToTarget(link, { type, id }, context));
+  return familySelectionMatches({
+    target: { type, id },
+    context,
+    structuredAssociations: groupLinksForBoat(boat.id),
+    linkedPersonIds: linksForBoat(boat.id).map(link => link.person_id),
+    legacyFamilyLabels: [boat.slakt, ...linkedFamilyNames(boat.id)],
+  });
 }
 
 function filteredBoats() {
