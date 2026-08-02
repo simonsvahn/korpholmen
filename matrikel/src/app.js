@@ -746,7 +746,7 @@ function renderGroupDrawer(entityType, groupId) {
       <label class="editor-field wide"><span>Namn</span><input data-group-field="name" value="${escapeAttribute(group.name || '')}"></label>
       <label class="editor-field"><span>Bekräftelse</span><select data-group-field="confirmed" data-value-type="boolean">${selectOptions([['false', 'ej bekräftad'], ['true', 'bekräftad']], String(isConfirmed(group.confirmed)))}</select></label>
       ${entityType === KIN_GROUP_TYPE ? `<label class="editor-field"><span>Art</span><select data-group-field="kind">${selectOptions(Object.entries(KIN_GROUP_KINDS), group.kind || 'family_circle')}</select></label>` : ''}
-      <label class="editor-field wide"><span>Omfattning</span><select data-group-field="membership_rule">${selectOptions(Object.entries(MEMBERSHIP_RULES), group.membership_rule || (entityType === FAMILY_UNIT_TYPE ? 'anchors_and_children' : 'explicit'))}</select></label>
+      <label class="editor-field wide"><span>Omfattning</span><select data-group-field="membership_rule">${selectOptions(Object.entries(MEMBERSHIP_RULES), group.membership_rule || (entityType === FAMILY_UNIT_TYPE ? 'anchors_and_shared_children' : 'explicit'))}</select></label>
       <label class="editor-field wide"><span>${entityType === FAMILY_UNIT_TYPE ? 'Tillhör släktgrupp' : 'Överordnad släktgrupp'}</span><select data-group-parent><option value="">Ingen vald</option>${parentOptions}</select></label>
     </div>
     <h3>Ankarpersoner</h3>
@@ -771,7 +771,7 @@ async function createGroup(entityType) {
       { entityType, entityId: id, field: 'name', value: name },
       { entityType, entityId: id, field: 'confirmed', value: false },
       { entityType, entityId: id, field: 'anchor_person_ids', value: [] },
-      { entityType, entityId: id, field: 'membership_rule', value: entityType === FAMILY_UNIT_TYPE ? 'anchors_and_children' : 'explicit' },
+      { entityType, entityId: id, field: 'membership_rule', value: entityType === FAMILY_UNIT_TYPE ? 'anchors_and_shared_children' : 'explicit' },
       ...(entityType === KIN_GROUP_TYPE ? [{ entityType, entityId: id, field: 'kind', value: 'family_circle' }] : []),
     ]);
   });

@@ -11,6 +11,7 @@ export const KIN_GROUP_KINDS = Object.freeze({
 export const MEMBERSHIP_RULES = Object.freeze({
   explicit: 'Endast uttryckliga personer',
   anchors_and_children: 'Ankarpersoner och barn',
+  anchors_and_shared_children: 'Ankarpersoner och deras gemensamma barn',
   anchors_and_descendants: 'Ankarpersoner och efterkommande',
 });
 
@@ -195,6 +196,30 @@ function descendants(anchorIds, context, groupConfirmed, maxDepth = Infinity) {
 export function familyUnitMemberDetails(group, context) {
   const confirmed = isConfirmed(group?.confirmed);
   const rule = group?.membership_rule || 'anchors_and_children';
+  if (rule === 'anchors_and_shared_children') {
+    const result = new Map();
+    const anchors = [...new Set(group?.anchor_person_ids || [])].filter(personId => context.peopleById.has(personId));
+    seedPeople(result, anchors, context, confirmed, 'ankarperson');
+    if (anchors.length) {
+      const childrenByAnchor = anchors.map(personId => new Map((context.childrenByParent.get(personId) || [])
+        .map(edge => [edge.person_id, edge])));
+      const candidates = anchors.length === 1
+        ? [...childrenByAnchor[0].keys()]
+        : [...childrenByAnchor[0].keys()].filter(personId => childrenByAnchor.every(children => children.has(personId)));
+      for (const personId of candidates) {
+        const edges = childrenByAnchor.map(children => children.get(personId)).filter(Boolean);
+        mergeMembership(result, {
+          person_id: personId,
+          generation: 2,
+          confirmed: confirmed && edges.every(edge => relationIsConfirmed(edge.relation)),
+          role: anchors.length === 1 ? 'barn' : 'gemensamt barn',
+        });
+      }
+    }
+    seedPeople(result, group?.explicit_person_ids, context, confirmed);
+    return [...result.values()].sort((a, b) => generationSortValue(a.generation) - generationSortValue(b.generation)
+      || String(context.peopleById.get(a.person_id)?.display_name).localeCompare(String(context.peopleById.get(b.person_id)?.display_name), 'sv'));
+  }
   const maxDepth = rule === 'anchors_and_children' ? 2 : rule === 'anchors_and_descendants' ? Infinity : 1;
   const result = descendants(group?.anchor_person_ids || [], context, confirmed, maxDepth);
   seedPeople(result, group?.explicit_person_ids, context, confirmed);
@@ -304,6 +329,73 @@ export function familyTargetCatalog(context) {
       label: displayReference(group),
     })),
   ];
+}
+
+function groupSearchTerms(group, context) {
+  const memberIds = targetMemberIds({ type: group.type, id: group.id }, context);
+  const people = memberIds.map(personId => context.peopleById.get(personId)).filter(Boolean);
+  const direct = [...new Set([
+    group.reference_code,
+    group.name,
+    ...(group.legacy_labels || []),
+    ...(group.search_aliases || []),
+    ...(group.anchor_person_ids || []).map(personId => context.peopleById.get(personId)?.display_name),
+  ].map(value => String(value || '').trim()).filter(Boolean))];
+  const members = [...new Set(people.flatMap(person => [person.display_name, person.full_name, person.club_name, person.family, person.ui_clan, ...(person.family_labels || [])])
+    .map(value => String(value || '').trim()).filter(Boolean))];
+  return { direct, members };
+}
+
+function searchScore(query, target) {
+  const normalizedLabel = normalizeFamilyText(target.label);
+  const directTerms = target.direct_search_terms.map(normalizeFamilyText);
+  const memberTerms = target.member_search_terms.map(normalizeFamilyText);
+  if (normalizeFamilyText(target.reference_code) === query) return 0;
+  if (normalizedLabel === query || directTerms.some(term => term === query)) return 1;
+  if (normalizedLabel.startsWith(query) || directTerms.some(term => term.startsWith(query))) return 2;
+  if (directTerms.some(term => term.split(' ').some(word => word.startsWith(query)))) return 3;
+  if (normalizedLabel.includes(query) || directTerms.some(term => term.includes(query))) return 4;
+  if (memberTerms.some(term => term === query)) return 5;
+  if (memberTerms.some(term => term.startsWith(query) || term.split(' ').some(word => word.startsWith(query)))) return 6;
+  if (memberTerms.some(term => term.includes(query))) return 7;
+  return Number.MAX_SAFE_INTEGER;
+}
+
+export function searchableFamilyTargets(context) {
+  return [
+    ...context.kinGroups.map(group => ({ ...group, type: KIN_GROUP_TYPE })),
+    ...context.familyUnits.map(group => ({ ...group, type: FAMILY_UNIT_TYPE })),
+  ].map(group => {
+    const terms = groupSearchTerms(group, context);
+    return {
+      type: group.type,
+      id: group.id,
+      reference_code: group.reference_code,
+      name: group.name,
+      label: displayReference(group),
+      direct_search_terms: terms.direct,
+      member_search_terms: terms.members,
+      search_terms: [...terms.direct, ...terms.members],
+    };
+  });
+}
+
+export function searchFamilyTargets(context, value, { limit = 8 } = {}) {
+  const query = normalizeFamilyText(value);
+  const targets = searchableFamilyTargets(context);
+  if (!query) return targets
+    .sort((a, b) => a.type === b.type
+      ? String(a.reference_code).localeCompare(String(b.reference_code), 'sv', { numeric: true })
+      : a.type === KIN_GROUP_TYPE ? -1 : 1)
+    .slice(0, limit);
+  return targets
+    .map(target => ({ target, score: searchScore(query, target) }))
+    .filter(entry => Number.isFinite(entry.score) && entry.score < Number.MAX_SAFE_INTEGER)
+    .sort((a, b) => a.score - b.score
+      || (a.target.type === b.target.type ? 0 : a.target.type === KIN_GROUP_TYPE ? -1 : 1)
+      || String(a.target.reference_code).localeCompare(String(b.target.reference_code), 'sv', { numeric: true }))
+    .slice(0, limit)
+    .map(entry => entry.target);
 }
 
 export function associationMemberIds(association, context) {

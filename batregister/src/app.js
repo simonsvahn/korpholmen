@@ -17,7 +17,8 @@ import {
   buildFamilyContext,
   displayReference,
   familySelectionMatches,
-  familyTargetCatalog,
+  searchFamilyTargets,
+  searchableFamilyTargets,
   targetMemberDetails,
   targetTypeLabel,
 } from '../core/family-context.js';
@@ -37,6 +38,10 @@ const backdrop = $('#backdrop');
 const statusNode = $('#sync-status');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
+const familyFilter = $('#family-filter');
+const familyFilterSearch = $('#family-filter-search');
+const familyFilterClear = $('#family-filter-clear');
+const familyFilterResults = $('#family-filter-results');
 const isSourceTree = location.pathname.includes('/apps/batregister/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:batregister-2026-08-01';
@@ -56,6 +61,7 @@ let matrikelPeople = [];
 let matrikelRelations = [];
 let matrikelFamilyUnits = [];
 let matrikelKinGroups = [];
+let familySearchActiveIndex = -1;
 
 const ui = { search: '', type: '', person: new URL(location.href).searchParams.get('person') || '', family: '', nameStatus: '', imageOnly: false, grouping: 'none' };
 const escapeHtml = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
@@ -118,6 +124,45 @@ function groupLinkRecords() { return repository.listEntities('boat-group-link').
 function groupLinksForBoat(id) { return groupLinkRecords().filter(link => link.boat_id === id); }
 function matrikelFamilyContext() {
   return buildFamilyContext({ people: matrikelPeople, relations: matrikelRelations, familyUnits: matrikelFamilyUnits, kinGroups: matrikelKinGroups });
+}
+
+const familyTargetValue = target => `${target.type}:${target.id}`;
+
+function familyTargetForValue(value, context = matrikelFamilyContext()) {
+  return searchableFamilyTargets(context).find(target => familyTargetValue(target) === value) || null;
+}
+
+function closeFamilySearch() {
+  familyFilterResults.hidden = true;
+  familyFilterSearch.setAttribute('aria-expanded', 'false');
+  familyFilterSearch.removeAttribute('aria-activedescendant');
+  familySearchActiveIndex = -1;
+}
+
+function renderFamilySearchResults() {
+  const targets = searchFamilyTargets(matrikelFamilyContext(), familyFilterSearch.value, { limit: 8 });
+  familySearchActiveIndex = targets.length ? Math.min(Math.max(familySearchActiveIndex, 0), targets.length - 1) : -1;
+  familyFilterResults.innerHTML = targets.map((target, index) => `<button type="button" id="family-result-${index}" role="option" data-family-value="${escapeHtml(familyTargetValue(target))}" data-family-label="${escapeHtml(target.label)}" aria-selected="${index === familySearchActiveIndex}"><span>${escapeHtml(targetTypeLabel(target.type))}</span><b>${escapeHtml(target.label)}</b></button>`).join('') || '<p>Ingen stabil familj eller släkt matchar sökningen.</p>';
+  familyFilterResults.hidden = false;
+  familyFilterSearch.setAttribute('aria-expanded', 'true');
+  if (familySearchActiveIndex >= 0) familyFilterSearch.setAttribute('aria-activedescendant', `family-result-${familySearchActiveIndex}`);
+  else familyFilterSearch.removeAttribute('aria-activedescendant');
+}
+
+function selectFamilyFilter(value, label) {
+  ui.family = value;
+  familyFilter.value = value;
+  familyFilterSearch.value = label;
+  familyFilterClear.hidden = !value;
+  closeFamilySearch();
+  render();
+}
+
+function relationLinkChoices(context = matrikelFamilyContext()) {
+  return [
+    ...matrikelPeople.map(person => ({ value: `person:${person.id}`, label: `Person · ${person.display_name}${person.club_name ? ` · ${person.club_name}` : ''}` })),
+    ...searchableFamilyTargets(context).map(target => ({ value: familyTargetValue(target), label: `${targetTypeLabel(target.type)} · ${target.label}` })),
+  ].sort((a, b) => a.label.localeCompare(b.label, 'sv'));
 }
 function familyMembers(family) {
   const ids = new Set(family.explicit_person_ids || []);
@@ -292,13 +337,12 @@ function render() {
   const personOptions = personFilterOptions();
   $('#person-filter').innerHTML = '<option value="">Alla personer</option>' + personOptions.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join('');
   $('#person-filter').value = personOptions.some(([id]) => id === ui.person) ? ui.person : '';
-  const familyFilter = $('#family-filter');
-  const previousFamily = ui.family;
   const context = matrikelFamilyContext();
-  const groupTargets = familyTargetCatalog(context).filter(target => target.type === FAMILY_UNIT_TYPE || target.type === KIN_GROUP_TYPE);
-  const legacyFamilies = unique([...all.map(boat=>boat.slakt), ...familyLinkRecords().map(link=>link.family_name)]).sort((a,b)=>a.localeCompare(b,'sv'));
-  familyFilter.innerHTML = `<option value="">Alla familjer och släkter</option><optgroup label="Familjer och släkter">${groupTargets.map(target=>`<option value="${escapeHtml(`${target.type}:${target.id}`)}">${escapeHtml(target.label)}</option>`).join('')}</optgroup><optgroup label="Äldre etiketter">${legacyFamilies.map(name=>`<option value="${escapeHtml(`legacy:${name}`)}">${escapeHtml(name)}</option>`).join('')}</optgroup>`;
-  familyFilter.value = [...familyFilter.options].some(option => option.value === previousFamily) ? previousFamily : '';
+  const selectedFamily = familyTargetForValue(ui.family, context);
+  if (ui.family && !selectedFamily) ui.family = '';
+  familyFilter.value = ui.family;
+  familyFilterClear.hidden = !ui.family;
+  if (document.activeElement !== familyFilterSearch || familyFilterResults.hidden) familyFilterSearch.value = selectedFamily?.label || '';
   const shown = filteredBoats();
   $('#filter-count').textContent = `${shown.length} av ${all.length} båtar`;
   if (!all.length) {
@@ -321,9 +365,7 @@ function renderDrawer(id) {
   const groupLinks = groupLinksForBoat(id);
   const families = familyRecords();
   const context = matrikelFamilyContext();
-  const targets = familyTargetCatalog(context);
-  const familyTargets = targets.filter(target => target.type === FAMILY_UNIT_TYPE);
-  const kinTargets = targets.filter(target => target.type === KIN_GROUP_TYPE);
+  const relationChoices = relationLinkChoices(context);
   const fullRef = imageRef(boat, 'full');
   const local = isSourceTree && fullRef?.filename ? `${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(fullRef.filename)}` : '';
   const cached = fullRef?.dropbox_path ? imageUrls.get(fullRef.dropbox_path) : '';
@@ -347,7 +389,7 @@ function renderDrawer(id) {
         ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familjegren · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
         ${links.length || familyLinks.length || groupLinks.length ? '' : '<p>Ingen person, familj eller släkt är kopplad ännu.</p>'}
       </div>
-      <label class="full-field">Lägg till koppling<select id="relation-link-select"><option value="">Välj person, familj eller släkt …</option><optgroup label="Personer">${matrikelPeople.map(person=>`<option value="person:${escapeHtml(person.id)}">${escapeHtml(person.display_name)}${person.club_name ? ` · ${escapeHtml(person.club_name)}` : ''}</option>`).join('')}</optgroup><optgroup label="Familjer">${familyTargets.map(target=>`<option value="${FAMILY_UNIT_TYPE}:${escapeHtml(target.id)}">${escapeHtml(target.label)}</option>`).join('')}</optgroup><optgroup label="Släkter">${kinTargets.map(target=>`<option value="${KIN_GROUP_TYPE}:${escapeHtml(target.id)}">${escapeHtml(target.label)}</option>`).join('')}</optgroup><optgroup label="Äldre familjeetiketter">${families.map(family=>`<option value="legacy-family:${escapeHtml(family.id)}">${escapeHtml(family.name)}</option>`).join('')}</optgroup></select></label>
+      <label class="full-field">Lägg till koppling<input id="relation-link-search" list="relation-link-options" autocomplete="off" placeholder="Sök person, FAMILJ eller SLÄKT …"><datalist id="relation-link-options">${relationChoices.map(choice=>`<option value="${escapeHtml(choice.label)}"></option>`).join('')}</datalist></label>
       <label class="full-field">Roll<input id="relation-link-role" value="ägare/anknuten"></label>
       <div class="button-row"><button class="secondary" type="button" data-action="add-link">Lägg till koppling</button><button class="secondary" type="button" data-action="refresh-people">Hämta personer från Matrikeln</button></div>
     </section>
@@ -396,7 +438,7 @@ async function deleteBoat() {
 }
 
 async function addRelationLink() {
-  const value=$('#relation-link-select')?.value; if(!value)return;
+  const input=$('#relation-link-search');const choice=relationLinkChoices().find(item=>item.label===input?.value);const value=choice?.value;if(!value){setStatus('Välj en person, FAMILJ eller SLÄKT ur söklistan.','warning');return}
   const separator=value.indexOf(':');const kind=value.slice(0,separator);const id=value.slice(separator+1); const role=$('#relation-link-role').value.trim()||'ägare/anknuten';
   if(kind==='person'){
     const person=matrikelPeople.find(item=>item.id===id); if(!person)return;
@@ -533,7 +575,25 @@ drawer.addEventListener('change',event=>{const field=event.target.closest('[data
 $('#search').addEventListener('input',event=>{ui.search=event.target.value;render()});
 $('#type-filter').addEventListener('change',event=>{ui.type=event.target.value;render()});
 $('#person-filter').addEventListener('change',event=>{ui.person=event.target.value;render()});
-$('#family-filter').addEventListener('change',event=>{ui.family=event.target.value;render()});
+familyFilterSearch.addEventListener('focus',renderFamilySearchResults);
+familyFilterSearch.addEventListener('input',()=>{familySearchActiveIndex=0;renderFamilySearchResults()});
+familyFilterSearch.addEventListener('keydown',event=>{
+  let options=[...familyFilterResults.querySelectorAll('[data-family-value]')];
+  if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+    event.preventDefault();
+    if(familyFilterResults.hidden){renderFamilySearchResults();options=[...familyFilterResults.querySelectorAll('[data-family-value]')]}
+    const direction=event.key==='ArrowDown'?1:-1;
+    familySearchActiveIndex=Math.max(0,Math.min(options.length-1,familySearchActiveIndex+direction));
+    renderFamilySearchResults();
+  }else if(event.key==='Enter'&&familySearchActiveIndex>=0){
+    event.preventDefault();
+    familyFilterResults.querySelectorAll('[data-family-value]')[familySearchActiveIndex]?.click();
+  }else if(event.key==='Escape')closeFamilySearch();
+});
+familyFilterResults.addEventListener('mousedown',event=>event.preventDefault());
+familyFilterResults.addEventListener('click',event=>{const option=event.target.closest('[data-family-value]');if(option)selectFamilyFilter(option.dataset.familyValue,option.dataset.familyLabel)});
+familyFilterClear.addEventListener('click',()=>selectFamilyFilter('',''));
+document.addEventListener('click',event=>{if(!event.target.closest('.family-combobox'))closeFamilySearch()});
 $('#name-filter').addEventListener('change',event=>{ui.nameStatus=event.target.value;render()});
 $('#grouping').addEventListener('change',event=>{ui.grouping=event.target.value;render()});
 $('#image-only').addEventListener('change',event=>{ui.imageOnly=event.target.checked;render()});
