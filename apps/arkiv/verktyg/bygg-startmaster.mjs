@@ -5,10 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
-const PROJEKT = resolve(REPO, '../../..');
-const OUT = resolve(ROOT, 'privat/migrering-2026-08-02');
-const DEVICE = 'migration-dokumentarkiv-2026-08-02';
-const CLOCK_MS = Date.UTC(2026, 7, 2, 18, 0, 0);
+const PROJEKT = process.env.KORPHOLMEN_PROJEKT_ROOT ? resolve(process.env.KORPHOLMEN_PROJEKT_ROOT) : resolve(REPO, '../../..');
+const PRIVATE_DATA_REPO = process.env.KORPHOLMEN_PRIVAT_DATA_REPO ? resolve(process.env.KORPHOLMEN_PRIVAT_DATA_REPO) : REPO;
+const OUT = resolve(ROOT, 'privat/migrering-2026-08-02-42-handlingar');
+const DEVICE = 'migration-dokumentarkiv-2026-08-02-42-handlingar';
+const CLOCK_MS = Date.UTC(2026, 7, 2, 19, 0, 0);
+const PUBLISHABLE_STATUSES = new Set(['färdig', 'kontroll behövs']);
 
 async function childByNfc(parent, wanted) {
   const entries = await readdir(parent, { withFileTypes: true });
@@ -21,7 +23,7 @@ const wikiGroup = await childByNfc(PROJEKT, '2 Wikis & källor');
 const wikiRoot = await childByNfc(wikiGroup, 'Wiki Korpholmen & släkten');
 const digitalRoot = await childByNfc(wikiRoot, 'Digitalisering 2026');
 const documentRoot = await childByNfc(digitalRoot, '01 Digitaliserade dokument');
-const appsRoot = REPO;
+const appsRoot = PRIVATE_DATA_REPO;
 
 const peoplePath = resolve(appsRoot, 'apps/matrikel/privat/migrering-2026-08-01/approved-excel-import.json');
 const boatsPath = resolve(appsRoot, 'apps/batregister/privat/kallkopior/byggkit/batregister.json');
@@ -31,19 +33,28 @@ const people = new Map(peopleData.people.map(person => [person.id, person]));
 const boats = new Map(boatData.batar.map(boat => [boat.id, boat]));
 
 const entityRegistry = [
-  { id: 'person:nilshenrikhedström', name: 'Nils-Henrik Hedström', type: 'person', aliases: ['Nils-Henrik Hedström'], app: 'Matrikeln', external_id: 'nilshenrikhedström', match: 'kopplad' },
+  { id: 'person:nilshenrikhedström', name: 'Nils-Henrik Hedström', type: 'person', aliases: ['Nils-Henrik Hedström', 'Nils Henrik Hedström', 'Nils-Henrik'], app: 'Matrikeln', external_id: 'nilshenrikhedström', match: 'kopplad' },
   { id: 'person:ingerbethge', name: 'Inger Bethge', type: 'person', aliases: ['Inger Bethge', 'Inger och Per Olof Bethge'], app: 'Matrikeln', external_id: 'ingerbethge', match: 'kopplad' },
-  { id: 'person:perolofbethge', name: 'Per Olof Bethge', type: 'person', aliases: ['Per Olof Bethge', 'Inger och Per Olof Bethge'], app: 'Matrikeln', external_id: 'perolofbethge', match: 'kopplad' },
+  { id: 'person:perolofbethge', name: 'Per Olof Bethge', type: 'person', aliases: ['Per Olof Bethge', 'Per-Olof', 'Inger och Per Olof Bethge'], app: 'Matrikeln', external_id: 'perolofbethge', match: 'kopplad' },
   { id: 'person:peraxelweslien', name: 'Per-Axel Weslien', type: 'person', aliases: ['Per-Axel Weslien', 'P-A Weslien'], app: 'Matrikeln', external_id: 'peraxelweslien', match: 'kopplad' },
   { id: 'person:carlgunderhedström', name: 'Carl-Gunder Hedström', type: 'person', aliases: ['Carl-Gunder Hedström', 'C-G Hedström', 'C. G. Hedström'], app: 'Matrikeln', external_id: 'carlgunderhedström', match: 'kopplad' },
   { id: 'person:hasseune', name: 'Hans A. Une', type: 'person', aliases: ['Hans A. Une', 'Hasse', 'Hans och Mark Une'], app: 'Matrikeln', external_id: 'hasseune', match: 'kopplad' },
   { id: 'person:markune', name: 'Mark Une', type: 'person', aliases: ['Mark Une', 'Marks och mina', 'Hans och Mark Une'], app: 'Matrikeln', external_id: 'markune', match: 'kopplad' },
   { id: 'person:britaune', name: 'Brita Une', type: 'person', aliases: ['Brita Une'], app: 'Matrikeln', external_id: 'britaune', match: 'kopplad' },
-  { id: 'person:petteråkerman', name: 'Petter Åkerman', type: 'person', aliases: ['Petter Åkerman'], app: 'Matrikeln', external_id: 'petteråkerman', match: 'kopplad' },
-  { id: 'person:görvelåkerman', name: 'Görvel Åkerman', type: 'person', aliases: ['Görvel Åkerman'], app: 'Matrikeln', external_id: 'görvelåkerman', match: 'kopplad' },
+  { id: 'person:petteråkerman', name: 'Petter Åkerman', type: 'person', aliases: ['Petter Åkerman', 'Petter och Görvel Åkerman'], app: 'Matrikeln', external_id: 'petteråkerman', match: 'kopplad' },
+  { id: 'person:görvelåkerman', name: 'Görvel Åkerman', type: 'person', aliases: ['Görvel Åkerman', 'Petter och Görvel Åkerman'], app: 'Matrikeln', external_id: 'görvelåkerman', match: 'kopplad' },
   { id: 'person:rutweslien', name: 'Rut Weslien', type: 'person', aliases: ['Rut Weslien', 'Ruth Weslien', 'fru Ruth'], app: 'Matrikeln', external_id: 'rutweslien', match: 'granska', note: 'Avskriften använder både Rut och Ruth; kontrollera namnformen mot Matrikeln.' },
   { id: 'person:thomashedström', name: 'Tomas Hedström', type: 'person', aliases: ['Tomas Hedström'], app: 'Matrikeln', external_id: 'thomashedström', match: 'granska', note: 'Matrikeln har Thomas Hedström. Identiteten ska bekräftas före skarp koppling.' },
   { id: 'person:carlhenriknordlander', name: 'Henrik Nordlander', type: 'person', aliases: ['Henrik Nordlander', 'Carl-Henrik Nordlander'], app: 'Matrikeln', external_id: 'carlhenriknordlander', match: 'granska', note: 'Dokumentet använder både Henrik och Carl-Henrik; möjlig identitet i Matrikeln.' },
+  { id: 'person:bobethge', name: 'Bo Bethge', type: 'person', aliases: ['Bo Bethge'], app: 'Matrikeln', external_id: 'bobethge', match: 'kopplad' },
+  { id: 'person:lenaböving', name: 'Lena Böving', type: 'person', aliases: ['Lena Böving'], app: 'Matrikeln', external_id: 'lenaböving', match: 'kopplad' },
+  { id: 'person:bibbihedström', name: 'Bibbi Hedström', type: 'person', aliases: ['Bibbi Hedström'], app: 'Matrikeln', external_id: 'bibbihedström', match: 'kopplad' },
+  { id: 'person:johanhedström', name: 'Johan Hedström', type: 'person', aliases: ['Johan Hedström'], app: 'Matrikeln', external_id: 'johanhedström', match: 'kopplad' },
+  { id: 'person:annagretanordlander', name: 'Anna-Greta Nordlander', type: 'person', aliases: ['Anna-Greta Nordlander', 'syster Anna-Greta'], app: 'Matrikeln', external_id: 'annagretanordlander', match: 'kopplad' },
+  { id: 'person:svantenäsmark', name: 'Svante Näsmark', type: 'person', aliases: ['Svante Näsmark'], app: 'Matrikeln', external_id: 'svantenäsmark', match: 'kopplad' },
+  { id: 'person:mats-sam-une-olöst', name: 'Mats-Sam Une', type: 'person', aliases: ['Mats-Sam Une'], match: 'granska', note: 'Namnet är osäkert läst i årsmötesprotokollet och saknar säker koppling i Matrikeln.' },
+  { id: 'person:max-allan-1955-olöst', name: 'Max-Allan', type: 'person', aliases: ['Max-Allan'], match: 'granska', note: 'Endast förnamn finns i avskriften; identiteten är inte fastställd.' },
+  { id: 'person:rolf-jörgensen-olöst', name: 'Rolf Jörgensen', type: 'person', aliases: ['Rolf Jörgensen'], match: 'saknas', note: 'Namnet finns på ett kuvert men saknar säker koppling i Matrikeln.' },
   { id: 'person:rolf-une-olöst', name: 'Rolf Une', type: 'person', aliases: ['Rolf Une'], match: 'saknas' },
   { id: 'person:agneta-ekström-olöst', name: 'Agneta Ekström', type: 'person', aliases: ['Agneta Ekström'], match: 'saknas' },
   { id: 'person:karin-näsmark-olöst', name: 'Karin Näsmark', type: 'person', aliases: ['Karin Näsmark'], match: 'saknas' },
@@ -101,17 +112,22 @@ function transcript(text) {
 }
 
 function category(type) {
-  if (type === 'protokoll') return 'Protokoll';
-  if (['arbetsanteckning', 'kontrollprotokoll', 'kontrollanteckning', 'resultatlista', 'tidtagningsanteckning', 'väderanteckning och intyg'].includes(type)) return 'Tävlingshandlingar';
-  if (['svarsbrev', 'cirkulärbrev', 'följebrev', 'skrivelse', 'kallelse'].includes(type)) return 'Brev & skrivelser';
-  if (['stadgeförslag', 'förvaltningsberättelse'].includes(type)) return 'Organisation';
+  if (['protokoll', 'styrelseprotokoll', 'årsmötesprotokoll', 'sammanträdesprotokoll'].includes(type)) return 'Protokoll';
+  if (['arbetsanteckning', 'beräkningsblad', 'fartlista', 'kontrollprotokoll', 'kontrollanteckning', 'målprotokoll', 'passageprotokoll', 'prisanteckning', 'prislista', 'resultatberäkning', 'resultatlista', 'startprotokoll', 'tidtagningsanteckning', 'tidslista', 'väderanteckning och intyg'].includes(type)) return 'Tävlingshandlingar';
+  if (['besked', 'kuvert', 'svarsbrev', 'cirkulärbrev', 'följebrev', 'skrivelse', 'kallelse'].includes(type)) return 'Brev & skrivelser';
+  if (['föredragningslista', 'medlemsansökan', 'stadgeförslag', 'förvaltningsberättelse'].includes(type)) return 'Organisation';
   if (['diagrambilaga', 'humoristisk utredning'].includes(type)) return 'Berättelser & bilagor';
   return 'Arkivöversikt';
 }
 
 const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCase('sv');
 const slug = value => normalize(value).normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-function documentId(sourcePath) {
+const LEGACY_DOCUMENT_IDS = new Map([
+  [normalize('Korpholmens Båtklubbs förvaltningsberättelse för 1954'), 'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md'],
+]);
+function documentId(sourcePath, title) {
+  const legacyId = LEGACY_DOCUMENT_IDS.get(normalize(title));
+  if (legacyId) return legacyId;
   const value = slug(sourcePath);
   if (value.length <= 220) return `document:${value}`;
   const suffix = createHash('sha256').update(sourcePath).digest('hex').slice(0, 12);
@@ -119,19 +135,26 @@ function documentId(sourcePath) {
 }
 const sourceFiles = (await findTranscripts(documentRoot)).sort((a, b) => a.localeCompare(b, 'sv'));
 const documents = [];
+const includedSourceFiles = [];
+const excludedDocuments = [];
 
 for (const sourceFile of sourceFiles) {
   const text = await readFile(sourceFile, 'utf8');
   const meta = frontmatter(text);
+  const sourcePath = relative(digitalRoot, sourceFile).split(sep).join('/');
+  if (!PUBLISHABLE_STATUSES.has(meta.avskriftsstatus)) {
+    excludedDocuments.push({ title: meta.titel || basename(sourceFile, ' – avskrift.md'), status: meta.avskriftsstatus || 'okänd', source_path: sourcePath });
+    continue;
+  }
+  includedSourceFiles.push(sourceFile);
   const transcription = transcript(text);
   const search = normalize(`${meta.titel || ''}\n${transcription}`);
   const entityIds = entityRegistry.filter(entity => entity.aliases.some(alias => search.includes(normalize(alias)))).map(entity => entity.id);
   const date = meta.dokumentdatum || 'okänt';
   const year = date.match(/\d{4}/)?.[0] || null;
   const imageRows = [...text.matchAll(/^\|\s*(\d{2})\s*\|/gm)].map(match => Number(match[1]));
-  const sourcePath = relative(digitalRoot, sourceFile).split(sep).join('/');
   documents.push({
-    id: documentId(sourcePath),
+    id: documentId(sourcePath, meta.titel),
     fields: {
       title: meta.titel || basename(sourceFile, ' – avskrift.md'),
       document_date: date,
@@ -148,7 +171,8 @@ for (const sourceFile of sourceFiles) {
   });
 }
 
-if (!documents.length) throw new Error('Inga avskrifter hittades');
+if (documents.length !== 42) throw new Error(`Förväntade 42 publicerbara avskrifter men hittade ${documents.length}`);
+if (excludedDocuments.length !== 1 || excludedDocuments[0].status !== 'pågår') throw new Error('Det förväntade ofullständiga dokumentet kunde inte avgränsas säkert');
 if (new Set(documents.map(document => document.id)).size !== documents.length) throw new Error('Dokument-ID:n är inte unika');
 
 let seq = 0;
@@ -185,14 +209,15 @@ for (const entity of entityRegistry) {
 }
 
 const sourceHash = createHash('sha256');
-for (const sourceFile of sourceFiles) sourceHash.update(await readFile(sourceFile));
+for (const sourceFile of includedSourceFiles) sourceHash.update(await readFile(sourceFile));
 await mkdir(OUT, { recursive: true });
 await writeFile(resolve(OUT, 'initial-ops.json'), `${JSON.stringify({
   operations_version: 1,
-  migration_id: 'dokumentarkiv-2026-08-02',
+  migration_id: 'dokumentarkiv-2026-08-02-42-handlingar',
   device_id: DEVICE,
   source_sha256: sourceHash.digest('hex'),
-  counts: { documents: documents.length, entities: entityRegistry.length, operations: operations.length },
+  counts: { documents: documents.length, entities: entityRegistry.length, operations: operations.length, excluded_documents: excludedDocuments.length },
+  excluded_documents: excludedDocuments,
   operations,
 }, null, 2)}\n`);
 

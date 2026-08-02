@@ -7,7 +7,7 @@ import { materialize, validateOperation } from '../../../packages/core/data-laye
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
-const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-02');
+const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-02-42-handlingar');
 const readJson=async path=>JSON.parse(await readFile(path,'utf8'));
 let passed=0;
 async function test(name,action){try{await action();passed+=1;console.log(`✓ ${name}`)}catch(error){console.error(`✗ ${name}`);throw error}}
@@ -17,13 +17,20 @@ const state=materialize(document.operations);
 const documents=state.listEntities('document').map(entity=>({id:entity.entity_id,...entity.fields}));
 const entities=state.listEntities('archive-entity').map(entity=>({id:entity.entity_id,...entity.fields}));
 
-await test('startmastern innehåller 21 kompletta handlingar och giltiga operationer',()=>{
+await test('startmastern innehåller 42 publicerbara handlingar och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
-  assert.equal(documents.length,21);
+  assert.equal(documents.length,42);
   assert.equal(entities.length,document.counts.entities);
-  assert.equal(new Set(documents.map(item=>item.id)).size,21);
+  assert.equal(new Set(documents.map(item=>item.id)).size,42);
   assert.ok(documents.every(item=>item.title&&item.document_date&&item.transcript&&item.source_path));
   assert.ok(documents.every(item=>Array.isArray(item.entity_ids)));
+  assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)));
+  assert.equal(document.counts.excluded_documents,1);
+  assert.equal(document.excluded_documents[0].status,'pågår');
+  assert.equal(documents.some(item=>item.title==='Protokoll vid sammanträde i Korpholmens Båtklubb'),false);
+  assert.ok(documents.some(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte'));
+  assert.ok(documents.some(item=>item.title==='Protokoll vid extra sammanträde med Korpholmens Båtklubb på Yxlan'));
+  assert.equal(documents.find(item=>item.title==='Korpholmens Båtklubbs förvaltningsberättelse för 1954').id,'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md');
 });
 
 await test('registerkopplingar skiljer exakt träff, granskning och saknad entitet',()=>{
@@ -35,9 +42,12 @@ await test('registerkopplingar skiljer exakt träff, granskning och saknad entit
   assert.equal(byId.get('boat:pumsbullan').match_status,'granska');
   assert.equal(byId.get('person:thomashedström').match_status,'granska');
   assert.equal(byId.get('person:rolf-une-olöst').match_status,'saknas');
+  assert.equal(byId.get('person:bibbihedström').external_id,'bibbihedström');
+  assert.equal(byId.get('person:mats-sam-une-olöst').match_status,'granska');
   assert.ok(entities.some(entity=>entity.match_status==='lokal'));
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:atlanta')));
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:gungafin')));
+  assert.ok(documents.find(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte').entity_ids.includes('person:bibbihedström'));
 });
 
 await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async()=>{

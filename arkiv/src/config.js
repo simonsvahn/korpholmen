@@ -4,4 +4,4 @@ export const DROPBOX_SCOPES = [
   'files.content.read',
   'files.content.write'
 ];
-export const LOCAL_BOOTSTRAP_URL = './privat/migrering-2026-08-02/initial-ops.json';
+export const LOCAL_BOOTSTRAP_URL = './privat/migrering-2026-08-02-42-handlingar/initial-ops.json';

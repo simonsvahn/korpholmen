@@ -21,7 +21,7 @@ const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/arkiv/');
 const TOKEN_META = 'dropbox:refresh-token';
-const BOOTSTRAP_META = 'bootstrap:dokumentarkiv-2026-08-02';
+const BOOTSTRAP_META = 'bootstrap:dokumentarkiv-2026-08-02-42-handlingar';
 const ENTITY_TYPES = ['person', 'båt', 'plats', 'fastighet', 'hus', 'organisation'];
 const ui = { search: '', category: 'Alla', entityType: 'alla', selectedId: '', sourceOpen: false };
 let store;
