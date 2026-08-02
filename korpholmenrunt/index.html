@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#123c46">
+  <meta name="description" content="Resultat, rekord, deltagare och båtar i Korpholmen runt">
+  <meta property="og:title" content="Korpholmen runt – resultat & rekord">
+  <meta property="og:description" content="Hela loppets moderna resultathistoria i en levande, korslänkad app.">
+  <meta property="og:image" content="./og.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-02-1">
+  <title>Korpholmen runt – resultat & rekord</title>
+</head>
+<body>
+  <header class="masthead">
+    <a class="marke" href="../" aria-label="Korpholmens appar"><span>KR</span><small>HISTORISKA RESULTAT</small></a>
+    <div class="titel"><p>Korpholmens Båtklubb</p><h1>Korpholmen runt</h1><span>Resultat · rekord · människor · båtar</span></div>
+    <div class="live"><span id="sync-status">Startar den lokala mastern…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
+  </header>
+
+  <nav class="huvudnav" aria-label="Appens delar">
+    <button class="aktiv" data-view="oversikt">Översikt</button>
+    <button data-view="resultat">Alla resultat</button>
+    <button data-view="rekord">Topptider</button>
+    <button data-view="profiler">Människor & båtar</button>
+    <button data-view="duell">Öduellen</button>
+    <button data-view="matchning">Matcha registren <b id="review-count">0</b></button>
+  </nav>
+
+  <section class="verktygsrad">
+    <label class="sok"><span>⌕</span><input id="global-search" type="search" placeholder="Sök person, båt, år eller klass…"><button id="clear-search" type="button" aria-label="Rensa">×</button></label>
+    <div class="snabbfilter"><select id="year-filter" aria-label="År"><option value="alla">Alla år</option></select><select id="class-filter" aria-label="Klass"><option value="alla">Alla klasser</option></select><select id="course-filter" aria-label="Bana"><option value="alla">Alla banor</option></select></div>
+    <button id="new-result" class="primar" type="button">+ Nytt resultat</button>
+    <button id="export-csv" class="sekundar" type="button">Exportera CSV</button>
+    <button id="bootstrap-local" class="sekundar" type="button" hidden>Aktivera startmaster</button>
+  </section>
+
+  <main id="app" tabindex="-1"></main>
+
+  <dialog id="result-dialog">
+    <form id="result-form" method="dialog">
+      <div class="dialoghuvud"><div><p>Levande master</p><h2 id="dialog-title">Nytt resultat</h2></div><button value="cancel" class="stang" aria-label="Stäng">×</button></div>
+      <input id="result-id" type="hidden">
+      <div class="faltgrid">
+        <label>År<input id="edit-year" inputmode="numeric" required pattern="[0-9]{4}"></label>
+        <label>Bana<select id="edit-course"><option value="S">S</option><option value="L">L</option></select></label>
+        <label>Tid<input id="edit-time" placeholder="19,01" required></label>
+        <label>Klass<input id="edit-class" placeholder="Kajak 1" required></label>
+        <label class="bred">Båtens namn i källan<input id="edit-boat-raw" required></label>
+        <label class="bred">Kopplad båt<select id="edit-boat-id"><option value="">Inte kopplad</option></select></label>
+        <label>Kapten<input id="edit-captain"></label>
+        <label>Besättning 1<input id="edit-crew-1"></label>
+        <label>Besättning 2<input id="edit-crew-2"></label>
+        <label class="bred">Anteckning<textarea id="edit-notes" rows="3"></textarea></label>
+      </div>
+      <div class="dialogfot"><span>Ändringen sparas lokalt direkt och synkas som en ny operation.</span><button type="button" id="save-result" class="primar">Spara i mastern</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./src/app.js?v=2026-08-02-1"></script>
+</body>
+</html>

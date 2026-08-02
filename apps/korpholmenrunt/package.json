@@ -1,0 +1,11 @@
+{
+  "name": "korpholmen-runt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:migration": "node verktyg/bygg-startmaster.mjs && python3 verktyg/bygg-sqlite.py",
+    "build:publish": "node verktyg/bygg-publicering.mjs",
+    "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
+    "test": "node test/harness.mjs"
+  }
+}
