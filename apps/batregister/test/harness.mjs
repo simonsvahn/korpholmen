@@ -67,11 +67,16 @@ await test('Dropbox-namnrymden skiljer Båtregister från Matrikeln',async()=>{
 
 await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  const html=await readFile(resolve(ROOT,'index.html'),'utf8');
   assert.ok(app.includes("repository.setField('boat'"));
   assert.ok(app.includes("entityType:'boat-person-link'"));
   assert.ok(app.includes("entityType:'boat-family-link'"));
   assert.ok(app.includes('person:${escapeHtml(person.id)}'));
   assert.ok(app.includes('family:${escapeHtml(family.id)}'));
+  assert.ok(app.includes("link.person_id === ui.person"));
+  assert.ok(app.includes('../matrikel/?person='));
+  assert.ok(html.includes('id="person-filter"'));
+  assert.ok(html.includes('Familjegren'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
 });

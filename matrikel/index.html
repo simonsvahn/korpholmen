@@ -8,7 +8,7 @@
   <title>Matrikel · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-01-10">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-01-13">
 </head>
 <body>
   <header class="site-header">
@@ -22,7 +22,13 @@
         <button id="connect-dropbox" type="button">Anslut Dropbox</button>
       </div>
     </div>
-    <p class="intro">Alla klubbmedlemmar — plus de anhöriga som behövs för sambanden — i ett sammanhängande landskap: klan → storfamilj → familj → person.</p>
+    <p class="intro">Personerna står i centrum. Runt dem visas nära familj, familjegren, släktkrets och fastighetsgemenskap — utan att de olika sorternas tillhörighet blandas ihop.</p>
+    <div class="family-model" aria-label="Matrikelns familjenivåer">
+      <span><b>Nära familj</b><small>belagda relationer</small></span>
+      <span><b>Familjegren</b><small>namngiven gren</small></span>
+      <span><b>Släktkrets</b><small>bred historisk gemenskap</small></span>
+      <span><b>Fastighet</b><small>gemenskap kring platsen</small></span>
+    </div>
   </header>
 
   <nav class="toolbar" aria-label="Navigering i matrikeln">
@@ -35,8 +41,8 @@
         </div>
       </div>
       <div class="field">
-        <label for="clan-jump">Hoppa till klan</label>
-        <select id="clan-jump"><option value="">Välj klan …</option></select>
+        <label for="clan-jump">Hoppa till släktkrets</label>
+        <select id="clan-jump"><option value="">Välj släktkrets …</option></select>
       </div>
       <button type="button" class="toggle" id="toggle-names" aria-pressed="false">Visa klubbnamn först</button>
       <button type="button" class="toggle" id="toggle-gaps" aria-pressed="false">Markera relationsluckor</button>
@@ -67,6 +73,11 @@
       <button type="button" class="toggle" id="year-on" aria-pressed="false">Slå på årsvy</button>
     </div>
     <div class="filter-row">
+      <div class="view-switcher" role="group" aria-label="Välj huvudvy">
+        <button type="button" data-view-mode="kinship" aria-pressed="true">Släkt &amp; familj</button>
+        <button type="button" data-view-mode="property" aria-pressed="false">Fastigheter</button>
+        <button type="button" data-view-mode="register" aria-pressed="false">Personlista</button>
+      </div>
       <div class="generation-filter" role="group" aria-labelledby="generation-label">
         <span class="filter-label" id="generation-label">Generationer <small>välj en eller flera</small></span>
         <div class="generation-buttons" id="generation-buttons"></div>
@@ -74,8 +85,6 @@
       <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
       <button type="button" class="toggle" id="toggle-lonely" aria-pressed="false">Bara utan kända band</button>
       <button type="button" class="toggle" id="review-button" aria-pressed="false">Granska</button>
-      <button type="button" class="toggle" id="group-toggle" aria-pressed="false">Gruppera per fastighet</button>
-      <button type="button" class="toggle" id="view-toggle" aria-pressed="false">Visa personregister</button>
       <output class="filter-count" id="filter-count" aria-live="polite"></output>
     </div>
     <div class="edit-status-row">
@@ -110,6 +119,6 @@
     <div id="drawer-content"></div>
   </aside>
 
-  <script type="module" src="./src/app.js?v=2026-08-01-11"></script>
+  <script type="module" src="./src/app.js?v=2026-08-01-13"></script>
 </body>
 </html>

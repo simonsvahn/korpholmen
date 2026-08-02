@@ -15,8 +15,10 @@ import { propertyLinkEntityId, relationEntityId, validateArchive } from '../src/
 import {
   buildGraph,
   componentSets,
+  familyCircleLabel,
   groupPeople,
   groupPeopleByProperty,
+  nearFamily,
   relationshipPath,
   resolvedIslands,
   shownName,
@@ -198,6 +200,27 @@ await test('landskapsmodellen tål saknade ändpunkter och hittar släktskapsvä
   assert.equal(path.length, 1);
 });
 
+await test('familjenivåerna är begripliga utan ny sakdata', () => {
+  const people = [
+    { id: 'mor', display_name: 'Mor' },
+    { id: 'far', display_name: 'Far' },
+    { id: 'barn-a', display_name: 'Barn A' },
+    { id: 'barn-b', display_name: 'Barn B' },
+  ];
+  const relations = [
+    { id: 'r1', kind: 'partner', from_person_id: 'mor', to_person_id: 'far' },
+    { id: 'r2', kind: 'foralder-barn', from_person_id: 'mor', to_person_id: 'barn-a' },
+    { id: 'r3', kind: 'foralder-barn', from_person_id: 'far', to_person_id: 'barn-a' },
+    { id: 'r4', kind: 'foralder-barn', from_person_id: 'mor', to_person_id: 'barn-b' },
+  ];
+  const graph = buildGraph(people, relations);
+  const family = nearFamily('barn-a', graph);
+  assert.deepEqual(family.parents.map((link) => link.id), ['far', 'mor']);
+  assert.deepEqual(family.siblings.map((link) => link.id), ['barn-b']);
+  assert.equal(family.siblings[0].relation.derived, true);
+  assert.equal(familyCircleLabel('Hedström-klanen (Carl Gunder & Bibbi)'), 'Hedström');
+});
+
 await test('fältändringar från två enheter överlever och synkas åt båda håll', async () => {
   const remote = new MemoryRemoteTransport({ id: 'dropbox-test' });
   const a = await new Repository({ store: new MemoryStore(), deviceId: 'web-a', now: () => 1000 }).init();
@@ -271,12 +294,18 @@ await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', a
   assert.ok(html.includes('Markera relationsluckor'));
   assert.ok(html.includes('id="living-filter"'));
   assert.ok(html.includes('id="property-filter"'));
-  assert.ok(html.includes('id="group-toggle"'));
+  assert.ok(html.includes('data-view-mode="kinship"'));
+  assert.ok(html.includes('data-view-mode="property"'));
+  assert.ok(html.includes('data-view-mode="register"'));
+  assert.ok(html.includes('Nära familj'));
+  assert.ok(html.includes('Familjegren'));
+  assert.ok(html.includes('Släktkrets'));
   assert.ok(appSource.includes("repository.setField('person'"));
   assert.ok(appSource.includes("repository.deleteEntities"));
   assert.ok(appSource.includes('renderLandscape'));
   assert.ok(appSource.includes('renderPropertyLandscape'));
   assert.ok(appSource.includes('componentSets(group.people, currentRelations)'));
+  assert.ok(appSource.includes('nearFamily(person.id, graph)'));
   assert.ok(appSource.includes('addPropertyLink'));
   assert.ok(appSource.includes('Okänd livsstatus'));
   assert.ok(appSource.includes('Ö och fastighet säger olika'));

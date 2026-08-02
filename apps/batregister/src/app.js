@@ -43,7 +43,7 @@ let syncPromise = null;
 let selectedBoatId = null;
 let matrikelPeople = [];
 
-const ui = { search: '', type: '', family: '', nameStatus: '', imageOnly: false, grouping: 'none' };
+const ui = { search: '', type: '', person: new URL(location.href).searchParams.get('person') || '', family: '', nameStatus: '', imageOnly: false, grouping: 'none' };
 const escapeHtml = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const unique = values => [...new Set(values.filter(Boolean))];
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
@@ -116,10 +116,20 @@ function optionList(select, values, label) {
   select.value = values.includes(current) ? current : '';
 }
 
+function personFilterOptions() {
+  const peopleById = new Map(matrikelPeople.map((person) => [person.id, person]));
+  const options = new Map();
+  for (const link of linkRecords()) {
+    options.set(link.person_id, peopleById.get(link.person_id)?.display_name || link.person_display_name || link.person_id);
+  }
+  return [...options.entries()].sort((a, b) => a[1].localeCompare(b[1], 'sv'));
+}
+
 function filteredBoats() {
   const query = normalize(ui.search);
   return boatRecords().filter(boat => {
     if (ui.type && boat.typ !== ui.type) return false;
+    if (ui.person && !linksForBoat(boat.id).some((link) => link.person_id === ui.person)) return false;
     if (ui.family && ![boat.slakt, ...linkedFamilyNames(boat.id)].includes(ui.family)) return false;
     if (ui.nameStatus && boat.namnstatus !== ui.nameStatus) return false;
     if (ui.imageOnly && !(boat.images || []).length) return false;
@@ -242,7 +252,10 @@ async function uploadPendingImages(transport) {
 function render() {
   const all = boatRecords();
   optionList($('#type-filter'), unique(all.map(boat=>boat.typ)).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla typer');
-  optionList($('#family-filter'), unique([...all.map(boat=>boat.slakt), ...familyLinkRecords().map(link=>link.family_name)]).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla släkter/familjer');
+  const personOptions = personFilterOptions();
+  $('#person-filter').innerHTML = '<option value="">Alla personer</option>' + personOptions.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join('');
+  $('#person-filter').value = personOptions.some(([id]) => id === ui.person) ? ui.person : '';
+  optionList($('#family-filter'), unique([...all.map(boat=>boat.slakt), ...familyLinkRecords().map(link=>link.family_name)]).sort((a,b)=>a.localeCompare(b,'sv')), 'Alla familjegrenar');
   const shown = filteredBoats();
   $('#filter-count').textContent = `${shown.length} av ${all.length} båtar`;
   if (!all.length) {
@@ -274,18 +287,18 @@ function renderDrawer(id) {
       ${textField('Dopnamn','dopnamn',boat.dopnamn)}${textField('Önskat namn','onskat_namn',boat.onskat_namn)}
       ${textField('Typ','typ',boat.typ)}${textField('Modell','modell',boat.modell)}
       ${numberField('År','ar',boat.ar)}${numberField('Längd (m)','langd_m',boat.langd_m,'0.1')}
-      ${textField('Motor','motor',boat.motor)}${textField('Släkt/grupp','slakt',boat.slakt)}
+      ${textField('Motor','motor',boat.motor)}${textField('Historisk släkt/grupp','slakt',boat.slakt)}
       ${textField('Period','period',boat.period,'span-2')}${textField('Ägare/anknytning','agare',boat.agare,'span-2')}
       ${textField('Tidigare namn, kommaseparerade','tidigare_namn',(boat.tidigare_namn||[]).join(', '),'span-2')}
       ${textField('Senare namn, kommaseparerade','senare_namn',(boat.senare_namn||[]).join(', '),'span-2')}
     </div>
-    <section class="drawer-section"><h3>Person- och familjekopplingar</h3>
+    <section class="drawer-section"><h3>Kopplingar till Matrikeln</h3><p class="section-help">Använd person när en bestämd ägare eller brukare är känd. Använd familjegren bara när källan faktiskt gäller familjen som helhet.</p>
       <div class="link-list">
-        ${links.map(link=>`<div class="link-row"><span><b>${escapeHtml(link.person_display_name || link.person_id)}</b><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
-        ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familj · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
-        ${links.length || familyLinks.length ? '' : '<p>Ingen person eller familj är kopplad ännu.</p>'}
+        ${links.map(link=>`<div class="link-row"><span><a href="../matrikel/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(link.person_display_name || link.person_id)}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
+        ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familjegren · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
+        ${links.length || familyLinks.length ? '' : '<p>Ingen person eller familjegren är kopplad ännu.</p>'}
       </div>
-      <label class="full-field">Lägg till koppling<select id="relation-link-select"><option value="">Välj person eller familj …</option><optgroup label="Personer">${matrikelPeople.map(person=>`<option value="person:${escapeHtml(person.id)}">${escapeHtml(person.display_name)}${person.club_name ? ` · ${escapeHtml(person.club_name)}` : ''}</option>`).join('')}</optgroup><optgroup label="Familjer">${families.map(family=>`<option value="family:${escapeHtml(family.id)}">${escapeHtml(family.name)}</option>`).join('')}</optgroup></select></label>
+      <label class="full-field">Lägg till koppling<select id="relation-link-select"><option value="">Välj person eller familjegren …</option><optgroup label="Personer">${matrikelPeople.map(person=>`<option value="person:${escapeHtml(person.id)}">${escapeHtml(person.display_name)}${person.club_name ? ` · ${escapeHtml(person.club_name)}` : ''}</option>`).join('')}</optgroup><optgroup label="Familjegrenar">${families.map(family=>`<option value="family:${escapeHtml(family.id)}">${escapeHtml(family.name)}</option>`).join('')}</optgroup></select></label>
       <label class="full-field">Roll<input id="relation-link-role" value="ägare/anknuten"></label>
       <div class="button-row"><button class="secondary" type="button" data-action="add-link">Lägg till koppling</button><button class="secondary" type="button" data-action="refresh-people">Hämta personer från Matrikeln</button></div>
     </section>
@@ -450,6 +463,7 @@ drawer.addEventListener('click',event=>{if(event.target.closest('[data-action="c
 drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
 $('#search').addEventListener('input',event=>{ui.search=event.target.value;render()});
 $('#type-filter').addEventListener('change',event=>{ui.type=event.target.value;render()});
+$('#person-filter').addEventListener('change',event=>{ui.person=event.target.value;render()});
 $('#family-filter').addEventListener('change',event=>{ui.family=event.target.value;render()});
 $('#name-filter').addEventListener('change',event=>{ui.nameStatus=event.target.value;render()});
 $('#grouping').addEventListener('change',event=>{ui.grouping=event.target.value;render()});

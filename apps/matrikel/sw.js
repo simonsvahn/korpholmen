@@ -1,12 +1,12 @@
-const CACHE = 'korpholmen-matrikel-2026-08-01-11';
+const CACHE = 'korpholmen-matrikel-2026-08-01-13';
 const SHELL = [
   './',
   './index.html',
-  './styles.css?v=2026-08-01-10',
+  './styles.css?v=2026-08-01-13',
   './manifest.webmanifest',
   './icons/icon.svg',
-  './src/app.js?v=2026-08-01-11',
-  './src/landscape-model.js?v=2026-08-01-10',
+  './src/app.js?v=2026-08-01-13',
+  './src/landscape-model.js?v=2026-08-01-12',
   './src/config.js?v=2026-08-01-10',
   './src/data-layer.js?v=2026-08-01-10',
   './src/domain/canonical.js?v=2026-08-01-10',

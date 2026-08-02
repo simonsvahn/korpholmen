@@ -23,6 +23,15 @@ export function clanDetail(name) {
   return match ? match[1] : text;
 }
 
+export function familyCircleLabel(name) {
+  return clanBase(name).replace(/-klanen$/i, '').trim();
+}
+
+export function familyStemLabel(name) {
+  const detail = clanDetail(name);
+  return detail === String(name || '') ? null : detail;
+}
+
 export function familyHue(name) {
   let value = 0;
   for (const character of String(name || '')) value = (value * 31 + character.charCodeAt(0)) % 360;
@@ -102,6 +111,37 @@ export function buildGraph(people, relations) {
   }
 
   return { byId, parents, children, partners, all };
+}
+
+export function nearFamily(personId, graph) {
+  const parents = graph.parents.get(personId) || [];
+  const children = graph.children.get(personId) || [];
+  const partnerLinks = graph.partners.get(personId) || [];
+  const siblingIds = new Set();
+  for (const parent of parents) {
+    for (const child of graph.children.get(parent.id) || []) {
+      if (child.id !== personId) siblingIds.add(child.id);
+    }
+  }
+  const siblings = [...siblingIds]
+    .map((id) => ({
+      id,
+      relation: {
+        id: `derived:sibling:${[personId, id].sort().join(':')}`,
+        kind: 'syskon',
+        derived: true,
+      },
+    }))
+    .filter((link) => graph.byId.has(link.id));
+  const sort = (links) => [...links].sort((a, b) => shownName(graph.byId.get(a.id)).localeCompare(shownName(graph.byId.get(b.id)), 'sv'));
+  return {
+    parents: sort(parents),
+    siblings: sort(siblings),
+    partners: sort(partnerLinks.filter((link) => link.relation.kind === 'partner')),
+    formerPartners: sort(partnerLinks.filter((link) => link.relation.kind === 'tidigare')),
+    coparents: sort(partnerLinks.filter((link) => link.relation.kind === 'coparent')),
+    children: sort(children),
+  };
 }
 
 export function groupPeople(people) {

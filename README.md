@@ -12,6 +12,10 @@ som GitHub.
   Dropbox-synk och OAuth.
 - `matrikel/` och `batregister/` — datafria publiceringspaket för GitHub Pages.
 
+Den gemensamma begrepps- och ansvarsfördelningen för nära familj,
+familjegren, släktkrets och fastighetsgemenskap finns i
+[`FAMILJEMODELL.md`](FAMILJEMODELL.md).
+
 Repo-roten är OAuth-retur och appväljare. Privat data finns aldrig i GitHub.
 
 Båda apparna är PWA:er med cache-först-appskal. Efter första lyckade
