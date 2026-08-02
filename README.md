@@ -10,9 +10,11 @@ som GitHub.
   bilder och länkar till Matrikelns person-ID.
 - `apps/fastigheter/` — källkod och privat master för registerenheter,
   historiska jordlotter, ägande, bruk, transaktioner och källbelägg.
+- `apps/dokumentarkiv/` — källkod och privat operationsmaster för ordagranna,
+  sökbara avskrifter och granskade registerkopplingar.
 - `packages/core/` — gemensam datafri motor för operationer, IndexedDB,
   Dropbox-synk och OAuth.
-- `matrikel/`, `batregister/` och `fastigheter/` — datafria
+- `matrikel/`, `batregister/`, `fastigheter/` och `dokumentarkiv/` — datafria
   publiceringspaket för GitHub Pages.
 
 Den gemensamma begrepps- och ansvarsfördelningen för nära familj,
@@ -21,7 +23,7 @@ familjegren, släktkrets och fastighetsgemenskap finns i
 
 Repo-roten är OAuth-retur och appväljare. Privat data finns aldrig i GitHub.
 
-Alla tre apparna är PWA:er med cache-först-appskal. Efter första lyckade
+Alla fyra apparna är PWA:er med cache-först-appskal. Efter första lyckade
 Dropbox-synken startar de från lokal IndexedDB utan nät, sparar ändringar
 lokalt och skickar dem automatiskt när anslutningen återkommer. Båtregister
 lagrar även hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.

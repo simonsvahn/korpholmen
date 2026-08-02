@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173d46">
+  <meta name="description" content="Sökbara avskrifter ur Korpholmens dokumentarkiv">
+  <meta property="og:title" content="Korpholmens dokumentarkiv">
+  <meta property="og:description" content="Ordagranna avskrifter och sökbara samband">
+  <meta property="og:image" content="./og.png">
+  <title>Korpholmens dokumentarkiv</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-02-2">
+</head>
+<body>
+  <header class="sidhuvud">
+    <a class="sigill" href="../" aria-label="Till Korpholmens appar"><span>K</span><small>1954</small></a>
+    <div class="identitet"><p class="overrad">Korpholmens arkiv</p><h1>Protokoll & handlingar</h1><p>Ordagranna avskrifter, sökbara samband och varsamt bevarade egenheter.</p></div>
+    <div class="arkivfakta"><strong id="document-total">0</strong><span>digitaliserade handlingar</span><small id="year-range">—</small></div>
+    <div class="sync-panel"><span id="sync-status" role="status">Startar lokalt arkiv…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
+  </header>
+
+  <section class="sokband" aria-label="Sök och filtrera">
+    <label class="sokruta"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Sök i avskrifter, personer, båtar…"><button id="clear-search" type="button" aria-label="Rensa sökning" hidden>×</button></label>
+    <div class="filterrader"><div id="category-filters" class="filtergrupp" aria-label="Dokumentkategori"></div><label class="typfilter"><span>Entitet</span><select id="entity-filter"><option value="alla">Alla typer</option><option value="person">Person</option><option value="båt">Båt</option><option value="plats">Plats</option><option value="fastighet">Fastighet</option><option value="hus">Hus</option><option value="organisation">Organisation</option></select></label></div>
+    <button id="bootstrap-local" class="bootstrap" type="button" hidden>Läs in aktuell källmaster</button>
+  </section>
+
+  <main class="arbetsyta">
+    <aside class="dokumentlista" aria-label="Dokumentlista"><div class="listtitel"><span>Handlingar</span><strong id="result-count">0</strong></div><div id="document-list" class="kortlista"></div></aside>
+    <section id="reader" aria-live="polite"></section>
+    <aside class="samband" aria-label="Strukturerade samband"><div class="sambandshuvud"><p class="overrad">Registerkopplingar</p><h2>Nämns i urvalet</h2><p>Exakta träffar har stabila ID:n. Möjliga träffar väntar på granskning.</p></div><div id="entity-list" class="sambandslista"></div><div class="modellnot"><strong>Strukturerat för nästa steg</strong><p>Person · fastighet · hus · plats · båt · organisation</p></div></aside>
+  </main>
+  <script type="module" src="./src/app.js?v=2026-08-02-2"></script>
+</body>
+</html>
