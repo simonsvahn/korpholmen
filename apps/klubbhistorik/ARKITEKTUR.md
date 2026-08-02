@@ -60,7 +60,11 @@ tolkning. Den är inte samma sak som den stabila personen eller båten.
 
 `person_id` respektive `boat_id` är länkar till Matrikel och Båtregister.
 `person-ref` och `boat-ref` är privata referenssnapshots för sökning och
-visning. De är utbytbara kataloger, inte egna mastrar.
+visning. De är utbytbara kataloger, inte egna mastrar. En `boat-ref` bär en
+fullständig strukturerad ögonblicksbild av båtpostens metadata, men inte
+bildfilerna. Granskningsvyn kan därför alltid visa särskiljning, typ, modell,
+år, period, ägare, namnhistorik och källor utan att göra Klubbhistorik till
+båtmaster.
 
 ### 5. Den härledda vyn
 
@@ -125,6 +129,12 @@ får länka till högst en fysisk båt. Retrospektiva särskiljningar ändrar in
 källformen. Exempelvis bevaras matrikelns »Filifjonkan« ordagrant men länkas
 efter granskning till båten Filifjonkan I, medan Filifjonkan II är en annan
 fysisk båt med ett eget stabilt ID.
+
+När flera fysiska båtar har samma namn får urvalslistan aldrig visa bara
+namnet. Den visar även Båtregistrets särskiljning och matchningsmetadata, till
+exempel »Majsol — Neretnieks · S/S · 1975« respektive »Majsol — Holm · M/S ·
+2013«. Redan godkända manuella kopplingar ligger kvar i en efterkontroll där
+de kan ändras med en ny operation; det tidigare beslutet raderas inte.
 
 ## Matchnings- och granskningsflöde
 

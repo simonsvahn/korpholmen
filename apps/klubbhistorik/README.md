@@ -34,6 +34,10 @@ på motsvarande rad.
   operationer ovanpå den låsta startmastern;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
 
+Båtreferenserna är privata snapshots av all strukturerad metadata i
+Båtregistret utom bilder. De används för begripliga matchningsetiketter och
+efterkontroll; Båtregistret förblir ensam master för själva båten.
+
 ## Kommandon
 
 ```sh

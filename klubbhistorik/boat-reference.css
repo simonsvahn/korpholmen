@@ -1,0 +1,61 @@
+.panelintro {
+  color: var(--muted);
+  margin-top: -.5rem;
+}
+
+.beslutsnot {
+  padding: .7rem .85rem;
+  border-left: 3px solid var(--sea2);
+  background: #eef4f1;
+}
+
+.batkandidatlista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: .65rem;
+  margin: .9rem 0;
+}
+
+.batreferens {
+  padding: .8rem;
+  border: 1px solid #cbd9d4;
+  border-radius: .8rem;
+  background: #f4f8f5;
+}
+
+.batreferens h4 {
+  margin: 0 0 .5rem;
+  font: 600 1.05rem Georgia, serif;
+}
+
+.batreferens p {
+  display: grid;
+  grid-template-columns: minmax(100px, .35fr) 1fr;
+  gap: .5rem;
+  margin: .28rem 0;
+  font-size: .78rem;
+}
+
+.batreferens p b { color: var(--ink); }
+.batreferens p span { color: var(--muted); }
+
+.batreferens a {
+  display: inline-block;
+  margin-top: .55rem;
+  color: var(--sea);
+  font-size: .78rem;
+  font-weight: 750;
+}
+
+.batreferens-tom { margin: .6rem 0; }
+.batval-preview { margin-top: .7rem; }
+.reviewaction select { min-width: min(520px, 100%); }
+
+@media (max-width: 650px) {
+  .batreferens p {
+    grid-template-columns: 1fr;
+    gap: .1rem;
+  }
+
+  .reviewaction select { min-width: 0; }
+}

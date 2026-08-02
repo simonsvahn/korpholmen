@@ -5,6 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import { boatOptionLabel, boatReferenceLines } from '../src/boat-reference.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -100,7 +101,45 @@ await test('osäkra identiteter ligger öppet i granskningskön',()=>{
   assert.deepEqual(unresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
   assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
   assert.equal(report.counts.unresolved_boats,14);
-  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,12);
+  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,8);
+});
+
+await test('alla båtreferenser bär full strukturerad metadata och får entydiga etiketter',()=>{
+  assert.equal(boatRefs.length,169);
+  assert.ok(boatRefs.every(item=>item.snapshot_version===2&&item.snapshot&&typeof item.snapshot==='object'));
+  assert.ok(boatRefs.every(item=>!Object.hasOwn(item.snapshot,'images')));
+  const oldMajsol=boatRefs.find(item=>item.external_id==='majsol_neretnieks');
+  const newMajsol=boatRefs.find(item=>item.external_id==='majsol_holm');
+  assert.match(boatOptionLabel(oldMajsol),/Majsol — Neretnieks.*S\/S.*1975/);
+  assert.match(boatOptionLabel(newMajsol),/Majsol — Holm.*M\/S.*2013/);
+  assert.notEqual(boatOptionLabel(oldMajsol),boatOptionLabel(newMajsol));
+  const unknownBaseName=boatRefs.find(item=>item.external_id==='bustermagnum');
+  assert.match(boatOptionLabel(unknownBaseName),/^Buster Magnum/);
+  assert.equal(boatReferenceLines(oldMajsol).owner,'Neretnieks → 1993 Junior Åsa');
+});
+
+await test('alla redan gjorda manuella båtkopplingar är eftergranskade och korrekta',()=>{
+  const expected=new Map([
+    ['boat-occurrence:matrikel-1980:019:1','carlphilipper'],
+    ['boat-occurrence:matrikel-1980:021:1','myran2'],
+    ['boat-occurrence:matrikel-1980:018:1','majsol_neretnieks'],
+  ]);
+  for(const [id,boatId] of expected){
+    const occurrence=boats.find(item=>item.id===id);
+    assert.equal(occurrence.boat_id,boatId);
+    assert.equal(occurrence.confirmed,true);
+    assert.equal(occurrence.audit_status,'eftergranskad');
+    assert.match(occurrence.decision_note,/Eftergranskad 2026-08-03/);
+  }
+});
+
+await test('Majsol 1986 avgörs av typ och år utan att källraden ändras',()=>{
+  const occurrence=boats.find(item=>item.id==='boat-occurrence:matrikel-1986:019:1');
+  assert.equal(occurrence.raw_text,'S/S Majsol (1975)');
+  assert.equal(occurrence.boat_id,'majsol_neretnieks');
+  assert.equal(occurrence.match_status,'godkand');
+  assert.equal(occurrence.confirmed,true);
+  assert.deepEqual(occurrence.candidate_ids,['majsol_neretnieks']);
 });
 
 await test('Filifjonkan-raderna behåller källformen men länkas till den första båten',()=>{
@@ -141,6 +180,8 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes('Som källan skrevs'));
   assert.ok(app.includes('Normaliserad värld'));
   assert.ok(app.includes('Frånvaro är inte ett utträde'));
+  assert.ok(app.includes('all strukturerad metadata från Båtregistret utom bilder'));
+  assert.ok(app.includes('Spara ändring'));
   assert.ok(app.includes("opsRoot:'/klubbhistorik/ops'"));
   assert.ok(app.includes("name:'kbk-klubbhistorik'"));
   assert.ok(html.includes('matriklar över tid'));
