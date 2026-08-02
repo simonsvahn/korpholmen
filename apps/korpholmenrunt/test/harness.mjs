@@ -90,7 +90,7 @@ await test('publiceringspaketet är datafritt och länkat från appnavet',async(
   assert.ok(publishedApp.includes("../core/data-layer.js"));
   assert.ok(publishedCore.includes('./storage/indexeddb.js'));
   assert.ok(root.includes('./korpholmenrunt/'));
-  assert.ok(root.includes('Fyra separata verktyg'));
+  assert.ok(root.includes('Fem separata verktyg'));
   for(const result of results.slice(0,40))assert.equal(publishedApp.includes(JSON.stringify(result.boat_name_raw)),false);
 });
 
