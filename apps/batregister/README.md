@@ -22,6 +22,9 @@ npm run build:publish
 På localhost kan startkopian aktiveras och därefter laddas upp till Dropbox.
 Entydiga personnamn och klubbnamn länkas automatiskt till Matrikelns stabila
 person-ID. Därutöver bygger startmastern reproducerbart på Simons uttryckligen
-godkända och avvisade beslut. Båtar kan kopplas både till en person och till en
-familj; familjens medlemmar hämtas ur Matrikelns lokalt cachade personlista.
-Oklara fall granskas i det separata Excelarket.
+godkända och avvisade beslut. Båtar kan kopplas till person, stabil FAMILJ eller
+stabil SLÄKT. Den gemensamma anknytningssökningen börjar med ett personnamn och
+låter användaren välja rätt omfattning; en koppling på hög nivå syns även när
+en underliggande person eller familj filtreras fram. Familje- och släktmodellen
+hämtas ur Matrikelns lokalt cachade data. Oklara fall granskas i det separata
+Excelarket.

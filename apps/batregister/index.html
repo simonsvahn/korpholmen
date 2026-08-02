@@ -8,7 +8,7 @@
   <title>Båtregister · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-02-3">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-02-6">
 </head>
 <body>
   <header class="site-header">
@@ -23,40 +23,50 @@
     </div>
   </header>
 
-  <nav class="toolbar" aria-label="Filtrera båtregistret">
-    <label class="field wide">Sök
-      <input id="search" type="search" placeholder="Båtnamn, ägare, modell eller källa …">
-    </label>
-    <label class="field">Typ
-      <select id="type-filter"><option value="">Alla typer</option></select>
-    </label>
-    <label class="field">Person
-      <select id="person-filter"><option value="">Alla personer</option></select>
-    </label>
-    <div class="field family-search-field">
-      <label for="family-filter-search">Familj eller släkt</label>
-      <div class="family-combobox">
-        <input id="family-filter" type="hidden" value="">
-        <input id="family-filter-search" type="search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="family-filter-results" placeholder="Sök namn, person eller kod …">
-        <button id="family-filter-clear" type="button" aria-label="Rensa familje- och släktfiltret" hidden>×</button>
-        <div id="family-filter-results" class="family-results" hidden></div>
-      </div>
-      <div class="family-picker-actions">
-        <button id="family-filter-browse" type="button" aria-expanded="false" aria-controls="family-filter-results">Visa hela familjelistan</button>
-        <span id="family-filter-summary" aria-live="polite">Familjedata laddas …</span>
+  <nav class="toolbar" aria-label="Sök och filtrera båtregistret">
+    <div class="primary-searches">
+      <label class="field boat-search-field">Sök båtar
+        <input id="search" type="search" placeholder="Båtnamn, modell, ägare eller källa …">
+      </label>
+      <div class="field connection-search-field">
+        <label for="connection-filter-search">Person, familj eller släkt</label>
+        <div class="connection-combobox">
+          <input id="connection-filter" type="hidden" value="">
+          <input id="connection-filter-search" type="search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="connection-filter-results" placeholder="Sök ett namn eller en släkt …">
+          <button id="connection-filter-clear" type="button" aria-label="Rensa anknytningsfiltret" hidden>×</button>
+          <div id="connection-filter-results" class="family-results connection-results" hidden></div>
+        </div>
+        <div class="connection-picker-actions">
+          <button id="connection-filter-browse" type="button" aria-expanded="false" aria-controls="connection-filter-results">Bläddra bland släkterna</button>
+          <span id="connection-filter-summary" aria-live="polite">Familjedata laddas …</span>
+        </div>
       </div>
     </div>
-    <label class="field">Namnstatus
-      <select id="name-filter"><option value="">Alla</option><option value="namn">Känt namn</option><option value="dopnamn">Endast dopnamn</option></select>
-    </label>
-    <label class="field">Gruppera
-      <select id="grouping"><option value="none">Ingen gruppering</option><option value="family">Familj eller släkt</option><option value="type">Typ</option><option value="era">Epok</option></select>
-    </label>
-    <label class="check"><input id="image-only" type="checkbox"> Bara med bild</label>
-    <button id="add-boat" type="button" class="primary">Ny båt</button>
-    <button id="bootstrap-local" type="button" hidden>Aktivera godkänd startkopia</button>
-    <output id="filter-count" aria-live="polite"></output>
+
+    <div class="filter-command-row">
+      <button id="filter-panel-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-controls="filter-panel">Filter <span id="filter-badge" hidden></span></button>
+      <button id="view-panel-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-controls="view-panel">Visa</button>
+      <output id="filter-count" aria-live="polite"></output>
+      <button id="add-boat" type="button" class="primary add-boat">Ny båt</button>
+      <button id="bootstrap-local" type="button" hidden>Aktivera godkänd startkopia</button>
+    </div>
+    <div id="active-filters" class="active-filters" aria-label="Aktiva filter"></div>
   </nav>
+
+  <section id="filter-panel" class="options-panel" hidden aria-label="Fler filter">
+    <header><div><span>Filtrera båtar</span><b>Förfina resultatet</b></div><button type="button" data-close-panel aria-label="Stäng filter">×</button></header>
+    <div class="panel-section"><h2>Båttyp</h2><div id="type-options" class="choice-grid"></div></div>
+    <div class="panel-section"><h2>Bild</h2><div class="choice-grid" id="image-options"><button type="button" data-image-status="">Alla</button><button type="button" data-image-status="with">Med bild</button><button type="button" data-image-status="without">Utan bild</button></div></div>
+    <div class="panel-section"><h2>Namnstatus</h2><div class="choice-grid" id="name-options"><button type="button" data-name-status="">Alla</button><button type="button" data-name-status="namn">Känt namn</button><button type="button" data-name-status="dopnamn">Endast dopnamn</button></div></div>
+    <button id="clear-all-filters" class="clear-all" type="button">Rensa alla filter</button>
+  </section>
+
+  <section id="view-panel" class="options-panel" hidden aria-label="Visningsalternativ">
+    <header><div><span>Visa båtar</span><b>Layout och gruppering</b></div><button type="button" data-close-panel aria-label="Stäng visningsalternativ">×</button></header>
+    <div class="panel-section"><h2>Layout</h2><div class="choice-grid" id="layout-options"><button type="button" data-layout="grid">Bildkort</button><button type="button" data-layout="list">Kompakt lista</button></div></div>
+    <div class="panel-section"><h2>Gruppera efter</h2><div class="choice-grid" id="group-options"><button type="button" data-grouping="none">Ingen</button><button type="button" data-grouping="family">Familj eller släkt</button><button type="button" data-grouping="type">Båttyp</button><button type="button" data-grouping="era">Epok</button></div></div>
+  </section>
+  <div id="panel-backdrop" hidden></div>
 
   <main id="content" aria-live="polite"></main>
 
@@ -66,6 +76,6 @@
   </aside>
   <div id="backdrop" hidden></div>
 
-  <script type="module" src="./src/app.js?v=2026-08-02-5"></script>
+  <script type="module" src="./src/app.js?v=2026-08-02-6"></script>
 </body>
 </html>

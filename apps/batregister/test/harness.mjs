@@ -6,12 +6,19 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { MemoryStore, materialize, validateOperation } from '../../../packages/core/data-layer.js';
 import {
+  FAMILY_UNIT_TYPE,
   KIN_GROUP_TYPE,
   buildFamilyContext,
   familyBrowseHierarchy,
   familySelectionMatches,
   searchFamilyTargets,
+  targetMemberDetails,
 } from '../../../packages/core/family-context.js';
+import {
+  boatMatchesConnection,
+  personScopeTargets,
+  searchPeopleForConnection,
+} from '../src/connection-filter.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -91,30 +98,35 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes('id="relation-link-search"'));
   assert.ok(app.includes('FAMILY_UNIT_TYPE'));
   assert.ok(app.includes('KIN_GROUP_TYPE'));
-  assert.ok(app.includes("link.person_id === ui.person"));
+  assert.ok(app.includes('boatMatchesConnectionTarget'));
   assert.ok(app.includes('../matrikel/?person='));
-  assert.ok(html.includes('id="person-filter"'));
-  assert.ok(html.includes('id="family-filter-search"'));
-  assert.ok(html.includes('id="family-filter-browse"'));
+  assert.ok(html.includes('id="connection-filter-search"'));
+  assert.ok(html.includes('id="connection-filter-browse"'));
+  assert.ok(html.includes('id="filter-panel"'));
+  assert.ok(html.includes('id="view-panel"'));
+  assert.ok(html.includes('id="active-filters"'));
+  assert.equal(html.includes('id="person-filter"'),false);
   assert.ok(html.includes('role="combobox"'));
-  assert.ok(html.includes('Familj eller släkt'));
+  assert.ok(html.includes('Person, familj eller släkt'));
   assert.ok(html.includes('stabil FAMILJ'));
   assert.ok(html.includes('stabil SLÄKT'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
 });
 
-await test('familjefiltret söker och bläddrar bland stabila grupper utan äldre etiketter', async()=>{
+await test('anknytningsfiltret söker personer och bläddrar bland stabila grupper utan äldre etiketter', async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   const html=await readFile(resolve(ROOT,'index.html'),'utf8');
   assert.ok(app.includes('searchFamilyTargets'));
-  assert.ok(app.includes('{ limit: 8 }'));
+  assert.ok(app.includes('searchPeopleForConnection'));
   assert.ok(app.includes('searchableFamilyTargets'));
-  assert.ok(app.includes('renderFamilyBrowseResults'));
-  assert.ok(app.includes('Inga individer listas här'));
-  assert.equal(html.includes('<select id="family-filter"'),false);
+  assert.ok(app.includes('renderConnectionBrowseResults'));
+  assert.ok(app.includes('renderPersonScopeResults'));
+  assert.equal(html.includes('<select id="connection-filter"'),false);
   assert.equal(html.includes('Äldre etiketter'),false);
   assert.equal(app.includes('<optgroup label="Äldre familjeetiketter"'),false);
+  const personResults=searchPeopleForConnection(familyContext.people,'Svahn');
+  assert.ok(personResults.length>0);
   const results=searchFamilyTargets(familyContext,'Svahn');
   assert.ok(results.length>0);
   assert.ok(results.every(result=>[KIN_GROUP_TYPE,'family-unit'].includes(result.type)));
@@ -127,10 +139,21 @@ await test('familjefiltret söker och bläddrar bland stabila grupper utan äldr
   assert.equal(placedFamilies,familyContext.familyUnits.length);
 });
 
+await test('en vald person erbjuder person, nära familj och tillhörande släktnivåer',()=>{
+  const family=familyContext.familyUnits.find(item=>(item.kin_group_ids||[]).length&&targetMemberDetails({type:FAMILY_UNIT_TYPE,id:item.id},familyContext).length);
+  assert.ok(family);
+  const personId=targetMemberDetails({type:FAMILY_UNIT_TYPE,id:family.id},familyContext)[0].person_id;
+  const scopes=personScopeTargets(personId,familyContext);
+  assert.ok(scopes.some(target=>target.type==='person'&&target.id===personId));
+  assert.ok(scopes.some(target=>target.type===FAMILY_UNIT_TYPE&&target.id===family.id));
+  for(const kinGroupId of family.kin_group_ids)assert.ok(scopes.some(target=>target.type===KIN_GROUP_TYPE&&target.id===kinGroupId),kinGroupId);
+});
+
 await test('båtar kan länkas till stabil FAMILJ eller SLÄKT med ärvd synlighet',async()=>{
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  const filter=await readFile(resolve(ROOT,'src/connection-filter.js'),'utf8');
   const core=await readFile(resolve(REPO,'packages/core/family-context.js'),'utf8');
-  assert.ok(app.includes('familySelectionMatches'));
+  assert.ok(filter.includes('familySelectionMatches'));
   assert.ok(app.includes('targetMemberDetails'));
   assert.ok(app.includes("field:'target_code'"));
   assert.ok(app.includes("field:'confirmed',value:true"));
@@ -158,6 +181,16 @@ await test('SLÄKT-filter hittar personlänkar och godkända äldre familjeetike
   assert.equal(hits.length,29);
   assert.ok(hits.some(boat=>boat.namn==='Gerry'));
   assert.ok(hits.some(boat=>boat.namn==='Pancho'));
+  const value=`${KIN_GROUP_TYPE}:${targetGroup.id}`;
+  const connectionHits=boats.filter(boat=>boatMatchesConnection({
+    boat,
+    value,
+    context:familyContext,
+    personLinks:personLinks.filter(link=>link.boat_id===boat.id),
+    groupLinks:groupLinks.filter(link=>link.boat_id===boat.id),
+    legacyFamilyLabels:[boat.slakt,...familyLinks.filter(link=>link.boat_id===boat.id).map(link=>link.family_name)],
+  }));
+  assert.deepEqual(connectionHits.map(boat=>boat.id),hits.map(boat=>boat.id));
 });
 
 await test('båtbilder kan köas och läsas lokalt utan Dropbox',async()=>{
@@ -187,12 +220,15 @@ await test('publiceringsbygget är datafritt',()=>{
 
 await test('publiceringspaketet har en egen offlinebar kopia av kärnan',async()=>{
   const publishedApp=await readFile(resolve(REPO,'batregister/src/app.js'),'utf8');
+  const publishedFilter=await readFile(resolve(REPO,'batregister/src/connection-filter.js'),'utf8');
   const publishedCore=await readFile(resolve(REPO,'batregister/core/data-layer.js'),'utf8');
   const serviceWorker=await readFile(resolve(ROOT,'sw.js'),'utf8');
   assert.ok(publishedApp.includes("../core/data-layer.js"));
+  assert.ok(publishedFilter.includes("../core/family-context.js"));
   assert.ok(publishedCore.includes("./storage/indexeddb.js"));
   assert.ok(serviceWorker.includes("?'../../packages/core':'./core'"));
   assert.ok(serviceWorker.includes("'./src/config.js'"));
+  assert.ok(serviceWorker.includes("'./src/connection-filter.js'"));
 });
 
 await test('OAuth-returen kan skickas till båda apparna',async()=>{

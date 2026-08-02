@@ -11,8 +11,10 @@ for(const relative of FILES){const source=resolve(ROOT,relative);if(!(await stat
 for(const relative of CORE_FILES){const source=resolve(CORE,relative);if(!(await stat(source)).isFile())throw new Error(`Gemensam kärnfil saknas: ${relative}`);const target=resolve(OUT,'core',relative);await mkdir(dirname(target),{recursive:true});await copyFile(source,target)}
 const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replace("../../../packages/core/data-layer.js","../core/data-layer.js").replace("../../../packages/core/family-context.js","../core/family-context.js");
 await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'src/app.js'),app);
-const bundle=(await Promise.all([...FILES.map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),(async()=>app)()])).join('\n');
+const connectionFilter=(await readFile(resolve(ROOT,'src/connection-filter.js'),'utf8')).replace("../../../packages/core/family-context.js","../core/family-context.js");
+await writeFile(resolve(OUT,'src/connection-filter.js'),connectionFilter);
+const bundle=(await Promise.all([...FILES.map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),(async()=>app)(),(async()=>connectionFilter)()])).join('\n');
 const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-01/initial-ops.json'),'utf8'));
 const privateBoatNames=privateData.operations.filter(operation=>operation.entity_type==='boat'&&operation.field==='namn').map(operation=>operation.value).filter(name=>name&&name!=='Namn okänt');
 if(privateBoatNames.some(name=>bundle.includes(JSON.stringify(name)))||bundle.includes('"operations_version"')||bundle.includes('data:image/'))throw new Error('Privat båtdata har läckt in i publiceringspaketet');
-console.log(`Datafritt Båtregister byggt: ${FILES.length+CORE_FILES.length+1} filer.`);
+console.log(`Datafritt Båtregister byggt: ${FILES.length+CORE_FILES.length+2} filer.`);
