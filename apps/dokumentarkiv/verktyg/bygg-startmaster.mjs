@@ -7,10 +7,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
 const PROJEKT = process.env.KORPHOLMEN_PROJEKT_ROOT ? resolve(process.env.KORPHOLMEN_PROJEKT_ROOT) : resolve(REPO, '../../..');
 const PRIVATE_DATA_REPO = process.env.KORPHOLMEN_PRIVAT_DATA_REPO ? resolve(process.env.KORPHOLMEN_PRIVAT_DATA_REPO) : REPO;
-const OUT = resolve(ROOT, 'privat/migrering-2026-08-02-42-handlingar');
-const DEVICE = 'migration-dokumentarkiv-2026-08-02-42-handlingar';
-const CLOCK_MS = Date.UTC(2026, 7, 2, 19, 0, 0);
+const MIGRATION_TAG = process.env.KORPHOLMEN_MIGRATION_TAG || '2026-08-03-arkivatlas';
+const OUT = resolve(ROOT, 'privat/aktuell-startmaster');
+const DEVICE = `migration-dokumentarkiv-${MIGRATION_TAG}`;
+const CLOCK_MS = Date.parse(process.env.KORPHOLMEN_MIGRATION_CLOCK || '2026-08-03T12:00:00Z');
 const PUBLISHABLE_STATUSES = new Set(['färdig', 'kontroll behövs']);
+const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCase('sv');
+const slug = value => normalize(value).normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 async function childByNfc(parent, wanted) {
   const entries = await readdir(parent, { withFileTypes: true });
@@ -22,15 +25,19 @@ async function childByNfc(parent, wanted) {
 const wikiGroup = await childByNfc(PROJEKT, '2 Wikis & källor');
 const wikiRoot = await childByNfc(wikiGroup, 'Wiki Korpholmen & släkten');
 const digitalRoot = await childByNfc(wikiRoot, 'Digitalisering 2026');
+const inboxRoot = await childByNfc(digitalRoot, '00 Inkorg');
 const documentRoot = await childByNfc(digitalRoot, '01 Digitaliserade dokument');
 const appsRoot = PRIVATE_DATA_REPO;
 
 const peoplePath = resolve(appsRoot, 'apps/matrikel/privat/migrering-2026-08-01/approved-excel-import.json');
 const boatsPath = resolve(appsRoot, 'apps/batregister/privat/kallkopior/byggkit/batregister.json');
+const propertiesPath = resolve(appsRoot, 'apps/fastigheter/privat/migrering-2026-08-02/research-export.json');
 const peopleData = JSON.parse(await readFile(peoplePath, 'utf8'));
 const boatData = JSON.parse(await readFile(boatsPath, 'utf8'));
+const propertyData = JSON.parse(await readFile(propertiesPath, 'utf8'));
 const people = new Map(peopleData.people.map(person => [person.id, person]));
 const boats = new Map(boatData.batar.map(boat => [boat.id, boat]));
+const properties = new Map(propertyData.tables.property.map(property => [property.id, property]));
 
 const entityRegistry = [
   { id: 'person:nilshenrikhedström', name: 'Nils-Henrik Hedström', type: 'person', aliases: ['Nils-Henrik Hedström', 'Nils Henrik Hedström', 'Nils-Henrik'], app: 'Matrikeln', external_id: 'nilshenrikhedström', match: 'kopplad' },
@@ -72,12 +79,71 @@ const entityRegistry = [
   { id: 'boat:pumsbullan', name: 'Pumsbullen', type: 'båt', aliases: ['Pumsbullen', 'Pumsan'], app: 'Båtregistret', external_id: 'pumsbullan', match: 'granska', note: 'Båtregistret har Pumsbullan; dokumenten använder Pumsbullen och möjligen Pumsan.' },
   { id: 'boat:job-olöst', name: 'Job', type: 'båt', aliases: ['Job'], app: 'Båtregistret', match: 'saknas' },
   { id: 'boat:dramaten-olöst', name: 'Dramaten', type: 'båt', aliases: ['Dramaten'], app: 'Båtregistret', match: 'saknas' },
-  { id: 'place:korpholmen', name: 'Korpholmen', type: 'plats', aliases: ['Korpholmen'], match: 'lokal' },
-  { id: 'place:sviholmen', name: 'Sviholmen', type: 'plats', aliases: ['Sviholmen'], match: 'lokal' },
-  { id: 'place:stugholmen', name: 'Stugholmen', type: 'plats', aliases: ['Stugholmen'], match: 'lokal' },
+  { id: 'place:korpholmen', name: 'Korpholmen', type: 'plats', aliases: ['Korpholmen', 'Stora Korpholmen'], match: 'lokal', map_x: 50, map_y: 54 },
+  { id: 'place:sviholmen', name: 'Sviholmen', type: 'plats', aliases: ['Sviholmen', 'Stora Sviholmen'], match: 'lokal', map_x: 59, map_y: 65 },
+  { id: 'place:stugholmen', name: 'Stugholmen', type: 'plats', aliases: ['Stugholmen'], match: 'lokal', map_x: 36, map_y: 78 },
+  { id: 'place:angsholmen', name: 'Ängsholmen', type: 'plats', aliases: ['Ängsholmen'], match: 'lokal', map_x: 24, map_y: 35 },
+  { id: 'place:yxlan', name: 'Yxlan', type: 'plats', aliases: ['Yxlan'], match: 'lokal', map_x: 82, map_y: 45 },
+  { id: 'place:brockholmen', name: 'Brockholmen', type: 'plats', aliases: ['Brockholmen', 'Brockholmens'], match: 'lokal', map_x: 68, map_y: 24 },
+  { id: 'place:midsommarangen', name: 'Midsommarängen', type: 'plats', aliases: ['Midsommarängen'], match: 'lokal', map_x: 46, map_y: 51 },
+  { id: 'house:oroligheten', name: 'Oroligheten', type: 'hus', aliases: ['Oroligheten'], match: 'lokal', map_x: 39, map_y: 62 },
+  { id: 'house:korpholmsmuseet', name: 'Korpholmsmuseet', type: 'hus', aliases: ['Korpholmsmuseet', 'telefonkiosken'], match: 'lokal', map_x: 51, map_y: 48 },
   { id: 'organization:kbk', name: 'Korpholmens Båtklubb', type: 'organisation', aliases: ['Korpholmens Båtklubb', 'KBK'], match: 'lokal' },
   { id: 'organization:sagsamfund', name: 'Korpholmens Sågsamfund', type: 'organisation', aliases: ['Korpholmens Sågsamfund', 'Sågsamfund'], match: 'lokal' },
 ];
+
+const occupiedIds = new Set(entityRegistry.map(entity => entity.id));
+const occupiedExternalIds = new Set(entityRegistry.map(entity => entity.external_id).filter(Boolean));
+function addRegistryEntity(entity) {
+  if (occupiedIds.has(entity.id) || occupiedExternalIds.has(entity.external_id)) return;
+  entityRegistry.push(entity);
+  occupiedIds.add(entity.id);
+  if (entity.external_id) occupiedExternalIds.add(entity.external_id);
+}
+
+for (const person of people.values()) {
+  const name = String(person.display_name || '').trim();
+  if (name.split(/\s+/).length < 2) continue;
+  addRegistryEntity({
+    id: `person:${person.id}`,
+    name,
+    type: 'person',
+    aliases: [name],
+    app: 'Matrikeln',
+    external_id: person.id,
+    match: 'granska',
+    note: 'Fullständigt namn förekommer i avskriften; identiteten är föreslagen från Matrikeln och behöver källkontroll.',
+  });
+}
+
+for (const boat of boats.values()) {
+  const names = [boat.namn, ...(boat.smeknamn || []), ...(boat.tidigare_namn || []), ...(boat.senare_namn || [])].filter(Boolean);
+  const canonical = String(boat.namn || '').trim();
+  if (!canonical || (canonical.length < 5 && !/[\s\d]/.test(canonical))) continue;
+  addRegistryEntity({
+    id: `boat:${boat.id}`,
+    name: canonical,
+    type: 'båt',
+    aliases: [...new Set(names)],
+    app: 'Båtregistret',
+    external_id: boat.id,
+    match: 'granska',
+    note: 'Båtnamnet förekommer i avskriften; registerkopplingen behöver källkontroll.',
+  });
+}
+
+for (const property of properties.values()) {
+  addRegistryEntity({
+    id: `property:${slug(property.id)}`,
+    name: property.display_name || property.id,
+    type: 'fastighet',
+    aliases: [property.id],
+    app: 'Fastigheter',
+    external_id: property.id,
+    match: 'kopplad',
+    note: 'Fastighetsbeteckningen är en exakt träff i Fastighetsmastern.',
+  });
+}
 
 for (const entity of entityRegistry.filter(item => item.app === 'Matrikeln')) {
   const target = people.get(entity.external_id);
@@ -93,6 +159,16 @@ async function findTranscripts(folder) {
     const fullPath = resolve(folder, entry.name);
     if (entry.isDirectory()) result.push(...await findTranscripts(fullPath));
     else if (entry.isFile() && entry.name.endsWith(' – avskrift.md')) result.push(fullPath);
+  }
+  return result;
+}
+
+async function findFiles(folder) {
+  const result = [];
+  for (const entry of await readdir(folder, { withFileTypes: true })) {
+    const fullPath = resolve(folder, entry.name);
+    if (entry.isDirectory()) result.push(...await findFiles(fullPath));
+    else if (entry.isFile() && entry.name !== '.gitkeep') result.push(fullPath);
   }
   return result;
 }
@@ -120,8 +196,31 @@ function category(type) {
   return 'Arkivöversikt';
 }
 
-const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCase('sv');
-const slug = value => normalize(value).normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const STORY_TRACKS = [
+  { id: 'arsmoten', label: 'Årsmöten genom tiderna', description: 'Årsmötesprotokoll, föredragningslistor och närliggande handlingar.', pattern: /årsmöte|förvaltningsberättelse|föredragningslista/i },
+  { id: 'tavlingar', label: 'Tävlingar och Korpholmen runt', description: 'Tävlingsprotokoll, loggböcker, tider, resultat och inbjudningar.', pattern: /tävling|korpholmen\s*runt|startprotokoll|målprotokoll|resultat|loggbok|fartlista|tidslista/i },
+  { id: 'atlanta', label: 'Atlantaärendet', description: 'Utredningen, bilagorna och senare hänvisningar till r/s Atlanta.', pattern: /atlanta/i },
+  { id: 'sagsamfundet', label: 'Korpholmens Sågsamfund', description: 'Cirkulärbrev, stadgeförslag och svar kring Sågsamfundet.', pattern: /sågsamfund/i },
+  { id: 'medlemskap', label: 'Medlemskap och inval', description: 'Ansökningar, inval, utträden och korresponderande medlemskap.', pattern: /medlemskap|medlemsansökan|inträde|inval|utträde|korresponderande/i },
+  { id: 'hederstecken', label: 'Priser och hederstecken', description: 'Kommittéer, förslag, medaljer och prisutdelningar.', pattern: /hederstecken|hederspris|prislista|prisutdelning|medalj/i },
+  { id: 'korrespondens', label: 'Brevväxling', description: 'Brev, skrivelser, besked och kuvert ordnade över tid.', pattern: /brev|skrivelse|besked|kuvert|kallelse/i },
+];
+
+function storyTracks(title, transcription, type) {
+  const searchable = `${title}\n${type}\n${transcription}`;
+  return STORY_TRACKS.filter(track => track.pattern.test(searchable)).map(track => track.id);
+}
+
+function collectionLabel(sourcePath, fallback) {
+  const parts = sourcePath.split('/');
+  const firstFolder = parts[1] || '';
+  if (/styrelse- och årsmöteshandlingar/i.test(firstFolder)) return 'Styrelse- och årsmöteshandlingar 1955';
+  if (/sågsamfund/i.test(firstFolder)) return 'Korpholmens Sågsamfund 1967';
+  if (/båtklubbs handlingar/i.test(firstFolder)) return 'Korpholmens Båtklubbs handlingar 1956';
+  if (/tävling/i.test(sourcePath)) return `${sourcePath.match(/\b\d{4}(?:-\d{2}-\d{2})?/)?.[0] || 'Odaterad'} – tävlingshandlingar`;
+  return fallback;
+}
+
 const LEGACY_DOCUMENT_IDS = new Map([
   [normalize('Korpholmens Båtklubbs förvaltningsberättelse för 1954'), 'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md'],
 ]);
@@ -137,9 +236,12 @@ const sourceFiles = (await findTranscripts(documentRoot)).sort((a, b) => a.local
 const documents = [];
 const includedSourceFiles = [];
 const excludedDocuments = [];
+const allTranscriptTexts = [];
+const usedEntityIds = new Set();
 
 for (const sourceFile of sourceFiles) {
   const text = await readFile(sourceFile, 'utf8');
+  allTranscriptTexts.push(text);
   const meta = frontmatter(text);
   const sourcePath = relative(digitalRoot, sourceFile).split(sep).join('/');
   if (!PUBLISHABLE_STATUSES.has(meta.avskriftsstatus)) {
@@ -150,9 +252,13 @@ for (const sourceFile of sourceFiles) {
   const transcription = transcript(text);
   const search = normalize(`${meta.titel || ''}\n${transcription}`);
   const entityIds = entityRegistry.filter(entity => entity.aliases.some(alias => search.includes(normalize(alias)))).map(entity => entity.id);
+  entityIds.forEach(id => usedEntityIds.add(id));
   const date = meta.dokumentdatum || 'okänt';
   const year = date.match(/\d{4}/)?.[0] || null;
   const imageRows = [...text.matchAll(/^\|\s*(\d{2})\s*\|/gm)].map(match => Number(match[1]));
+  const originalNames = [...text.matchAll(/^\|\s*`([^`]+)`\s*\|/gm)].map(match => match[1]);
+  const documentType = meta.dokumenttyp || 'okänd';
+  const documentCategory = category(documentType);
   documents.push({
     id: documentId(sourcePath, meta.titel),
     fields: {
@@ -160,20 +266,51 @@ for (const sourceFile of sourceFiles) {
       document_date: date,
       year: year ? Number(year) : null,
       dating: meta.datering || 'okänd',
-      document_type: meta.dokumenttyp || 'okänd',
-      category: category(meta.dokumenttyp || 'okänd'),
+      document_type: documentType,
+      category: documentCategory,
       status: meta.avskriftsstatus || 'okänd',
-      image_count: imageRows.length ? Math.max(...imageRows) : 0,
+      image_count: imageRows.length ? Math.max(...imageRows) : originalNames.length,
       source_path: sourcePath,
       transcript: transcription,
       entity_ids: entityIds,
+      decade: year ? Math.floor(Number(year) / 10) * 10 : null,
+      month: date.match(/^\d{4}-(\d{2})/)?.[1] || null,
+      collection: collectionLabel(sourcePath, documentCategory),
+      story_track_ids: storyTracks(meta.titel || '', transcription, documentType),
+      transcript_sha256: createHash('sha256').update(transcription).digest('hex'),
+      word_count: transcription.split(/\s+/).filter(Boolean).length,
+      has_uncertainty: /\[(?:osäker|osäkert|oläsligt)/i.test(transcription),
+      original_filenames: originalNames,
     },
   });
 }
 
-if (documents.length !== 42) throw new Error(`Förväntade 42 publicerbara avskrifter men hittade ${documents.length}`);
-if (excludedDocuments.length !== 1 || excludedDocuments[0].status !== 'pågår') throw new Error('Det förväntade ofullständiga dokumentet kunde inte avgränsas säkert');
+if (!documents.length) throw new Error('Inga publicerbara avskrifter hittades');
 if (new Set(documents.map(document => document.id)).size !== documents.length) throw new Error('Dokument-ID:n är inte unika');
+
+const inboxFiles = (await findFiles(inboxRoot)).sort((a, b) => a.localeCompare(b, 'sv'));
+const normalizedSources = normalize(allTranscriptTexts.join('\n'));
+const pendingInboxFiles = inboxFiles
+  .filter(path => !normalizedSources.includes(normalize(basename(path))))
+  .map(path => relative(inboxRoot, path).split(sep).join('/'));
+const statusCounts = Object.fromEntries([...new Set(documents.map(document => document.fields.status))]
+  .sort((a, b) => a.localeCompare(b, 'sv'))
+  .map(status => [status, documents.filter(document => document.fields.status === status).length]));
+const decadeCounts = Object.fromEntries([...new Set(documents.map(document => document.fields.decade).filter(Number.isFinite))]
+  .sort((a, b) => a - b)
+  .map(decade => [String(decade), documents.filter(document => document.fields.decade === decade).length]));
+const archiveSummary = {
+  total_documents: documents.length,
+  status_counts: statusCounts,
+  decade_counts: decadeCounts,
+  inbox_total_files: inboxFiles.length,
+  inbox_referenced_files: inboxFiles.length - pendingInboxFiles.length,
+  inbox_pending_files: pendingInboxFiles,
+  excluded_documents: excludedDocuments,
+  story_tracks: STORY_TRACKS.map(({ pattern, ...track }) => ({ ...track, count: documents.filter(document => document.fields.story_track_ids.includes(track.id)).length })),
+  migration_tag: MIGRATION_TAG,
+  generated_at: new Date(CLOCK_MS).toISOString(),
+};
 
 let seq = 0;
 const operations = [];
@@ -193,7 +330,7 @@ function set(entityType, entityId, field, value) {
 }
 
 for (const document of documents) for (const [field, value] of Object.entries(document.fields)) set('document', document.id, field, value);
-for (const entity of entityRegistry) {
+for (const entity of entityRegistry.filter(item => usedEntityIds.has(item.id))) {
   const fields = {
     name: entity.name,
     entity_type: entity.type,
@@ -201,24 +338,28 @@ for (const entity of entityRegistry) {
     app: entity.app || null,
     external_id: entity.external_id || null,
     note: entity.note || null,
+    map_x: Number.isFinite(entity.map_x) ? entity.map_x : null,
+    map_y: Number.isFinite(entity.map_y) ? entity.map_y : null,
     url: entity.app === 'Matrikeln' && entity.external_id
       ? `../matrikel/?person=${encodeURIComponent(entity.external_id)}`
-      : entity.app === 'Båtregistret' ? '../batregister/' : null,
+      : entity.app === 'Båtregistret' ? '../batregister/'
+        : entity.app === 'Fastigheter' && entity.external_id ? `../fastigheter/?property=${encodeURIComponent(entity.external_id)}` : null,
   };
   for (const [field, value] of Object.entries(fields)) set('archive-entity', entity.id, field, value);
 }
+for (const [field, value] of Object.entries(archiveSummary)) set('archive-summary', 'archive-summary:current', field, value);
 
 const sourceHash = createHash('sha256');
 for (const sourceFile of includedSourceFiles) sourceHash.update(await readFile(sourceFile));
 await mkdir(OUT, { recursive: true });
 await writeFile(resolve(OUT, 'initial-ops.json'), `${JSON.stringify({
   operations_version: 1,
-  migration_id: 'dokumentarkiv-2026-08-02-42-handlingar',
+  migration_id: `dokumentarkiv-${MIGRATION_TAG}`,
   device_id: DEVICE,
   source_sha256: sourceHash.digest('hex'),
-  counts: { documents: documents.length, entities: entityRegistry.length, operations: operations.length, excluded_documents: excludedDocuments.length },
+  counts: { documents: documents.length, entities: usedEntityIds.size, operations: operations.length, excluded_documents: excludedDocuments.length, pending_inbox_files: pendingInboxFiles.length },
   excluded_documents: excludedDocuments,
   operations,
 }, null, 2)}\n`);
 
-console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${entityRegistry.length} entiteter, ${operations.length} operationer.`);
+console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);

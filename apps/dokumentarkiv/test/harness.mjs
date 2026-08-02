@@ -7,7 +7,7 @@ import { materialize, validateOperation } from '../../../packages/core/data-laye
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
-const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-02-42-handlingar');
+const PRIVATE=resolve(ROOT,'privat/aktuell-startmaster');
 const readJson=async path=>JSON.parse(await readFile(path,'utf8'));
 let passed=0;
 async function test(name,action){try{await action();passed+=1;console.log(`✓ ${name}`)}catch(error){console.error(`✗ ${name}`);throw error}}
@@ -16,18 +16,23 @@ const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
 const state=materialize(document.operations);
 const documents=state.listEntities('document').map(entity=>({id:entity.entity_id,...entity.fields}));
 const entities=state.listEntities('archive-entity').map(entity=>({id:entity.entity_id,...entity.fields}));
+const summary=state.listEntities('archive-summary').map(entity=>({id:entity.entity_id,...entity.fields}))[0];
 
-await test('startmastern innehåller 42 publicerbara handlingar och giltiga operationer',()=>{
+await test('startmastern innehåller hela det aktuella arkivet och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
-  assert.equal(documents.length,42);
+  assert.equal(documents.length,document.counts.documents);
+  assert.ok(documents.length>=80);
   assert.equal(entities.length,document.counts.entities);
-  assert.equal(new Set(documents.map(item=>item.id)).size,42);
+  assert.equal(new Set(documents.map(item=>item.id)).size,documents.length);
   assert.ok(documents.every(item=>item.title&&item.document_date&&item.transcript&&item.source_path));
   assert.ok(documents.every(item=>Array.isArray(item.entity_ids)));
+  assert.ok(documents.every(item=>Array.isArray(item.story_track_ids)));
+  assert.ok(documents.every(item=>item.transcript_sha256&&Number.isInteger(item.word_count)));
   assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)));
-  assert.equal(document.counts.excluded_documents,1);
-  assert.equal(document.excluded_documents[0].status,'pågår');
-  assert.equal(documents.some(item=>item.title==='Protokoll vid sammanträde i Korpholmens Båtklubb'),false);
+  assert.equal(summary.total_documents,documents.length);
+  assert.equal(summary.inbox_total_files,summary.inbox_referenced_files+summary.inbox_pending_files.length);
+  assert.equal(summary.inbox_pending_files.length,document.counts.pending_inbox_files);
+  assert.ok(Array.isArray(summary.story_tracks)&&summary.story_tracks.length>=6);
   assert.ok(documents.some(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte'));
   assert.ok(documents.some(item=>item.title==='Protokoll vid extra sammanträde med Korpholmens Båtklubb på Yxlan'));
   assert.equal(documents.find(item=>item.title==='Korpholmens Båtklubbs förvaltningsberättelse för 1954').id,'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md');
@@ -54,11 +59,21 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   const [html,app,styles]=await Promise.all(['index.html','src/app.js','styles.css'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   assert.ok(html.includes('id="search"'));
   assert.ok(html.includes('id="entity-filter"'));
-  assert.ok(html.includes('id="reader"'));
+  assert.ok(html.includes('id="view-tabs"'));
+  assert.ok(html.includes('id="status-filter"'));
+  assert.ok(html.includes('data-view="overview"'));
+  assert.ok(html.includes('data-view="question"'));
   assert.ok(html.includes('Korpholmens Båtklubbs arkiv – Protokoll & handlingar'));
   assert.ok(html.includes('Korpholmens Båtklubbs arkiv'));
   assert.ok(html.includes('Dokumenttyper, flera kan väljas'));
   assert.ok(app.includes('document.transcript'));
+  assert.ok(app.includes('renderOverview'));
+  assert.ok(app.includes('renderTracks'));
+  assert.ok(app.includes('renderConnections'));
+  assert.ok(app.includes('renderPlaces'));
+  assert.ok(app.includes('renderWork'));
+  assert.ok(app.includes('renderQuestion'));
+  assert.ok(app.includes('transcriptVersions'));
   assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
   assert.ok(app.includes("location.pathname.includes('/apps/dokumentarkiv/')"));
   assert.ok(app.includes("new URL('dokumentarkiv/', redirectUri())"));
@@ -68,6 +83,9 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(app.includes('ui.categories.delete(category)'));
   assert.ok(app.includes('ui.categories.clear()'));
   assert.ok(styles.includes('.papper'));
+  assert.ok(styles.includes('.arsmatris'));
+  assert.ok(styles.includes('.sambandskarta'));
+  assert.ok(styles.includes('.platskarta'));
   assert.ok(styles.includes('@media print'));
 });
 

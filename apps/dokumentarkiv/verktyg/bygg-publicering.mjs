@@ -32,7 +32,7 @@ const bundle=(await Promise.all([
   ...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),
   Promise.resolve(app),
 ])).join('\n');
-const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-02-42-handlingar/initial-ops.json'),'utf8'));
+const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/aktuell-startmaster/initial-ops.json'),'utf8'));
 const privateTitles=privateData.operations.filter(operation=>operation.entity_type==='document'&&operation.field==='title').map(operation=>operation.value).filter(Boolean);
 if(privateTitles.some(title=>bundle.includes(String(title)))||bundle.includes('"operations_version"')||bundle.includes('"transcript"'))throw new Error('Privata avskrifter har läckt in i publiceringspaketet');
 

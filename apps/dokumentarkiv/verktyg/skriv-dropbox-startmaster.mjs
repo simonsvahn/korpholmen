@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { batchPath, createBatch, materialize } from '../../../packages/core/data-layer.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-02-42-handlingar');
+const PRIVATE=resolve(ROOT,'privat/aktuell-startmaster');
 const requestedRoot=process.argv[2];
 if(!requestedRoot)throw new Error('Ange den lokala Dropbox-roten, exempelvis /Users/.../Dropbox/Appar/Korpholmen');
 
