@@ -38,7 +38,10 @@ på motsvarande rad.
 npm run build:migration
 npm test
 npm run build:publish
+npm run seed:dropbox -- "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
 Startmastern kan endast aktiveras från källappen på localhost. GitHub Pages
-får aldrig den privata datan.
+får aldrig den privata datan. Seed-kommandot skriver oföränderliga batcher
+till `/klubbhistorik/ops`, vägrar andra Dropbox-rötter och skriver aldrig över
+en befintlig batch med annat innehåll.

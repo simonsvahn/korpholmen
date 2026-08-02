@@ -152,6 +152,18 @@ await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
   assert.ok(appReadmes.every(readme=>readme.includes('ARKITEKTUR.md')));
 });
 
+await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
+  const [seed,appPackage]=await Promise.all([
+    readFile(resolve(ROOT,'verktyg/skriv-dropbox-startmaster.mjs'),'utf8'),
+    readFile(resolve(ROOT,'package.json'),'utf8'),
+  ]);
+  assert.ok(seed.includes("endsWith('/Dropbox/Appar/Korpholmen')"));
+  assert.ok(seed.includes("'/klubbhistorik/ops'"));
+  assert.ok(seed.includes("{flag:'wx'}"));
+  assert.ok(seed.includes('Befintlig operationsbatch skiljer sig och skrivs inte över'));
+  assert.equal(JSON.parse(appPackage).scripts['seed:dropbox'],'node verktyg/skriv-dropbox-startmaster.mjs');
+});
+
 await test('publiceringsbygget är datafritt och länkat från appfamiljen',async()=>{
   const result=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(result.status,0,result.stderr||result.stdout);
