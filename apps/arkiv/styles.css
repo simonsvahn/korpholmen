@@ -1,0 +1,214 @@
+:root {
+  --hav: #173d46;
+  --hav-djupt: #0d2b32;
+  --hav-ljust: #dce9e7;
+  --papper: #fbf7ec;
+  --papper-morkt: #eee5d2;
+  --svart: #202824;
+  --svart-mjuk: #58635c;
+  --rod: #9f3f2d;
+  --rod-ljust: #f0dcd2;
+  --guld: #bb9250;
+  --linje: rgba(23, 61, 70, .17);
+  --skugga: 0 18px 52px rgba(22, 39, 37, .15);
+  --sans: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+html { background: #e9ebe5; color: var(--svart); scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at 10% 0%, rgba(255,255,255,.84), transparent 34rem), linear-gradient(180deg, #f3f1e9 0, #e5e8e2 45rem);
+  color: var(--svart);
+  font-family: var(--sans);
+  min-height: 100vh;
+}
+button, input, select { font: inherit; }
+button, a, select { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(187,146,80,.72); outline-offset: 2px; }
+
+.sidhuvud {
+  align-items: center;
+  background: var(--hav);
+  color: #f9f6ea;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  min-height: 172px;
+  padding: 28px max(28px, calc((100vw - 1540px)/2));
+  position: relative;
+}
+.sidhuvud::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent); bottom: 8px; content: ""; height: 1px; left: 0; position: absolute; right: 0; }
+.sigill { align-items: center; border: 1px solid rgba(251,247,236,.55); border-radius: 50%; color: inherit; display: flex; flex-direction: column; height: 92px; justify-content: center; position: relative; text-decoration: none; width: 92px; }
+.sigill::before, .sigill::after { border: 1px solid rgba(187,146,80,.72); border-radius: 50%; content: ""; inset: 5px; position: absolute; }
+.sigill::after { border-left-color: transparent; border-right-color: transparent; inset: 10px; transform: rotate(35deg); }
+.sigill span { font-family: var(--serif); font-size: 37px; font-weight: 600; line-height: .85; position: relative; z-index: 1; }
+.sigill small { color: #dfc28e; font-size: 9px; letter-spacing: .16em; margin-top: 7px; position: relative; z-index: 1; }
+.overrad { color: var(--guld); font-size: 11px; font-weight: 700; letter-spacing: .19em; margin: 0 0 8px; text-transform: uppercase; }
+.identitet h1 { font-family: var(--serif); font-size: clamp(31px,4.4vw,57px); font-weight: 500; letter-spacing: -.035em; line-height: .98; margin: 0; }
+.identitet > p:last-child { color: rgba(249,246,234,.72); font-family: var(--serif); font-size: 16px; font-style: italic; margin: 12px 0 0; }
+.arkivfakta { border-left: 1px solid rgba(255,255,255,.19); display: grid; grid-template-columns: auto 112px; padding: 8px 0 8px 26px; }
+.arkivfakta strong { font-family: var(--serif); font-size: 46px; font-weight: 400; grid-row: span 2; line-height: .9; margin-right: 12px; }
+.arkivfakta span { color: rgba(249,246,234,.68); font-size: 10px; font-weight: 700; letter-spacing: .08em; line-height: 1.25; text-transform: uppercase; }
+.arkivfakta small { align-self: end; color: #dfc28e; font-family: var(--serif); font-size: 15px; }
+.sync-panel { align-items: flex-end; display: flex; flex-direction: column; gap: 8px; grid-column: 3; }
+.sync-panel span { color: rgba(249,246,234,.72); font-size: 9px; max-width: 230px; text-align: right; }
+.sync-panel .status-ok { color: #cce5d7; }
+.sync-panel .status-warning { color: #eed399; }
+.sync-panel .status-error { color: #f1b1a6; }
+.sync-panel button, .bootstrap, .tomtresultat button { background: #f9f6ea; border: 0; border-radius: 999px; color: var(--hav); cursor: pointer; font-size: 10px; font-weight: 800; padding: 8px 12px; }
+
+.sokband { background: rgba(255,255,255,.72); border-bottom: 1px solid var(--linje); box-shadow: 0 5px 26px rgba(29,52,48,.05); padding: 15px max(28px, calc((100vw - 1540px)/2)) 14px; position: sticky; top: 0; z-index: 20; }
+.sokruta { align-items: center; border-bottom: 1px solid rgba(23,61,70,.34); display: grid; gap: 10px; grid-template-columns: auto 1fr auto; margin-bottom: 12px; max-width: 780px; padding: 0 2px 7px; }
+.sokruta > span { color: var(--rod); font-family: var(--serif); font-size: 25px; transform: rotate(-15deg); }
+.sokruta input { background: transparent; border: 0; color: var(--hav-djupt); font-family: var(--serif); font-size: 18px; min-width: 0; outline: 0; }
+.sokruta input::placeholder { color: #7b837c; font-style: italic; }
+.sokruta button { background: none; border: 0; color: var(--svart-mjuk); cursor: pointer; font-size: 22px; padding: 0 5px; }
+.filterrader { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+.filtergrupp { display: flex; flex-wrap: wrap; gap: 7px; }
+.filtergrupp button { background: transparent; border: 1px solid rgba(23,61,70,.2); border-radius: 999px; color: var(--hav); cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 6px 11px; }
+.filtergrupp button:hover, .filtergrupp button.vald { background: var(--hav); border-color: var(--hav); color: #fffaf0; }
+.typfilter { align-items: center; display: flex; gap: 7px; }
+.typfilter span { color: var(--svart-mjuk); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.typfilter select { background: transparent; border: 0; border-bottom: 1px solid rgba(23,61,70,.28); color: var(--hav); cursor: pointer; font-size: 12px; padding: 4px 20px 4px 2px; }
+.bootstrap { background: var(--rod); color: white; margin-top: 11px; }
+
+.arbetsyta { align-items: start; display: grid; gap: 26px; grid-template-columns: 290px minmax(520px,760px) 260px; justify-content: center; margin: 0 auto; max-width: 1600px; min-height: 100vh; padding: 30px 28px 80px; }
+.dokumentlista, .samband { max-height: calc(100vh - 198px); position: sticky; top: 168px; }
+.listtitel { align-items: baseline; border-bottom: 1px solid var(--linje); color: var(--hav); display: flex; justify-content: space-between; margin-bottom: 9px; padding: 0 3px 8px; }
+.listtitel span { font-size: 11px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+.listtitel strong { color: var(--rod); font-family: var(--serif); font-size: 23px; font-weight: 400; }
+.kortlista, .sambandslista { max-height: calc(100vh - 248px); overflow: auto; padding: 0 8px 25px 0; scrollbar-color: rgba(23,61,70,.24) transparent; scrollbar-width: thin; }
+.dokumentkort { background: transparent; border: 0; border-bottom: 1px solid var(--linje); color: var(--svart); cursor: pointer; display: block; padding: 15px 12px; position: relative; text-align: left; transition: background 160ms ease, transform 160ms ease; width: 100%; }
+.dokumentkort::before { background: var(--rod); bottom: 9px; content: ""; left: 0; opacity: 0; position: absolute; top: 9px; width: 3px; }
+.dokumentkort:hover { background: rgba(255,255,255,.55); }
+.dokumentkort.aktiv { background: rgba(255,255,255,.83); box-shadow: 0 7px 20px rgba(26,49,45,.07); transform: translateX(3px); }
+.dokumentkort.aktiv::before { opacity: 1; }
+.kortdatum { color: var(--rod); display: block; font-size: 10px; font-weight: 800; letter-spacing: .11em; margin-bottom: 7px; text-transform: uppercase; }
+.dokumentkort > strong { display: block; font-family: var(--serif); font-size: 16px; font-weight: 600; line-height: 1.28; }
+.kortfot { color: var(--svart-mjuk); display: flex; font-size: 9px; justify-content: space-between; letter-spacing: .04em; margin-top: 10px; text-transform: uppercase; }
+
+.papper { background: linear-gradient(90deg, rgba(136,94,46,.025), transparent 18%, transparent 82%, rgba(136,94,46,.025)), var(--papper); box-shadow: var(--skugga), inset 0 0 0 1px rgba(129,101,53,.11); min-height: 900px; padding: 68px clamp(42px,7vw,88px) 54px; position: relative; }
+.papper::before { background: linear-gradient(90deg, transparent, rgba(118,81,40,.05), transparent); content: ""; height: 1px; left: 34px; position: absolute; right: 34px; top: 24px; }
+.halslagskant { display: flex; flex-direction: column; gap: 118px; left: 14px; position: absolute; top: 172px; }
+.halslagskant i { background: #ded8c8; border: 1px solid rgba(83,70,50,.22); border-radius: 50%; box-shadow: inset 1px 2px 3px rgba(63,48,29,.14); height: 13px; width: 13px; }
+.dokumenthuvud { text-align: center; }
+.dokumentmeta { align-items: center; color: var(--hav); display: flex; font-size: 10px; font-weight: 800; justify-content: center; letter-spacing: .13em; text-transform: uppercase; }
+.dokumentmeta > span:first-child::after { color: var(--guld); content: "◆"; font-size: 6px; margin: 0 10px; vertical-align: 2px; }
+.status { border-radius: 999px; font-size: 8px; letter-spacing: .08em; padding: 4px 7px; }
+.status.klar { background: var(--hav-ljust); color: var(--hav); }
+.status.kontroll { background: var(--rod-ljust); color: var(--rod); }
+.dokumentdatum { color: var(--rod); font-family: var(--serif); font-size: 15px; font-style: italic; margin: 20px 0 8px; }
+.dokumenthuvud h2 { color: var(--hav-djupt); font-family: var(--serif); font-size: clamp(31px,4.1vw,46px); font-weight: 500; letter-spacing: -.03em; line-height: 1.04; margin: 0 auto; max-width: 650px; }
+.ingress { color: var(--svart-mjuk); font-family: var(--serif); font-size: 15px; font-style: italic; line-height: 1.55; margin: 20px auto 0; max-width: 540px; }
+.entitetsrad { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 24px auto 0; }
+.entitetsmarke { align-items: center; background: rgba(255,255,255,.48); border: 1px solid rgba(23,61,70,.17); border-radius: 999px; color: var(--hav); cursor: pointer; display: inline-flex; font-size: 10px; font-weight: 700; gap: 6px; padding: 4px 8px 4px 5px; }
+.entitetsmarke:hover { background: #fff; border-color: rgba(23,61,70,.4); }
+.entitetsmarke.granska { border-color: rgba(159,63,45,.32); color: var(--rod); }
+.entitetsikon { align-items: center; background: var(--hav); border-radius: 50%; color: white; display: inline-flex; flex: 0 0 auto; font-family: var(--serif); font-size: 8px; font-weight: 700; height: 18px; justify-content: center; width: 18px; }
+.entitetsmarke.granska .entitetsikon { background: var(--rod); }
+.ornament { align-items: center; display: flex; gap: 15px; margin: 32px 0 24px; }
+.ornament::before, .ornament::after { background: linear-gradient(90deg, transparent, rgba(23,61,70,.25)); content: ""; flex: 1; height: 1px; }
+.ornament::after { background: linear-gradient(90deg, rgba(23,61,70,.25), transparent); }
+.ornament span { color: var(--guld); font-family: var(--serif); font-size: 20px; }
+.avskriftstext { color: #252823; font-family: var(--serif); font-size: 18px; line-height: 1.76; overflow-wrap: break-word; }
+.avskriftstext p { margin: 0 0 1.05em; }
+.avskriftstext h2, .avskriftstext h3 { color: var(--hav-djupt); font-weight: 600; }
+.avskriftstext h2 { font-size: 25px; letter-spacing: .08em; margin: 2.4em 0 1em; overflow-wrap: anywhere; text-align: center; text-transform: uppercase; }
+.avskriftstext h3 { border-bottom: 1px solid rgba(23,61,70,.2); font-size: 13px; letter-spacing: .14em; margin: 3em 0 1.4em; padding-bottom: 6px; text-transform: uppercase; }
+.avskriftstext ul { margin: .5em 0 1.4em; padding-left: 1.3em; }
+.avskriftstext li { margin-bottom: .65em; padding-left: .35em; }
+.avskriftstext pre { background: rgba(238,229,210,.62); border-left: 2px solid var(--guld); font-family: "Courier New", Courier, monospace; font-size: 13px; line-height: 1.72; margin: 1.4em -10px; overflow-x: auto; padding: 22px; white-space: pre-wrap; }
+.avskriftstext code { background: rgba(238,229,210,.8); border-radius: 3px; font-family: "Courier New", Courier, monospace; font-size: .82em; padding: 1px 4px; }
+.osaker { background: linear-gradient(transparent 56%, rgba(211,161,82,.34) 56%); color: inherit; padding: 0 1px; }
+.dokumentfot { align-items: center; border-top: 1px solid rgba(23,61,70,.18); color: var(--svart-mjuk); display: flex; font-size: 9px; justify-content: space-between; letter-spacing: .12em; margin-top: 54px; padding-top: 13px; text-transform: uppercase; }
+.dokumentfot button { background: none; border: 0; color: var(--rod); cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .08em; padding: 0; text-transform: uppercase; }
+.kallruta { background: var(--papper-morkt); border-left: 2px solid var(--guld); color: var(--svart-mjuk); font-size: 11px; line-height: 1.55; margin-top: 16px; padding: 14px 16px; }
+.kallruta strong { color: var(--hav); display: block; font-size: 9px; letter-spacing: .12em; margin-bottom: 5px; text-transform: uppercase; }
+.kallruta code { overflow-wrap: anywhere; }
+.kallruta p { margin: 8px 0 0; }
+
+.samband { overflow: hidden; }
+.sambandshuvud { border-bottom: 1px solid var(--linje); margin-bottom: 10px; padding-bottom: 13px; }
+.sambandshuvud h2 { color: var(--hav-djupt); font-family: var(--serif); font-size: 25px; font-weight: 500; line-height: 1.05; margin: 0 0 8px; }
+.sambandshuvud > p:last-child { color: var(--svart-mjuk); font-family: var(--serif); font-size: 12px; line-height: 1.45; margin: 0; }
+.sambandskort { border-bottom: 1px solid var(--linje); padding: 11px 2px; }
+.sambandsnamn { align-items: center; background: none; border: 0; color: var(--svart); cursor: pointer; display: flex; gap: 9px; padding: 0; text-align: left; width: 100%; }
+.sambandsnamn:hover strong { color: var(--rod); }
+.sambandsnamn strong { display: block; font-family: var(--serif); font-size: 14px; line-height: 1.2; }
+.sambandsnamn small { color: var(--svart-mjuk); display: block; font-size: 8px; letter-spacing: .11em; margin-top: 3px; text-transform: uppercase; }
+.entitetsikon.båt { background: #3f6974; }
+.entitetsikon.organisation { background: #806741; }
+.entitetsikon.plats, .entitetsikon.fastighet, .entitetsikon.hus { background: #5d6c50; }
+.kopplingsrad { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+.kopplingsstatus { border-radius: 999px; font-size: 8px; font-weight: 800; letter-spacing: .08em; padding: 3px 6px; text-transform: uppercase; }
+.kopplingsstatus.kopplad { background: var(--hav-ljust); color: var(--hav); }
+.kopplingsstatus.granska { background: var(--rod-ljust); color: var(--rod); }
+.kopplingsstatus.saknas { background: #e8e5dd; color: #6e716b; }
+.kopplingsstatus.lokal { background: #e6eadf; color: #566547; }
+.kopplingsrad a { color: var(--hav); font-size: 9px; font-weight: 800; text-decoration: none; }
+.kopplingsrad a:hover { color: var(--rod); text-decoration: underline; }
+.sambandskort > code { color: #6e7770; display: block; font-size: 8px; margin-top: 6px; overflow-wrap: anywhere; }
+.kopplingsnot { color: var(--svart-mjuk); font-family: var(--serif); font-size: 10px; font-style: italic; line-height: 1.4; margin: 8px 0 0; }
+.modellnot { background: rgba(255,255,255,.55); border: 1px solid var(--linje); margin-top: 13px; padding: 11px 12px; }
+.modellnot strong { color: var(--hav); display: block; font-family: var(--serif); font-size: 12px; }
+.modellnot p, .tomnot { color: var(--svart-mjuk); font-size: 8px; letter-spacing: .05em; margin: 5px 0 0; text-transform: uppercase; }
+.tomtresultat { align-items: center; background: rgba(255,255,255,.55); border: 1px dashed rgba(23,61,70,.3); display: flex; flex-direction: column; justify-content: center; min-height: 560px; padding: 60px; text-align: center; }
+.tomtresultat > span { color: var(--rod); font-family: var(--serif); font-size: 56px; }
+.tomtresultat h2 { color: var(--hav); font-family: var(--serif); font-size: 28px; font-weight: 500; margin: 10px 0 4px; }
+.tomtresultat p { color: var(--svart-mjuk); font-family: var(--serif); max-width: 420px; }
+.tomtresultat button { background: var(--hav); color: white; margin-top: 12px; }
+
+@media (max-width: 1350px) {
+  .sidhuvud { grid-template-columns: auto minmax(0,1fr) auto; }
+  .arkivfakta { display: none; }
+  .sync-panel { grid-column: 3; }
+}
+@media (max-width: 1200px) {
+  .arbetsyta { grid-template-columns: 270px minmax(500px,720px); }
+  .samband { grid-column: 2; max-height: none; position: static; }
+  .sambandslista { display: grid; gap: 0 16px; grid-template-columns: repeat(2,minmax(0,1fr)); max-height: none; overflow: visible; }
+}
+@media (max-width: 850px) {
+  .sidhuvud { grid-template-columns: auto 1fr; }
+  .sync-panel { align-items: flex-start; grid-column: 2; }
+  .sync-panel span { text-align: left; }
+  .arbetsyta { display: block; padding: 20px 14px 60px; }
+  .dokumentlista { margin: 0 auto 20px; max-height: none; max-width: 760px; position: static; }
+  .kortlista { display: flex; gap: 8px; max-height: none; overflow-x: auto; padding: 0 0 10px; }
+  .dokumentkort { border: 1px solid var(--linje); flex: 0 0 235px; min-height: 138px; }
+  .dokumentkort.aktiv { transform: translateY(-2px); }
+  .papper, .tomtresultat, .samband { margin-left: auto; margin-right: auto; max-width: 760px; }
+  .samband { margin-top: 24px; }
+}
+@media (max-width: 620px) {
+  .sidhuvud { gap: 14px; min-height: 138px; padding: 22px 18px 24px; }
+  .sigill { height: 66px; width: 66px; }
+  .sigill span { font-size: 27px; }
+  .sigill small { font-size: 7px; }
+  .identitet h1 { font-size: 30px; }
+  .identitet > p:last-child { display: none; }
+  .sync-panel { align-items: stretch; grid-column: 1 / -1; }
+  .sync-panel span { max-width: none; }
+  .sokband { padding: 11px 14px 10px; position: static; }
+  .sokruta { margin-bottom: 9px; }
+  .sokruta input { font-size: 16px; }
+  .filterrader { align-items: flex-start; flex-direction: column; }
+  .filtergrupp { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; padding-bottom: 3px; }
+  .filtergrupp button { flex: 0 0 auto; }
+  .papper { min-height: 760px; padding: 50px 26px 40px; }
+  .papper::before { left: 20px; right: 20px; }
+  .halslagskant { display: none; }
+  .dokumenthuvud h2 { font-size: 32px; }
+  .avskriftstext { font-size: 17px; line-height: 1.68; }
+  .avskriftstext pre { font-size: 11px; margin-left: -12px; margin-right: -12px; padding: 15px; }
+  .sambandslista { display: block; }
+  .dokumentfot { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+@media print {
+  body { background: white; }
+  .sidhuvud, .sokband, .dokumentlista, .samband, .entitetsrad, .dokumentfot, .halslagskant { display: none; }
+  .arbetsyta { display: block; padding: 0; }
+  .papper { box-shadow: none; max-width: none; padding: 1.5cm; }
+}
