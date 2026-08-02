@@ -1,0 +1,53 @@
+.matchkontext {
+  border-bottom: 1px solid var(--linje);
+  border-top: 1px solid var(--linje);
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px 0;
+}
+
+.matchuppgift {
+  display: grid;
+  gap: 3px;
+}
+
+.matchuppgift > span {
+  color: var(--guld);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.matchuppgift strong {
+  color: var(--text);
+  font: 600 15px var(--serif);
+}
+
+.matchkallnamn {
+  color: var(--mjuk);
+  display: block;
+  font-size: 8px;
+}
+
+.matchbesattning {
+  display: grid;
+  gap: 4px;
+}
+
+.matchperson {
+  align-items: baseline;
+  color: var(--text);
+  display: grid;
+  font: 600 13px var(--serif);
+  gap: 6px;
+  grid-template-columns: 72px 1fr;
+}
+
+.matchperson small {
+  color: var(--mjuk);
+  font: 700 8px var(--sans);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}

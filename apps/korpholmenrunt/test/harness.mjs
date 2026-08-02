@@ -71,9 +71,15 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 });
 
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
-  const [html,app,styles]=await Promise.all(['index.html','src/app.js','styles.css'].map(file=>readFile(resolve(ROOT,file),'utf8')));
+  const [html,app,styles,matchingStyles]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Matcha registren'])assert.ok(html.includes(label));
   for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching'])assert.ok(app.includes(capability));
+  assert.ok(app.includes("['Kapten',result.captain_raw]"));
+  assert.ok(app.includes("['Besättning 1',result.crew_1_raw]"));
+  assert.ok(app.includes("['Besättning 2',result.crew_2_raw]"));
+  assert.ok(app.includes('matchContext(result,bMap)'));
+  assert.equal((app.match(/\$\{matchContext\(result,bMap\)\}/g)||[]).length,2);
+  assert.ok(matchingStyles.includes('.matchkontext'));
   assert.ok(app.includes("opsRoot:'/korpholmenrunt/ops'"));
   assert.ok(app.includes("source_id:prior?.source_id??'race-source:user'"));
   assert.ok(styles.includes('@media(max-width:'));
