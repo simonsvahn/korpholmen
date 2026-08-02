@@ -34,6 +34,7 @@ import {
   kinGroupMemberDetails,
   nextReferenceCode,
   readableReference,
+  searchFamilyTargets,
 } from '../../../packages/core/family-context.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -276,6 +277,34 @@ await test('FAMILJ- och SLÄKT-koder är läsbara medan släktled är grupprelat
   const hierarchy = kinGroupMemberDetails(hierarchyGroups[0], hierarchyContext);
   assert.equal(hierarchy.find(member => member.person_id === 'barn').generation, 2);
   assert.equal(hierarchy.find(member => member.person_id === 'barnbarn').generation, 3);
+});
+
+await test('familjebildningar blandar inte barn från olika relationer', () => {
+  const people = [
+    { id: 'a', display_name: 'A' },
+    { id: 'b', display_name: 'B' },
+    { id: 'c', display_name: 'C' },
+    { id: 'gemensamt', display_name: 'Gemensamt barn' },
+    { id: 'tidigare', display_name: 'Barn från tidigare relation' },
+  ];
+  const relations = [
+    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'gemensamt', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'b', to_person_id: 'gemensamt', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'tidigare', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'c', to_person_id: 'tidigare', user_confirmed: true },
+  ];
+  const familyUnits = [{ id: 'familj-ab', reference_code: 'FAMILJ-001', name: 'A och B', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_shared_children', confirmed: true }];
+  const context = buildFamilyContext({ people, relations, familyUnits });
+  assert.deepEqual(familyUnitMemberDetails(familyUnits[0], context).map(member => member.person_id), ['a', 'b', 'gemensamt']);
+});
+
+await test('stabila grupper kan sökas via kod, äldre namn och medlemmar', () => {
+  const people = [{ id: 'lotta', display_name: 'Lotta Svahn', family: 'Svahn' }];
+  const kinGroups = [{ id: 'slakt', reference_code: 'SLÄKT-005', name: 'Inger–Bethge', legacy_labels: ['Svahn'], explicit_person_ids: ['lotta'], membership_rule: 'explicit' }];
+  const context = buildFamilyContext({ people, kinGroups });
+  assert.equal(searchFamilyTargets(context, 'svahn')[0].id, 'slakt');
+  assert.equal(searchFamilyTargets(context, 'SLÄKT-005')[0].id, 'slakt');
+  assert.equal(searchFamilyTargets(context, 'Lotta')[0].id, 'slakt');
 });
 
 await test('fältändringar från två enheter överlever och synkas åt båda håll', async () => {

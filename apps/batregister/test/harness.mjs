@@ -9,6 +9,7 @@ import {
   KIN_GROUP_TYPE,
   buildFamilyContext,
   familySelectionMatches,
+  searchFamilyTargets,
 } from '../../../packages/core/family-context.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -85,18 +86,34 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes("entityType:'boat-person-link'"));
   assert.ok(app.includes("entityType:'boat-family-link'"));
   assert.ok(app.includes("entityType:'boat-group-link'"));
-  assert.ok(app.includes('person:${escapeHtml(person.id)}'));
-  assert.ok(app.includes('legacy-family:${escapeHtml(family.id)}'));
+  assert.ok(app.includes('person:${person.id}'));
+  assert.ok(app.includes('id="relation-link-search"'));
   assert.ok(app.includes('FAMILY_UNIT_TYPE'));
   assert.ok(app.includes('KIN_GROUP_TYPE'));
   assert.ok(app.includes("link.person_id === ui.person"));
   assert.ok(app.includes('../matrikel/?person='));
   assert.ok(html.includes('id="person-filter"'));
+  assert.ok(html.includes('id="family-filter-search"'));
+  assert.ok(html.includes('role="combobox"'));
   assert.ok(html.includes('Familj eller släkt'));
   assert.ok(html.includes('stabil FAMILJ'));
   assert.ok(html.includes('stabil SLÄKT'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
+});
+
+await test('familjefiltret söker stabila grupper utan en lång lista med äldre etiketter', async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  const html=await readFile(resolve(ROOT,'index.html'),'utf8');
+  assert.ok(app.includes('searchFamilyTargets'));
+  assert.ok(app.includes('{ limit: 8 }'));
+  assert.ok(app.includes('searchableFamilyTargets'));
+  assert.equal(html.includes('<select id="family-filter"'),false);
+  assert.equal(html.includes('Äldre etiketter'),false);
+  assert.equal(app.includes('<optgroup label="Äldre familjeetiketter"'),false);
+  const results=searchFamilyTargets(familyContext,'Svahn');
+  assert.ok(results.length>0);
+  assert.ok(results.every(result=>[KIN_GROUP_TYPE,'family-unit'].includes(result.type)));
 });
 
 await test('båtar kan länkas till stabil FAMILJ eller SLÄKT med ärvd synlighet',async()=>{

@@ -28,6 +28,14 @@ livet höra till flera familjer: som barn, partner och förälder. Skilsmässa
 raderar inte familjen; partnerrelationen får i stället historisk status. En ny
 partner kan ge en ny familjeenhet.
 
+Standardregeln är `anchors_and_shared_children`: ankarpersonerna och endast
+de barn som har en registrerad förälder–barn-relation till samtliga ankare.
+Detta hindrar att barn från en tidigare eller senare relation automatiskt
+läggs i fel familjebildning. Ett barn kan alltid läggas till uttryckligen när
+källmaterialet är ofullständigt. Den äldre unionsregeln
+`anchors_and_children` finns kvar för bakåtkompatibilitet men används inte för
+nya familjer.
+
 Den läsbara koden är `FAMILJ-001`, `FAMILJ-002` och så vidare.
 
 ### SLÄKT
@@ -149,6 +157,33 @@ FAMILJ-009 Thomas och Solveig
 Strukturen får finnas som ej bekräftad utan att de underliggande
 personrelationerna uppgraderas. I den första migreringen är endast sådant
 Simon uttryckligen har bekräftat markerat som bekräftat.
+
+## Den fullständiga modellen och fortsatt utbyggnad
+
+Den första totalmodellen omfattar alla familjebildningar som kan identifieras
+utan nya personpåståenden: registrerade partner/tidigare partner samt grupper
+av två eller fler registrerade medföräldrar. Modellen utökar de nio första
+Hedström-familjerna och de nio första släktgrupperna; den ersätter eller
+numrerar aldrig om dem.
+
+De äldre personfälten `ui_clan` och `family` används bara som ett
+övergångsunderlag för att fånga personer som ännu saknar kompletta
+relationer. Meningsfulla äldre namn sparas som sökord på en stabil SLÄKT.
+Statusrubriker som »utan känd släktkoppling« skapar ingen släktgrupp. De äldre
+etiketterna visas inte som ett parallellt val i apparna och kan avvecklas när
+alla personer är täckta av relationer eller uttryckligt medlemskap.
+
+Verktyget `apps/matrikel/verktyg/utoka-familjemodell.mjs` är återkörbart mot
+den aktuella operationsmastern. Det matchar en familj via dess oföränderliga
+ankaruppsättning, behåller befintligt id, kod, namn och bekräftelsestatus och
+skapar endast saknade grupper eller medlemskap. Varje senare körning får ett
+nytt migrerings-id. Därmed kan datan kompletteras i flera omgångar utan att
+båtkopplingar, länkar eller äldre hänvisningar bryts.
+
+Vid totalpasset 2026-08-02 ger den aktuella datan 49 FAMILJ och 24 SLÄKT.
+Det är en modell av vad som finns registrerat nu, inte ett påstående om att
+materialet är slutgiltigt. Ej bekräftade relationer ger ej bekräftade
+familjebildningar och kan rättas eller tas bort med bevarad ändringshistorik.
 
 ## Ansvar mellan apparna
 
