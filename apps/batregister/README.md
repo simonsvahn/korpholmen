@@ -22,6 +22,11 @@ npm test
 npm run build:publish
 ```
 
+Spårbara rättelser efter grundimporten ligger som privata operationsdokument i
+`privat/korrigeringar/`. Seed-kommandot läser dem efter startmastern och skriver
+varje korrigeringsenhet som en ny oföränderlig Dropbox-batch; tidigare batcher
+skrivs aldrig över.
+
 På localhost kan startkopian aktiveras och därefter laddas upp till Dropbox.
 Entydiga personnamn och klubbnamn länkas automatiskt till Matrikelns stabila
 person-ID. Därutöver bygger startmastern reproducerbart på Simons uttryckligen

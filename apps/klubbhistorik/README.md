@@ -30,6 +30,8 @@ på motsvarande rad.
 - `privat/migrering-2026-08-02/initial-ops.json` — reproducerbar startmaster;
 - `privat/migrering-2026-08-02/kontrollrapport.json` — radtäckning,
   kontrollsummor, dubbletter och olösta identiteter;
+- `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
+  operationer ovanpå den låsta startmastern;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
 
 ## Kommandon

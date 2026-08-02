@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
@@ -11,6 +11,7 @@ const REPO=resolve(ROOT,'../..');
 const PRIVATE=resolve(ROOT,'privat');
 const MIGRATION=resolve(PRIVATE,'migrering-2026-08-02');
 const SOURCES=resolve(PRIVATE,'kallkopior');
+const CORRECTIONS=resolve(PRIVATE,'korrigeringar');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -32,7 +33,10 @@ const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
 const document=JSON.parse(secondBytes);
 const report=JSON.parse(secondReportBytes);
-const state=materialize(document.operations);
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
+const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
+const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
+const state=materialize([...document.operations,...correctionOperations]);
 const rows=type=>state.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
 const releases=rows('matrikel-release');
 const sourceRows=rows('source-row');
@@ -49,7 +53,9 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
 
 await test('alla operationer är giltiga och unika',()=>{
   document.operations.forEach(validateOperation);
+  correctionOperations.forEach(validateOperation);
   assert.equal(new Set(document.operations.map(operation=>operation.op_id)).size,document.operations.length);
+  assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
   assert.equal(document.counts.operations,document.operations.length);
   assert.equal(document.counts.operations,10138);
 });
@@ -83,7 +89,7 @@ await test('person- och båtkopplingar pekar bara på respektive master',()=>{
   const personIds=new Set(personRefs.map(ref=>ref.external_id));
   const boatIds=new Set(boatRefs.map(ref=>ref.external_id));
   assert.equal(personIds.size,214);
-  assert.equal(boatIds.size,168);
+  assert.equal(boatIds.size,169);
   for(const item of people.filter(row=>row.person_id&&row.confirmed))assert.ok(personIds.has(item.person_id),item.person_id);
   for(const item of boats.filter(row=>row.boat_id&&row.confirmed))assert.ok(boatIds.has(item.boat_id),item.boat_id);
 });
@@ -94,6 +100,19 @@ await test('osäkra identiteter ligger öppet i granskningskön',()=>{
   assert.deepEqual(unresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
   assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
   assert.equal(report.counts.unresolved_boats,14);
+  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,12);
+});
+
+await test('Filifjonkan-raderna behåller källformen men länkas till den första båten',()=>{
+  const firstRef=boatRefs.find(item=>item.external_id==='filifjonkaniii');
+  const secondRef=boatRefs.find(item=>item.external_id==='filifjonkanii');
+  assert.equal(firstRef.name,'Filifjonkan I');
+  assert.deepEqual(firstRef.aliases,['Filifjonkan']);
+  assert.equal(secondRef.name,'Filifjonkan II');
+  const occurrences=boats.filter(item=>item.boat_name_raw==='Filifjonkan');
+  assert.deepEqual(occurrences.map(item=>item.release_id).sort(),['matrikel-1980','matrikel-1986']);
+  assert.ok(occurrences.every(item=>item.raw_text.includes('Filifjonkan')&&item.boat_id==='filifjonkaniii'&&item.confirmed===true));
+  assert.ok(occurrences.every(item=>item.match_status==='godkand'&&item.match_method==='källbelagd identitetsrättning'));
 });
 
 await test('dubbletter och ogiltiga källvärden rättas inte bort',()=>{
@@ -131,7 +150,7 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
 });
 
 await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
-  const appReadmePaths=['matrikel','batregister','fastigheter','arkiv','korpholmenrunt','klubbhistorik'].map(name=>resolve(REPO,'apps',name,'README.md'));
+  const appReadmePaths=['matrikel','batregister','fastigheter','dokumentarkiv','korpholmenrunt','klubbhistorik'].map(name=>resolve(REPO,'apps',name,'README.md'));
   const [architecture,localArchitecture,rootReadme,localModel,...appReadmes]=await Promise.all([
     readFile(resolve(REPO,'ARKITEKTUR.md'),'utf8'),
     readFile(resolve(ROOT,'ARKITEKTUR.md'),'utf8'),

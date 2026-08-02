@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,7 @@ import {
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
 const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-01');
+const CORRECTIONS=resolve(ROOT,'privat/korrigeringar');
 const readJson=async path=>JSON.parse(await readFile(path,'utf8'));
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
@@ -31,7 +32,10 @@ async function test(name,action){try{await action();passed+=1;console.log(`✓ $
 const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
 const imageManifest=await readJson(resolve(PRIVATE,'bildmanifest.json'));
 const decisions=await readJson(resolve(ROOT,'privat/kallkopior/byggkit/godkanda-kopplingar-2026-08-01.json'));
-const state=materialize(document.operations);
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
+const correctionDocuments=await Promise.all(correctionFiles.map(file=>readJson(resolve(CORRECTIONS,file))));
+const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
+const state=materialize([...document.operations,...correctionOperations]);
 
 const matrikelPrivate=resolve(ROOT,'../matrikel/privat');
 const matrikelMigration=resolve(matrikelPrivate,'migrering-2026-08-01');
@@ -41,13 +45,31 @@ const matrikelState=materialize([...matrikelDocuments.flatMap(item=>item.operati
 const entityRows=type=>matrikelState.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
 const familyContext=buildFamilyContext({people:entityRows('person'),relations:entityRows('relation'),familyUnits:entityRows('family-unit'),kinGroups:entityRows(KIN_GROUP_TYPE)});
 
-await test('startmastern innehåller 168 båtar och giltiga operationer',()=>{
+await test('startmastern och rättelserna innehåller 169 båtar och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
-  assert.equal(state.listEntities('boat').length,168);
+  correctionOperations.forEach(validateOperation);
+  assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
+  assert.equal(state.listEntities('boat').length,169);
   assert.equal(state.listEntities('boat-person-link').length,173);
   assert.ok(state.listEntities('family').length>4);
-  assert.equal(state.listEntities('boat-family-link').length,8);
+  assert.equal(state.listEntities('boat-family-link').length,9);
   for(const family of decisions.families)assert.ok(state.listEntities('family').some(entity=>entity.entity_id===family.id),family.id);
+});
+
+await test('Filifjonkan I och II är två båtar utan att ettans historik går förlorad',()=>{
+  const first=state.getEntity('boat','filifjonkaniii');
+  const second=state.getEntity('boat','filifjonkanii');
+  assert.equal(first.fields.namn,'Filifjonkan I');
+  assert.equal(first.fields.modell,'M/S Selko');
+  assert.deepEqual(first.fields.tidigare_namn,['Filifjonkan']);
+  assert.equal(first.fields.ar,1962);
+  assert.equal(first.fields.images.length,1);
+  assert.equal(second.fields.namn,'Filifjonkan II');
+  assert.equal(second.fields.modell,'M/S Askeladden');
+  assert.equal(second.fields.ar,null);
+  assert.deepEqual(second.fields.images,[]);
+  assert.ok(state.getEntity('boat-person-link','filifjonkaniii--perolofbethge'));
+  assert.ok(state.getEntity('boat-family-link','filifjonkanii--family--bethge'));
 });
 
 await test('alla säkra båt-person-länkar pekar på en person i Matrikeln',async()=>{

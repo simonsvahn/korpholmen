@@ -119,6 +119,13 @@ domäntid eller intervall, källrad/evidens, roll (`ägare`, `brukare`,
 `familjebåt` eller annan tydlig betydelse), säkerhet och granskningsstatus.
 Först då kan Explorer visa vem som ägde eller använde båten vid en viss tid.
 
+En fartygsrad kan innehålla flera kommaseparerade namn. Raden bevaras då som
+en `source-row`, medan varje namn blir en egen `boat-occurrence`; en förekomst
+får länka till högst en fysisk båt. Retrospektiva särskiljningar ändrar inte
+källformen. Exempelvis bevaras matrikelns »Filifjonkan« ordagrant men länkas
+efter granskning till båten Filifjonkan I, medan Filifjonkan II är en annan
+fysisk båt med ett eget stabilt ID.
+
 ## Matchnings- och granskningsflöde
 
 ```mermaid
