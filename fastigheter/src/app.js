@@ -183,6 +183,12 @@ function claimPeriod(claim) {
   const start = claim.start_year || claim.start_year_min; const end = claim.end_year || claim.end_year_max;
   return start || end ? `${start || '?'}–${end || '?'}` : 'odaterat';
 }
+function renderStructuredHistorySection(holdingClaims, hasUnnormalizedClaims) {
+  return `<section class="drawer-section" data-section="history"><h3>Historik</h3><p class="section-help">Samtliga poster ur den manuella tabellen har en roll, tidsperiod, osäkerhetsgrad, källstatus och länk till originaluppgiften. Hyra, boende och verksamhetsdrift hålls skilda från juridiskt ägande.</p>
+    <div class="claim-chain">${holdingClaims.map(claim => `<article class="history-claim ${/hyresgäst|boende|brukare|verksamhetsutövare/i.test(claim.role) ? 'role-warning' : ''}"><time>${escapeHtml(claimPeriod(claim))}</time><div><h4>${escapeHtml(claim.holder_text)}</h4><p><b>${escapeHtml(claim.role)}</b> · ${escapeHtml(claim.verification_status)}</p><p><small>${escapeHtml(claim.certainty)} · ${escapeHtml((claim.source_ids || []).join(', '))}</small></p>${claim.source_locators?.length ? `<p><small>${escapeHtml(claim.source_locators.join('; '))}</small></p>` : ''}<details><summary>Originaluppgift</summary><p>${escapeHtml(claim.raw_text)}</p></details></div></article>`).join('') || '<p>Ingen råkedja för fastigheten.</p>'}</div>
+    ${hasUnnormalizedClaims ? '<p class="error">En eller flera råposter saknar normalisering.</p>' : ''}
+  </section>`;
+}
 function renderDrawer(id) {
   const property = propertyRecords().find(item => item.id === id);
   if (!property) return closeDrawer();
@@ -193,7 +199,8 @@ function renderDrawer(id) {
   const parties = new Map(partyRecords().map(party => [party.id, party]));
   const links = communityFor(id);
   drawerContent.innerHTML = `<h2>${escapeHtml(property.display_name || property.id)}</h2><p class="drawer-id">${escapeHtml(property.id)}</p>
-    <section class="drawer-section"><h3>Identitet</h3><div class="edit-grid">
+    ${renderStructuredHistorySection(holdingClaims, claimsFor(id).some(claim => !claim.normalized))}
+    <section class="drawer-section" data-section="identity"><h3>Identitet</h3><div class="edit-grid">
       <label>Namn<input data-property-field="display_name" value="${escapeHtml(property.display_name || '')}"></label>
       <label>Ö/plats<input data-property-field="island" value="${escapeHtml(property.island || '')}"></label>
       <label class="span-2">Kort etikett<input data-property-field="label" value="${escapeHtml(property.label || '')}"></label>
@@ -210,10 +217,6 @@ function renderDrawer(id) {
     </section>
     <section class="drawer-section"><h3>Innehav och roller</h3>${holdings.map(holding => `<div class="history-row"><time>${escapeHtml(holding.start_date || holding.observed_on || 'odaterat')}</time><div><b>${escapeHtml(parties.get(holding.party_id)?.name || holding.name || holding.party_id)}</b><br><small>${escapeHtml(holding.role)} · ${escapeHtml(holding.certainty || holding.basis || '')}</small></div></div>`).join('')}
       <form id="new-holding-form" class="entry-form"><h4>Nytt innehav eller bruk</h4><label class="span-2">Person/part<input name="name" required></label><label>Roll<select name="role"><option>ägare</option><option>lagfaren ägare</option><option>hyresgäst</option><option>brukare</option><option>arrendator</option><option>dödsbo</option></select></label><label>Från<input name="start_date" type="date"></label><label>Till<input name="end_date" type="date"></label><label>Observerad<input name="observed_on" type="date"></label><button class="primary" type="submit">Lägg till innehav</button></form>
-    </section>
-    <section class="drawer-section"><h3>Strukturerad historisk kedja</h3><p class="section-help">Samtliga poster ur den manuella tabellen har en roll, tidsperiod, osäkerhetsgrad, källstatus och länk till originaluppgiften. Hyra, boende och verksamhetsdrift hålls skilda från juridiskt ägande.</p>
-      <div class="claim-chain">${holdingClaims.map(claim => `<article class="history-claim ${/hyresgäst|boende|brukare|verksamhetsutövare/i.test(claim.role) ? 'role-warning' : ''}"><time>${escapeHtml(claimPeriod(claim))}</time><div><h4>${escapeHtml(claim.holder_text)}</h4><p><b>${escapeHtml(claim.role)}</b> · ${escapeHtml(claim.verification_status)}</p><p><small>${escapeHtml(claim.certainty)} · ${escapeHtml((claim.source_ids || []).join(', '))}</small></p>${claim.source_locators?.length ? `<p><small>${escapeHtml(claim.source_locators.join('; '))}</small></p>` : ''}<details><summary>Originaluppgift</summary><p>${escapeHtml(claim.raw_text)}</p></details></div></article>`).join('') || '<p>Ingen råkedja för fastigheten.</p>'}</div>
-      ${claimsFor(id).some(claim => !claim.normalized) ? '<p class="error">En eller flera råposter saknar normalisering.</p>' : ''}
     </section>
     <section class="drawer-section"><h3>Kopplingar</h3><p>${relationsFor(id).map(relation => escapeHtml(`${relation.from_id} → ${relation.to_property_id}: ${relation.relation} (${relation.certainty})`)).join('<br>') || 'Ingen kadastral relation.'}</p><h4>Fastighetsgemenskap i Matrikeln</h4><p class="section-help">Dessa kopplingar betyder anknytning till fastigheten, inte lagfart.</p><p>${links.map(link => `<a href="../matrikel/?person=${encodeURIComponent(link.person_id)}">${escapeHtml(link.person_display_name)}</a>`).join(', ') || 'Inga personkopplingar.'}</p></section>
     <section class="drawer-section"><h3>Källor</h3><ul>${unique([...events.flatMap(event => event.source_ids || []), ...eventClaims.flatMap(event => event.source_ids || []), ...holdings.flatMap(holding => holding.source_ids || []), ...holdingClaims.flatMap(holding => holding.source_ids || []), ...(audit?.compared_source_ids || [])]).map(sourceId => `<li><b>${escapeHtml(sourceId)}</b> — ${escapeHtml(sources.get(sourceId)?.label || '')}</li>`).join('')}</ul></section>`;
