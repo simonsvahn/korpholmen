@@ -71,6 +71,7 @@ export function buildGraph(people, relations) {
   const parents = new Map();
   const children = new Map();
   const partners = new Map();
+  const siblings = new Map();
   const all = new Map();
   const add = (map, key, value) => {
     if (!map.has(key)) map.set(key, []);
@@ -89,6 +90,9 @@ export function buildGraph(people, relations) {
     if (relation.kind === 'foralder-barn') {
       add(children, from.id, { id: to.id, relation });
       add(parents, to.id, { id: from.id, relation });
+    } else if (relation.kind === 'syskon') {
+      add(siblings, from.id, { id: to.id, relation });
+      add(siblings, to.id, { id: from.id, relation });
     } else {
       add(partners, from.id, { id: to.id, relation });
       add(partners, to.id, { id: from.id, relation });
@@ -110,29 +114,27 @@ export function buildGraph(people, relations) {
     }
   }
 
-  return { byId, parents, children, partners, all };
+  return { byId, parents, children, partners, siblings, all };
 }
 
 export function nearFamily(personId, graph) {
   const parents = graph.parents.get(personId) || [];
   const children = graph.children.get(personId) || [];
   const partnerLinks = graph.partners.get(personId) || [];
-  const siblingIds = new Set();
+  const siblingLinks = new Map((graph.siblings.get(personId) || []).map(link => [link.id, link]));
   for (const parent of parents) {
     for (const child of graph.children.get(parent.id) || []) {
-      if (child.id !== personId) siblingIds.add(child.id);
+      if (child.id !== personId && !siblingLinks.has(child.id)) siblingLinks.set(child.id, {
+        id: child.id,
+        relation: {
+          id: `derived:sibling:${[personId, child.id].sort().join(':')}`,
+          kind: 'syskon',
+          derived: true,
+        },
+      });
     }
   }
-  const siblings = [...siblingIds]
-    .map((id) => ({
-      id,
-      relation: {
-        id: `derived:sibling:${[personId, id].sort().join(':')}`,
-        kind: 'syskon',
-        derived: true,
-      },
-    }))
-    .filter((link) => graph.byId.has(link.id));
+  const siblings = [...siblingLinks.values()].filter((link) => graph.byId.has(link.id));
   const sort = (links) => [...links].sort((a, b) => shownName(graph.byId.get(a.id)).localeCompare(shownName(graph.byId.get(b.id)), 'sv'));
   return {
     parents: sort(parents),
@@ -253,6 +255,7 @@ export function relationDescription(step, graph) {
     return relation.from_person_id === step.from ? `${from} är förälder till ${to}` : `${from} är barn till ${to}`;
   }
   if (relation.kind === 'tidigare') return `${from} och ${to} var tidigare partner`;
+  if (relation.kind === 'syskon') return `${from} och ${to} är syskon`;
   if (relation.kind === 'coparent') return `${from} och ${to} har barn tillsammans`;
   return `${from} och ${to} är partner`;
 }

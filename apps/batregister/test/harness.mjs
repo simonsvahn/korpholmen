@@ -71,14 +71,31 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes("repository.setField('boat'"));
   assert.ok(app.includes("entityType:'boat-person-link'"));
   assert.ok(app.includes("entityType:'boat-family-link'"));
+  assert.ok(app.includes("entityType:'boat-group-link'"));
   assert.ok(app.includes('person:${escapeHtml(person.id)}'));
-  assert.ok(app.includes('family:${escapeHtml(family.id)}'));
+  assert.ok(app.includes('legacy-family:${escapeHtml(family.id)}'));
+  assert.ok(app.includes('FAMILY_UNIT_TYPE'));
+  assert.ok(app.includes('KIN_GROUP_TYPE'));
   assert.ok(app.includes("link.person_id === ui.person"));
   assert.ok(app.includes('../matrikel/?person='));
   assert.ok(html.includes('id="person-filter"'));
-  assert.ok(html.includes('Familjegren'));
+  assert.ok(html.includes('Familj eller släkt'));
+  assert.ok(html.includes('stabil FAMILJ'));
+  assert.ok(html.includes('stabil SLÄKT'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
+});
+
+await test('båtar kan länkas till stabil FAMILJ eller SLÄKT med ärvd synlighet',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  const core=await readFile(resolve(REPO,'packages/core/family-context.js'),'utf8');
+  assert.ok(app.includes('associationAppliesToTarget'));
+  assert.ok(app.includes('targetMemberDetails'));
+  assert.ok(app.includes("field:'target_code'"));
+  assert.ok(app.includes("field:'confirmed',value:true"));
+  assert.ok(core.includes('anchors_and_descendants'));
+  assert.ok(core.includes("return 'FAMILJ'"));
+  assert.ok(core.includes("return 'SLÄKT'"));
 });
 
 await test('båtbilder kan köas och läsas lokalt utan Dropbox',async()=>{

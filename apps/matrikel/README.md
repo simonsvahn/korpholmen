@@ -64,13 +64,19 @@ Repo-roten `https://simonsvahn.github.io/korpholmen/` är registrerad som
 **Redirect URI** i Dropbox App Console och skickar OAuth-returen vidare till
 rätt Korpholmen-app.
 
-## Nästa datamodellsteg
+## Fastighetskopplingar
 
-Fastighet och ö ska inte bli ett nytt fritextfält på personen. Modellen blir:
+Fastighet och ö är inte ett fritextfält på personen. Matrikeln har ett
+bekräftat navigationslager:
 
-1. `property` med stabil fastighetsidentitet och `island_id`;
-2. `person_property` med roll och tidsstatus;
-3. personens aktuella öar härleds automatiskt ur aktiva fastighetskopplingar.
+1. `property` med stabil fastighetsidentitet;
+2. `property-link` som beskriver fastighetsgemenskap;
+3. personens öanknytning kan presenteras från dessa kopplingar.
+
+Sedan 2026-08-02 är appen **Fastighetshistorik** kanonisk master för själva
+fastigheterna, historiska jordenheter, ägande, bruk och transaktioner.
+Matrikelns fastighetslager är en övergångs-/navigationskopia. En
+`property-link` är aldrig i sig bevis för juridiskt ägande.
 
 Det äldre personfältet `legacy_island` bevaras under övergången så att ingen
 befintlig öanknytning tappas innan fastighetskopplingarna har bekräftats.

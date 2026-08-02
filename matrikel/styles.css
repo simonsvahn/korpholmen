@@ -138,6 +138,36 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 .bridge-chip { display: inline-block; padding: .12rem .45rem; }
 .empty-note { color: var(--muted); font-size: .8rem; font-style: italic; }
 
+.group-model-intro, .model-empty { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface); }
+.group-model-intro h2, .model-empty h2, .unplaced-families h2 { margin: 0; color: var(--navy); font-size: 1.25rem; }
+.group-model-intro p, .model-empty p { max-width: 60rem; margin: .25rem 0 0; color: var(--muted); font-size: .82rem; }
+.button-row { display: flex; gap: .45rem; flex-wrap: wrap; }
+.button-row button { border: 1px solid var(--navy); border-radius: .38rem; background: var(--navy); color: #fff; padding: .42rem .62rem; font: 700 .76rem/1.2 Helvetica, Arial, sans-serif; }
+.kin-group-list { display: grid; gap: 1rem; }
+.kin-group-card { padding: .8rem; border: 1px solid var(--line); border-left: 5px solid var(--navy-2); border-radius: .6rem; background: color-mix(in srgb, var(--surface) 76%, transparent); }
+.kin-group-card.kind-stem_line { border-left-color: var(--green); }
+.kin-group-card.kind-branch { border-left-color: var(--cyan); }
+.kin-group-heading { display: flex; justify-content: space-between; gap: .8rem; align-items: flex-start; }
+.kin-group-heading > button, .group-card-heading { display: flex; gap: .6rem; align-items: flex-start; border: 0; background: transparent; color: var(--navy); padding: 0; text-align: left; }
+.kin-group-heading button span, .group-card-heading span { display: grid; }
+.kin-group-heading small, .group-card-heading small { color: var(--muted); font: 700 .62rem/1.2 Helvetica, Arial, sans-serif; letter-spacing: .05em; }
+.kin-group-heading b, .group-card-heading b { font-size: 1rem; }
+.kin-group-heading > div { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.group-kind, .confirmation { border-radius: 999px; padding: .18rem .42rem; font: 700 .62rem/1.2 Helvetica, Arial, sans-serif; white-space: nowrap; }
+.group-kind { background: var(--surface-2); color: var(--muted); }
+.confirmation.confirmed { background: color-mix(in srgb, var(--green) 18%, var(--surface)); color: var(--green); }
+.confirmation.unconfirmed { background: color-mix(in srgb, var(--amber) 17%, var(--surface)); color: var(--amber); }
+.group-summary, .family-unit-card p { margin: .32rem 0; color: var(--muted); font: .7rem/1.3 Helvetica, Arial, sans-serif; }
+.group-people { display: flex; gap: .25rem; flex-wrap: wrap; }
+.group-person { border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--navy); padding: .18rem .42rem; font: .68rem/1.2 Helvetica, Arial, sans-serif; }
+.group-person.unconfirmed { border-style: dashed; color: var(--muted); }
+.more-members { align-self: center; color: var(--muted); font: .66rem Helvetica, Arial, sans-serif; }
+.child-groups { display: grid; gap: .65rem; margin: .75rem 0 0 .8rem; padding-left: .8rem; border-left: 2px solid var(--line-strong); }
+.family-unit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .5rem; margin-top: .65rem; }
+.family-unit-card { padding: .6rem; border: 1px solid var(--line); border-radius: .48rem; background: var(--surface); }
+.group-card-heading { width: 100%; justify-content: space-between; }
+.unplaced-families { margin-top: 1rem; }
+
 .property-group { margin-bottom: 1.4rem; border: 1px solid var(--line); border-radius: .65rem; background: color-mix(in srgb, var(--surface) 72%, transparent); overflow: hidden; }
 .property-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem .85rem; border-bottom: 3px double var(--navy-2); background: var(--surface); }
 .property-header h2 { margin: 0; color: var(--navy); font-size: 1.28rem; }
@@ -177,6 +207,7 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
 .belonging-card div { display: grid; gap: .08rem; min-width: 0; }
 .belonging-card span { color: var(--muted); font: 700 .58rem/1.2 Helvetica, Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
 .belonging-card strong { overflow-wrap: anywhere; color: var(--navy); font: 700 .78rem/1.25 Helvetica, Arial, sans-serif; }
+.belonging-card strong small { display: block; margin: .08rem 0 .24rem; color: var(--muted); font: 400 .64rem/1.25 Helvetica, Arial, sans-serif; }
 .close-family-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
 .close-family-grid section { min-width: 0; padding: .5rem .55rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface-2); }
 #person-drawer .close-family-grid h4 { margin: 0 0 .3rem; color: var(--navy); font: 700 .68rem/1.2 Helvetica, Arial, sans-serif; }
@@ -233,6 +264,10 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
   .property-header { display: block; }
   .property-meta { margin-top: .25rem; text-align: left; }
   .clan-header { display: block; }
+  .group-model-intro, .model-empty, .kin-group-heading { display: block; }
+  .group-model-intro .button-row, .model-empty .button-row { margin-top: .75rem; }
+  .kin-group-heading > div { margin-top: .35rem; justify-content: flex-start; }
+  .child-groups { margin-left: .25rem; padding-left: .5rem; }
   .clan-meta { margin-top: .2rem; text-align: left; }
   .family-stem { padding-left: .5rem; border-left-width: 3px; }
   .children { display: block; margin: .4rem 0 .05rem .65rem; padding: .05rem 0 .05rem .7rem; border-top: 0; border-left: 2px solid var(--line-strong); }

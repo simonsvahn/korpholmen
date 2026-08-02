@@ -24,6 +24,15 @@ import {
   shownName,
   visiblePersonIds,
 } from '../src/landscape-model.js';
+import {
+  FAMILY_UNIT_TYPE,
+  KIN_GROUP_TYPE,
+  buildFamilyContext,
+  familyUnitMemberDetails,
+  kinGroupMemberDetails,
+  nextReferenceCode,
+  readableReference,
+} from '../../../packages/core/family-context.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-01');
@@ -221,6 +230,52 @@ await test('familjenivåerna är begripliga utan ny sakdata', () => {
   assert.equal(familyCircleLabel('Hedström-klanen (Carl Gunder & Bibbi)'), 'Hedström');
 });
 
+await test('direkta syskon fungerar utan registrerade föräldrar', () => {
+  const people = [
+    { id: 'broder-a', display_name: 'Broder A' },
+    { id: 'broder-b', display_name: 'Broder B' },
+  ];
+  const relations = [{ id: 'syskon', kind: 'syskon', from_person_id: 'broder-a', to_person_id: 'broder-b', user_confirmed: true }];
+  const graph = buildGraph(people, relations);
+  const family = nearFamily('broder-a', graph);
+  assert.deepEqual(family.siblings.map(link => link.id), ['broder-b']);
+  assert.equal(family.siblings[0].relation.derived, undefined);
+  assert.equal(graph.partners.get('broder-a'), undefined);
+});
+
+await test('FAMILJ- och SLÄKT-koder är läsbara medan släktled är grupprelativa', () => {
+  const people = [
+    { id: 'a', display_name: 'Ankare A' },
+    { id: 'b', display_name: 'Ankare B' },
+    { id: 'barn', display_name: 'Barnet' },
+    { id: 'barnbarn', display_name: 'Barnbarnet' },
+  ];
+  const relations = [
+    { kind: 'syskon', from_person_id: 'a', to_person_id: 'b', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'barn', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'barn', to_person_id: 'barnbarn', user_confirmed: false },
+  ];
+  const familyUnits = [{ id: 'f1', reference_code: 'FAMILJ-001', name: 'Ankare A och B', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_children', confirmed: true }];
+  const kinGroups = [{ id: 's1', reference_code: 'SLÄKT-001', name: 'Syskonen', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_descendants', confirmed: true }];
+  const context = buildFamilyContext({ people, relations, familyUnits, kinGroups });
+  assert.equal(nextReferenceCode(FAMILY_UNIT_TYPE, familyUnits), 'FAMILJ-002');
+  assert.equal(nextReferenceCode(KIN_GROUP_TYPE, kinGroups), 'SLÄKT-002');
+  assert.equal(readableReference(kinGroups[0]), 'SLÄKT-001--syskonen');
+  assert.deepEqual(familyUnitMemberDetails(familyUnits[0], context).map(member => [member.person_id, member.generation]), [['a', 1], ['b', 1], ['barn', 2]]);
+  const descendants = kinGroupMemberDetails(kinGroups[0], context);
+  assert.deepEqual(descendants.map(member => [member.person_id, member.generation]), [['a', 1], ['b', 1], ['barn', 2], ['barnbarn', 3]]);
+  assert.equal(descendants.find(member => member.person_id === 'barnbarn').confirmed, false);
+
+  const hierarchyGroups = [
+    { ...kinGroups[0], child_group_ids: ['s2'] },
+    { id: 's2', reference_code: 'SLÄKT-002', name: 'Barnets gren', anchor_person_ids: ['barn'], membership_rule: 'anchors_and_descendants', confirmed: true },
+  ];
+  const hierarchyContext = buildFamilyContext({ people, relations, kinGroups: hierarchyGroups });
+  const hierarchy = kinGroupMemberDetails(hierarchyGroups[0], hierarchyContext);
+  assert.equal(hierarchy.find(member => member.person_id === 'barn').generation, 2);
+  assert.equal(hierarchy.find(member => member.person_id === 'barnbarn').generation, 3);
+});
+
 await test('fältändringar från två enheter överlever och synkas åt båda håll', async () => {
   const remote = new MemoryRemoteTransport({ id: 'dropbox-test' });
   const a = await new Repository({ store: new MemoryStore(), deviceId: 'web-a', now: () => 1000 }).init();
@@ -284,6 +339,8 @@ await test('Matrikeln startar och sparar lokalt utan nät efter första anslutni
   assert.ok(appSource.includes('const serviceWorkerPromise = registerServiceWorker()'));
   assert.ok(serviceWorker.includes("return cached || network"));
   assert.ok(serviceWorker.includes("cache: 'reload'"));
+  assert.ok(serviceWorker.includes("self.location.pathname.includes('/apps/matrikel/')"));
+  assert.ok(serviceWorker.includes("'../../packages/core/family-context.js'"));
 });
 
 await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', async () => {
@@ -297,9 +354,14 @@ await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', a
   assert.ok(html.includes('data-view-mode="kinship"'));
   assert.ok(html.includes('data-view-mode="property"'));
   assert.ok(html.includes('data-view-mode="register"'));
-  assert.ok(html.includes('Nära familj'));
-  assert.ok(html.includes('Familjegren'));
-  assert.ok(html.includes('Släktkrets'));
+  assert.ok(html.includes('data-view-mode="groups"'));
+  assert.ok(html.includes('Familjer &amp; släkter'));
+  assert.ok(html.includes('<b>FAMILJ</b>'));
+  assert.ok(html.includes('<b>SLÄKT</b>'));
+  assert.ok(appSource.includes('Nära familj'));
+  assert.ok(appSource.includes('renderGroupView'));
+  assert.ok(appSource.includes('familyUnitMemberDetails'));
+  assert.ok(appSource.includes('kinGroupMemberDetails'));
   assert.ok(appSource.includes("repository.setField('person'"));
   assert.ok(appSource.includes("repository.deleteEntities"));
   assert.ok(appSource.includes('renderLandscape'));
