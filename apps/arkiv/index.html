@@ -22,7 +22,7 @@
 
   <section class="sokband" aria-label="Sök och filtrera">
     <label class="sokruta"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Sök i avskrifter, personer, båtar…"><button id="clear-search" type="button" aria-label="Rensa sökning" hidden>×</button></label>
-    <div class="filterrader"><div id="category-filters" class="filtergrupp" aria-label="Dokumentkategori"></div><label class="typfilter"><span>Entitet</span><select id="entity-filter"><option value="alla">Alla typer</option><option value="person">Person</option><option value="båt">Båt</option><option value="plats">Plats</option><option value="fastighet">Fastighet</option><option value="hus">Hus</option><option value="organisation">Organisation</option></select></label></div>
+    <div class="filterrader"><div id="category-filters" class="filtergrupp" role="group" aria-label="Dokumenttyper, flera kan väljas"></div><label class="typfilter"><span>Entitet</span><select id="entity-filter"><option value="alla">Alla typer</option><option value="person">Person</option><option value="båt">Båt</option><option value="plats">Plats</option><option value="fastighet">Fastighet</option><option value="hus">Hus</option><option value="organisation">Organisation</option></select></label></div>
     <button id="bootstrap-local" class="bootstrap" type="button" hidden>Läs in aktuell källmaster</button>
   </section>
 
@@ -31,6 +31,6 @@
     <section id="reader" aria-live="polite"></section>
     <aside class="samband" aria-label="Strukturerade samband"><div class="sambandshuvud"><p class="overrad">Registerkopplingar</p><h2>Nämns i urvalet</h2><p>Exakta träffar har stabila ID:n. Möjliga träffar väntar på granskning.</p></div><div id="entity-list" class="sambandslista"></div><div class="modellnot"><strong>Strukturerat för nästa steg</strong><p>Person · fastighet · hus · plats · båt · organisation</p></div></aside>
   </main>
-  <script type="module" src="./src/app.js?v=2026-08-02-2"></script>
+  <script type="module" src="./src/app.js?v=2026-08-02-3"></script>
 </body>
 </html>

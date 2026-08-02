@@ -57,8 +57,14 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(html.includes('id="reader"'));
   assert.ok(html.includes('Korpholmens Båtklubbs arkiv – Protokoll & handlingar'));
   assert.ok(html.includes('Korpholmens Båtklubbs arkiv'));
+  assert.ok(html.includes('Dokumenttyper, flera kan väljas'));
   assert.ok(app.includes('document.transcript'));
   assert.ok(app.includes("opsRoot: '/arkiv/ops'"));
+  assert.ok(app.includes('categories: new Set()'));
+  assert.ok(app.includes('ui.categories.has(document.category)'));
+  assert.ok(app.includes('ui.categories.add(category)'));
+  assert.ok(app.includes('ui.categories.delete(category)'));
+  assert.ok(app.includes('ui.categories.clear()'));
   assert.ok(styles.includes('.papper'));
   assert.ok(styles.includes('@media print'));
 });
