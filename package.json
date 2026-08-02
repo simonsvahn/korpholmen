@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm --prefix apps/matrikel test && npm --prefix apps/batregister test",
-    "build": "npm --prefix apps/matrikel run build:publish && npm --prefix apps/batregister run build:publish"
+    "test": "npm --prefix apps/matrikel test && npm --prefix apps/batregister test && npm --prefix apps/fastigheter test",
+    "build": "npm --prefix apps/matrikel run build:publish && npm --prefix apps/batregister run build:publish && npm --prefix apps/fastigheter run build:publish"
   }
 }
