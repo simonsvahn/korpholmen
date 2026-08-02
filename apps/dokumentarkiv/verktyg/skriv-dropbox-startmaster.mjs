@@ -30,7 +30,7 @@ async function writeImmutableJson(path,value){
 
 for(let index=0;index<document.operations.length;index+=250){
   const batch=createBatch(document.operations.slice(index,index+250));
-  const relative=batchPath(batch.device_id,batch.from_seq,batch.to_seq,'/arkiv/ops').replace(/^\//,'');
+  const relative=batchPath(batch.device_id,batch.from_seq,batch.to_seq,'/dokumentarkiv/ops').replace(/^\//,'');
   await writeImmutableJson(resolve(dropboxRoot,relative),batch);
 }
 

@@ -59,7 +59,9 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(html.includes('Korpholmens Båtklubbs arkiv'));
   assert.ok(html.includes('Dokumenttyper, flera kan väljas'));
   assert.ok(app.includes('document.transcript'));
-  assert.ok(app.includes("opsRoot: '/arkiv/ops'"));
+  assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
+  assert.ok(app.includes("location.pathname.includes('/apps/dokumentarkiv/')"));
+  assert.ok(app.includes("new URL('dokumentarkiv/', redirectUri())"));
   assert.ok(app.includes('categories: new Set()'));
   assert.ok(app.includes('ui.categories.has(document.category)'));
   assert.ok(app.includes('ui.categories.add(category)'));
@@ -76,8 +78,8 @@ await test('publiceringsbygget är datafritt',()=>{
 
 await test('publiceringspaketet har en egen offlinebar kärna utan privata avskrifter',async()=>{
   const [publishedApp,publishedCore,serviceWorker]=await Promise.all([
-    readFile(resolve(REPO,'arkiv/src/app.js'),'utf8'),
-    readFile(resolve(REPO,'arkiv/core/data-layer.js'),'utf8'),
+    readFile(resolve(REPO,'dokumentarkiv/src/app.js'),'utf8'),
+    readFile(resolve(REPO,'dokumentarkiv/core/data-layer.js'),'utf8'),
     readFile(resolve(ROOT,'sw.js'),'utf8'),
   ]);
   assert.ok(publishedApp.includes("../core/data-layer.js"));
@@ -90,7 +92,8 @@ await test('OAuth-returen och appnavigeringen omfattar Dokumentarkivet',async()=
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   assert.ok(root.includes('korpholmen:oauth-return'));
-  assert.ok(root.includes('arkiv/'));
+  assert.ok(root.includes('href="./dokumentarkiv/"'));
+  assert.equal(root.includes('href="./arkiv/"'),false);
   assert.ok(root.includes('Dokumentarkiv'));
   assert.ok(app.includes("isSourceTree ? '../../' : '../'"));
 });
