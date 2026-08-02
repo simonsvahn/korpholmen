@@ -8,7 +8,7 @@
   <title>Matrikel · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-01-13">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-02-1">
 </head>
 <body>
   <header class="site-header">
@@ -22,11 +22,11 @@
         <button id="connect-dropbox" type="button">Anslut Dropbox</button>
       </div>
     </div>
-    <p class="intro">Personerna står i centrum. Runt dem visas nära familj, familjegren, släktkrets och fastighetsgemenskap — utan att de olika sorternas tillhörighet blandas ihop.</p>
+    <p class="intro">Personerna står i centrum. Familjer och släkter har stabila, läsbara identiteter; släktväven visar de faktiska relationerna och fastigheterna är en separat gemenskap.</p>
     <div class="family-model" aria-label="Matrikelns familjenivåer">
-      <span><b>Nära familj</b><small>belagda relationer</small></span>
-      <span><b>Familjegren</b><small>namngiven gren</small></span>
-      <span><b>Släktkrets</b><small>bred historisk gemenskap</small></span>
+      <span><b>FAMILJ</b><small>konkret familjebildning</small></span>
+      <span><b>SLÄKT</b><small>gren, stamlinje eller krets</small></span>
+      <span><b>Släktväv</b><small>bekräftade och öppna relationer</small></span>
       <span><b>Fastighet</b><small>gemenskap kring platsen</small></span>
     </div>
   </header>
@@ -74,12 +74,13 @@
     </div>
     <div class="filter-row">
       <div class="view-switcher" role="group" aria-label="Välj huvudvy">
-        <button type="button" data-view-mode="kinship" aria-pressed="true">Släkt &amp; familj</button>
+        <button type="button" data-view-mode="groups" aria-pressed="true">Familjer &amp; släkter</button>
+        <button type="button" data-view-mode="kinship" aria-pressed="false">Släktväven</button>
         <button type="button" data-view-mode="property" aria-pressed="false">Fastigheter</button>
         <button type="button" data-view-mode="register" aria-pressed="false">Personlista</button>
       </div>
       <div class="generation-filter" role="group" aria-labelledby="generation-label">
-        <span class="filter-label" id="generation-label">Generationer <small>välj en eller flera</small></span>
+        <span class="filter-label" id="generation-label">Äldre presentationsled <small>inte jämförbara mellan släkter</small></span>
         <div class="generation-buttons" id="generation-buttons"></div>
       </div>
       <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
@@ -90,6 +91,7 @@
     <div class="edit-status-row">
       <span id="edit-status">Ändringar sparas lokalt direkt och synkas med Dropbox.</span>
       <button type="button" id="bootstrap-local" hidden>Aktivera godkänd startkopia</button>
+      <button type="button" id="family-model-local" hidden>Aktivera godkänd familjemodell</button>
     </div>
     <div id="relation-path" class="relation-path" hidden></div>
   </nav>
@@ -102,13 +104,12 @@
       <span><b>—</b> partner</span>
       <span><b>+</b> har barn tillsammans</span>
       <span><span class="line-sample"></span>föräldraband</span>
-      <span><span class="line-sample uncertain"></span>osäker uppgift</span>
+      <span><span class="line-sample uncertain"></span>ej bekräftad uppgift</span>
       <span><span class="member-symbol">●</span> aktuell</span>
       <span><span class="member-symbol previous">○</span> tidigare</span>
       <span><span class="member-symbol expected">◐</span> förväntad</span>
       <span><b>†</b> avliden</span>
       <span><b>?</b> livsstatus okänd</span>
-      <span><b>≈</b> generation uppskattad</span>
       <span><b>⚑</b> relevant föräldrakoppling saknas</span>
     </div>
     <div id="content" aria-live="polite"></div>
@@ -119,6 +120,6 @@
     <div id="drawer-content"></div>
   </aside>
 
-  <script type="module" src="./src/app.js?v=2026-08-01-13"></script>
+  <script type="module" src="./src/app.js?v=2026-08-02-1"></script>
 </body>
 </html>

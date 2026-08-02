@@ -1,4 +1,4 @@
-const RELATION_KINDS = new Set(['foralder-barn', 'partner', 'tidigare']);
+const RELATION_KINDS = new Set(['foralder-barn', 'syskon', 'partner', 'tidigare']);
 
 function requiredText(value, label) {
   if (typeof value !== 'string' || !value.trim()) throw new TypeError(`${label} saknas`);

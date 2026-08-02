@@ -11,3 +11,4 @@ export const DROPBOX_SCOPES = [
 export const LOCAL_BOOTSTRAP_URL = './privat/migrering-2026-08-01/initial-ops.json';
 export const LOCAL_UI_METADATA_URL = './privat/migrering-2026-08-01/ui-metadata-ops.json';
 export const LOCAL_APPROVED_DATA_URL = './privat/migrering-2026-08-01/approved-excel-ops.json';
+export const LOCAL_FAMILY_MODEL_URL = './privat/familjemodell-2026-08-02.json';

@@ -32,7 +32,21 @@ import {
   shownName,
   visiblePersonIds,
 } from './landscape-model.js?v=2026-08-01-12';
-import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-10';
+import {
+  FAMILY_UNIT_TYPE,
+  KIN_GROUP_KINDS,
+  KIN_GROUP_TYPE,
+  MEMBERSHIP_RULES,
+  buildFamilyContext,
+  displayReference,
+  familyUnitMemberDetails,
+  groupsForPerson,
+  isConfirmed,
+  kinGroupMemberDetails,
+  nextReferenceCode,
+  relativeGenerationLabel,
+} from '../../../packages/core/family-context.js';
+import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-10';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
 
 const $ = (selector) => document.querySelector(selector);
@@ -41,6 +55,7 @@ const editStatusNode = $('#edit-status');
 const contentNode = $('#content');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
+const familyModelButton = $('#family-model-local');
 const drawer = $('#person-drawer');
 const drawerContent = $('#drawer-content');
 const personSearch = $('#person-search');
@@ -53,6 +68,7 @@ const relationPathNode = $('#relation-path');
 const isSourceTree = location.pathname.includes('/apps/matrikel/');
 const TOKEN_META = 'dropbox:refresh-token-v1';
 const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
+const FAMILY_MODEL_META = 'migration:familjemodell-2026-08-02';
 
 let repository;
 let store;
@@ -64,11 +80,16 @@ let currentPeople = [];
 let currentRelations = [];
 let currentProperties = [];
 let currentPropertyLinks = [];
+let currentFamilyUnits = [];
+let currentKinGroups = [];
+let familyContext = null;
 let propertyById = new Map();
 let requestedPersonApplied = false;
+let requestedGroupApplied = false;
 
 const ui = {
   selectedPersonId: null,
+  selectedGroup: null,
   clubNamesFirst: false,
   showGaps: false,
   island: '',
@@ -79,7 +100,7 @@ const ui = {
   onlyUnlinked: false,
   yearOn: false,
   year: new Date().getFullYear(),
-  view: 'kinship',
+  view: 'groups',
   review: false,
   pathIds: new Set(),
 };
@@ -161,11 +182,25 @@ function propertyLinkRecords() {
     .map((entity) => ({ id: entity.entity_id, ...entity.fields }));
 }
 
+function familyUnitRecords() {
+  return repository.listEntities(FAMILY_UNIT_TYPE)
+    .map(entity => ({ id: entity.entity_id, ...entity.fields }))
+    .sort((a, b) => String(a.reference_code).localeCompare(String(b.reference_code), 'sv', { numeric: true }));
+}
+
+function kinGroupRecords() {
+  return repository.listEntities(KIN_GROUP_TYPE)
+    .map(entity => ({ id: entity.entity_id, ...entity.fields }))
+    .sort((a, b) => String(a.reference_code).localeCompare(String(b.reference_code), 'sv', { numeric: true }));
+}
+
 function refreshData() {
   const people = personRecords();
   currentRelations = relationRecords();
   currentProperties = propertyRecords();
   currentPropertyLinks = propertyLinkRecords();
+  currentFamilyUnits = familyUnitRecords();
+  currentKinGroups = kinGroupRecords();
   propertyById = new Map(currentProperties.map((property) => [property.id, property]));
   const linksByPerson = new Map();
   for (const link of currentPropertyLinks) {
@@ -182,12 +217,34 @@ function refreshData() {
     };
   });
   graph = buildGraph(currentPeople, currentRelations);
+  familyContext = buildFamilyContext({
+    people: currentPeople,
+    relations: currentRelations,
+    familyUnits: currentFamilyUnits,
+    kinGroups: currentKinGroups,
+    properties: currentProperties,
+    propertyLinks: currentPropertyLinks,
+  });
   if (!requestedPersonApplied) {
     const requestedPersonId = new URL(location.href).searchParams.get('person');
     if (requestedPersonId && graph.byId.has(requestedPersonId)) ui.selectedPersonId = requestedPersonId;
     if (requestedPersonId && graph.byId.has(requestedPersonId)) requestedPersonApplied = true;
   }
+  if (!requestedGroupApplied) {
+    const requestedGroupId = new URL(location.href).searchParams.get('group');
+    const family = currentFamilyUnits.find(entry => entry.id === requestedGroupId);
+    const kin = currentKinGroups.find(entry => entry.id === requestedGroupId);
+    if (family || kin) {
+      ui.selectedGroup = { entityType: family ? FAMILY_UNIT_TYPE : KIN_GROUP_TYPE, id: requestedGroupId };
+      ui.view = 'groups';
+      requestedGroupApplied = true;
+    }
+  }
   if (ui.selectedPersonId && !graph.byId.has(ui.selectedPersonId)) ui.selectedPersonId = null;
+  if (ui.selectedGroup) {
+    const records = ui.selectedGroup.entityType === FAMILY_UNIT_TYPE ? currentFamilyUnits : currentKinGroups;
+    if (!records.some(group => group.id === ui.selectedGroup.id)) ui.selectedGroup = null;
+  }
 }
 
 function propertyNames(person) {
@@ -250,6 +307,7 @@ function refreshControls() {
     .map((group) => `<option value="${escapeAttribute(group.name)}">${escapeHtml(familyCircleLabel(group.name))}</option>`).join('');
   if (groups.some((group) => group.name === selectedClan)) clanJump.value = selectedClan;
   clanJump.disabled = ui.view !== 'kinship';
+  generationButtons.closest('.generation-filter').hidden = ui.view !== 'kinship';
 
   const islands = unique(currentPeople.flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
   islandFilter.innerHTML = '<option value="">Alla öar</option>' + islands
@@ -324,7 +382,7 @@ function renderBranch(id, component, visited, visible, relatedIds, uncertain = f
     .sort((a, b) => (generationFor(graph.byId.get(a)) ?? 99) - (generationFor(graph.byId.get(b)) ?? 99) || shownName(graph.byId.get(a)).localeCompare(shownName(graph.byId.get(b)), 'sv'));
   const childHtml = childIds.map((childId) => {
     const links = currentRelations.filter((relation) => relation.kind === 'foralder-barn' && relation.to_person_id === childId && householdIds.includes(relation.from_person_id));
-    const isUncertain = links.some((relation) => relation.confidence === 'osäker');
+    const isUncertain = links.some((relation) => !isConfirmed(relation.user_confirmed));
     return renderBranch(childId, component, visited, visible, relatedIds, isUncertain);
   }).join('');
   const visibleHousehold = householdIds.filter((personId) => visible.has(personId));
@@ -380,6 +438,74 @@ function renderFamilyStem(name, people, visible, relatedIds) {
     <div class="forest">${connected.map((component) => renderComponent(component, visible, relatedIds)).join('') || '<p class="empty-note">Inga belagda relationer inom gruppen.</p>'}</div>
     ${isolated.length ? `<section class="unlinked"><h4>Ännu inte kopplade till en bestämd släktgren · ${isolated.length}</h4><div class="unlinked-grid">${isolated.map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>` : ''}
   </section>`;
+}
+
+function confirmationBadge(value) {
+  return isConfirmed(value)
+    ? '<span class="confirmation confirmed">Bekräftad</span>'
+    : '<span class="confirmation unconfirmed">Ej bekräftad</span>';
+}
+
+function memberButtons(details, limit = 10) {
+  const shown = details.slice(0, limit).map(member => {
+    const person = familyContext.peopleById.get(member.person_id);
+    if (!person) return '';
+    return `<button type="button" class="group-person ${member.confirmed ? '' : 'unconfirmed'}" data-person-id="${escapeAttribute(person.id)}" title="${escapeAttribute(relativeGenerationLabel(member, { name: 'gruppen' }))}">${escapeHtml(person.display_name)}${member.generation > 1 ? ` · led ${member.generation}` : ''}</button>`;
+  }).join('');
+  return `${shown}${details.length > limit ? `<span class="more-members">+ ${details.length - limit} till</span>` : ''}`;
+}
+
+function countNoun(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function renderFamilyUnitCard(group, visible) {
+  const members = familyUnitMemberDetails(group, familyContext);
+  if (members.length && !members.some(member => visible.has(member.person_id))) return '';
+  const confirmedMembers = members.filter(member => member.confirmed).length;
+  const anchorCount = (group.anchor_person_ids || []).filter(id => familyContext.peopleById.has(id)).length;
+  return `<article class="family-unit-card">
+    <button type="button" class="group-card-heading" data-group-type="${FAMILY_UNIT_TYPE}" data-group-id="${escapeAttribute(group.id)}">
+      <span><small>${escapeHtml(group.reference_code || 'FAMILJ')}</small><b>${escapeHtml(group.name || 'Namnlös familj')}</b></span>${confirmationBadge(group.confirmed)}
+    </button>
+    <p>${countNoun(anchorCount, 'ankarperson', 'ankarpersoner')} · ${countNoun(members.length, 'person i familjen', 'personer i familjen')} · ${confirmedMembers} genom helt bekräftade led</p>
+    <div class="group-people">${memberButtons(members)}</div>
+  </article>`;
+}
+
+function renderKinGroupNode(group, visible, rendered) {
+  if (!group || rendered.has(group.id)) return '';
+  rendered.add(group.id);
+  const members = kinGroupMemberDetails(group, familyContext);
+  if (members.length && !members.some(member => visible.has(member.person_id))) return '';
+  const confirmedMembers = members.filter(member => member.confirmed).length;
+  const anchorCount = (group.anchor_person_ids || []).filter(id => familyContext.peopleById.has(id)).length;
+  const childIds = new Set(group.child_group_ids || []);
+  for (const candidate of currentKinGroups) if ((candidate.parent_group_ids || []).includes(group.id)) childIds.add(candidate.id);
+  const families = currentFamilyUnits.filter(unit => (unit.kin_group_ids || []).includes(group.id));
+  return `<section class="kin-group-card kind-${escapeAttribute(group.kind || 'family_circle')}">
+    <header class="kin-group-heading">
+      <button type="button" data-group-type="${KIN_GROUP_TYPE}" data-group-id="${escapeAttribute(group.id)}"><small>${escapeHtml(group.reference_code || 'SLÄKT')}</small><b>${escapeHtml(group.name || 'Namnlös släktgrupp')}</b></button>
+      <div><span class="group-kind">${escapeHtml(KIN_GROUP_KINDS[group.kind] || 'Släktgrupp')}</span>${confirmationBadge(group.confirmed)}</div>
+    </header>
+    <p class="group-summary">${countNoun(anchorCount, 'ankarperson', 'ankarpersoner')} · ${countNoun(members.length, 'person synlig', 'personer synliga')} i gruppen och dess undergrupper · ${confirmedMembers} genom helt bekräftade led · släktleden räknas från denna grupp</p>
+    <div class="group-people">${memberButtons(members)}</div>
+    ${families.length ? `<div class="family-unit-list">${families.map(unit => renderFamilyUnitCard(unit, visible)).join('')}</div>` : ''}
+    ${childIds.size ? `<div class="child-groups">${[...childIds].map(id => renderKinGroupNode(familyContext.kinGroupById.get(id), visible, rendered)).join('')}</div>` : ''}
+  </section>`;
+}
+
+function renderGroupView(visible) {
+  if (!currentFamilyUnits.length && !currentKinGroups.length) return `<section class="model-empty"><h2>Familjer och släkter har ännu inte strukturerats</h2><p>Personrelationerna finns kvar. Skapa stabila familjer och släktgrupper utan att ändra de underliggande fakta som ännu inte är bekräftade.</p><div class="button-row"><button type="button" data-action="create-family-unit">Ny familj</button><button type="button" data-action="create-kin-group">Ny släktgrupp</button></div></section>`;
+  const childIds = new Set(currentKinGroups.flatMap(group => group.child_group_ids || []));
+  const roots = currentKinGroups.filter(group => !(group.parent_group_ids || []).length && !childIds.has(group.id));
+  const rendered = new Set();
+  const rootHtml = roots.map(group => renderKinGroupNode(group, visible, rendered)).join('');
+  const orphanHtml = currentKinGroups.filter(group => !rendered.has(group.id)).map(group => renderKinGroupNode(group, visible, rendered)).join('');
+  const unplacedFamilies = currentFamilyUnits.filter(unit => !(unit.kin_group_ids || []).some(id => familyContext.kinGroupById.has(id)));
+  return `<section class="group-model-intro"><div><p class="section-kicker">Stabila identiteter</p><h2>Familjer och släkter</h2><p>FAMILJ är en konkret familjebildning. SLÄKT är en namngiven syskongrupp, gren, stamlinje eller släktkrets. Bekräftelse av en grupp ändrar aldrig automatiskt en personrelation.</p></div><div class="button-row"><button type="button" data-action="create-family-unit">Ny familj</button><button type="button" data-action="create-kin-group">Ny släktgrupp</button></div></section>
+    <div class="kin-group-list">${rootHtml}${orphanHtml}</div>
+    ${unplacedFamilies.length ? `<section class="unplaced-families"><h2>Familjer utan vald släktgrupp</h2><div class="family-unit-list">${unplacedFamilies.map(group => renderFamilyUnitCard(group, visible)).join('')}</div></section>` : ''}`;
 }
 
 function renderLandscape(visible, relatedIds) {
@@ -468,18 +594,21 @@ function render() {
   const relatedIds = ui.selectedPersonId ? lineageIds(ui.selectedPersonId, graph) : new Set();
   const body = ui.review
     ? renderReview()
-    : ui.view === 'register'
+    : ui.view === 'groups'
+      ? renderGroupView(visible)
+      : ui.view === 'register'
       ? renderRegister(visible)
       : ui.view === 'property'
         ? renderPropertyLandscape(visible, relatedIds)
         : renderLandscape(visible, relatedIds);
-  contentNode.innerHTML = `<section class="summary" aria-label="Datasammanfattning"><div><strong>${currentPeople.length}</strong><span>personer</span></div><div><strong>${currentRelations.length}</strong><span>relationer</span></div><div><strong>${currentProperties.length}</strong><span>fastigheter</span></div><div><strong>${currentPropertyLinks.length}</strong><span>fastighetsband</span></div><div><strong>${visible.size}</strong><span>visas</span></div></section>${body || '<p class="empty-note">Inga personer matchar filtren.</p>'}`;
+  contentNode.innerHTML = `<section class="summary" aria-label="Datasammanfattning"><div><strong>${currentPeople.length}</strong><span>personer</span></div><div><strong>${currentRelations.length}</strong><span>relationer</span></div><div><strong>${currentFamilyUnits.length}</strong><span>familjer</span></div><div><strong>${currentKinGroups.length}</strong><span>släktgrupper</span></div><div><strong>${visible.size}</strong><span>personer visas</span></div></section>${body || '<p class="empty-note">Inga personer matchar filtren.</p>'}`;
   $('#filter-count').textContent = `${visible.size} av ${currentPeople.length} personer`;
   document.body.classList.toggle('show-gaps', ui.showGaps);
   document.body.classList.toggle('has-selection', Boolean(ui.selectedPersonId));
   document.querySelectorAll('[data-view-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.viewMode === ui.view)));
   $('#review-button').setAttribute('aria-pressed', String(ui.review));
   if (ui.selectedPersonId) renderDrawer(ui.selectedPersonId);
+  else if (ui.selectedGroup) renderGroupDrawer(ui.selectedGroup.entityType, ui.selectedGroup.id);
 }
 
 function relationRows(links) {
@@ -489,7 +618,7 @@ function relationRows(links) {
     const relation = link.relation;
     if (!person) return '';
     const derived = relation.derived;
-    return `<li class="relation-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button>${derived ? `<span class="derived-label">${relation.kind === 'syskon' ? 'via gemensam förälder' : 'via gemensamt barn'}</span>` : `<select data-relation-field="confidence" data-relation-id="${escapeAttribute(relation.id)}" aria-label="Säkerhet"><option value="säker" ${relation.confidence === 'säker' ? 'selected' : ''}>säker</option><option value="trolig" ${relation.confidence === 'trolig' ? 'selected' : ''}>trolig</option><option value="osäker" ${relation.confidence === 'osäker' ? 'selected' : ''}>osäker</option><option value="okänt" ${!relation.confidence || relation.confidence === 'okänt' ? 'selected' : ''}>okänt</option></select><button type="button" class="icon-button" data-delete-relation="${escapeAttribute(relation.id)}" aria-label="Ta bort relation till ${escapeAttribute(person.display_name)}">×</button>`}</li>`;
+    return `<li class="relation-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button>${derived ? `<span class="derived-label">via gemensam förälder</span>` : `<select data-relation-field="user_confirmed" data-value-type="boolean" data-relation-id="${escapeAttribute(relation.id)}" aria-label="Bekräftelse"><option value="true" ${isConfirmed(relation.user_confirmed) ? 'selected' : ''}>bekräftad</option><option value="false" ${!isConfirmed(relation.user_confirmed) ? 'selected' : ''}>ej bekräftad</option></select><button type="button" class="icon-button" data-delete-relation="${escapeAttribute(relation.id)}" aria-label="Ta bort relation till ${escapeAttribute(person.display_name)}">×</button>`}</li>`;
   }).join('');
 }
 
@@ -504,8 +633,9 @@ function renderDrawer(personId) {
     return;
   }
   const closeFamily = nearFamily(person.id, graph);
-  const circle = familyCircleLabel(person.ui_clan || person.family);
-  const stem = familyStemLabel(person.ui_clan || person.family);
+  const groupMemberships = groupsForPerson(person.id, familyContext);
+  const familyMemberships = groupMemberships.filter(entry => entry.type === FAMILY_UNIT_TYPE);
+  const kinMemberships = groupMemberships.filter(entry => entry.type === KIN_GROUP_TYPE);
   const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id && propertyById.has(link.property_id));
   const linkedPropertyIds = new Set(propertyLinks.map((link) => link.property_id));
   const availableProperties = currentProperties.filter((property) => !linkedPropertyIds.has(property.id));
@@ -516,9 +646,8 @@ function renderDrawer(personId) {
   }).join('');
   drawerContent.innerHTML = `<h2>${escapeHtml(person.display_name)}</h2><p class="drawer-meta">${escapeHtml([person.club_name, years(person), ...islandNames(person)].filter(Boolean).join(' · '))}</p>
     <section class="belonging-card" aria-label="Personens tillhörigheter">
-      <div><span>Släktkrets</span><strong>${escapeHtml(circle || 'Okänd')}</strong></div>
-      ${stem ? `<div><span>Stamfamilj</span><strong>${escapeHtml(stem)}</strong></div>` : ''}
-      <div><span>Familjegren</span><strong>${escapeHtml(person.family || 'Okänd')}</strong></div>
+      <div><span>Familjer</span><strong>${familyMemberships.length ? familyMemberships.map(entry => escapeHtml(displayReference(entry.group))).join('<br>') : 'Ingen strukturerad'}</strong></div>
+      <div><span>Släkter</span><strong>${kinMemberships.length ? kinMemberships.map(entry => `${escapeHtml(displayReference(entry.group))}<small>${escapeHtml(relativeGenerationLabel(entry.membership, entry.group))}${entry.membership.confirmed ? '' : ' · ej helt bekräftat'}</small>`).join('<br>') : 'Ingen strukturerad'}</strong></div>
       <div><span>Fastighet</span><strong>${escapeHtml(propertyNames(person).join(' · ') || 'Ingen registrerad')}</strong></div>
     </section>
     <h3>Personuppgifter</h3>
@@ -530,10 +659,7 @@ function renderDrawer(personId) {
       <label class="editor-field"><span>Lever</span><select data-person-field="living">${selectOptions([['okänt', 'okänt'], ['ja', 'ja'], ['nej', 'nej']], person.living || 'okänt')}</select></label>
       <label class="editor-field"><span>Medlemsläge</span><select data-person-field="membership_status">${selectOptions([['aktuell', 'aktuell'], ['tidigare', 'tidigare'], ['förväntad', 'förväntad'], ['ej', 'ej medlem']], person.membership_status)}</select></label>
       <label class="editor-field wide"><span>KBK-namn</span><input data-person-field="club_name" value="${escapeAttribute(person.club_name || '')}"></label>
-      <label class="editor-field wide"><span>Familjegren</span><input data-person-field="family" value="${escapeAttribute(person.family || '')}"><small>Den namngivna gren personen visas under, till exempel Böving eller Åkerman.</small></label>
-      <label class="editor-field wide"><span>Släktkrets och stamfamilj</span><input data-person-field="ui_clan" value="${escapeAttribute(person.ui_clan || person.family || '')}"><small>Presentationsetikett, till exempel Hedström-klanen (Carl Gunder & Bibbi).</small></label>
       <label class="editor-field"><span>Presentationsroll</span><select data-person-field="ui_is_inlaw" data-value-type="boolean">${selectOptions([['false', 'född i/fristående'], ['true', 'ingift']], String(Boolean(person.ui_is_inlaw)))}</select></label>
-      <label class="editor-field"><span>Generation</span><select data-person-field="ui_generation" data-value-type="number">${selectOptions([['', 'okänd'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], person.ui_generation ?? '')}</select></label>
       <label class="editor-field"><span>Manuell ö utan fastighet</span><select data-person-field="legacy_island"><option value="">Ingen angiven</option>${islands.map((island) => `<option value="${escapeAttribute(island)}" ${person.legacy_island === island ? 'selected' : ''}>${escapeHtml(island)}</option>`).join('')}</select></label>
       <label class="editor-field"><span>Ö-status</span><select data-person-field="residence_status">${selectOptions([['okänt', 'okänt'], ['bor', 'bor'], ['avflyttad', 'avflyttad']], person.residence_status || 'okänt')}</select></label>
       <label class="editor-field wide"><span>Roll</span><input data-person-field="role" value="${escapeAttribute(person.role || '')}"></label>
@@ -555,9 +681,8 @@ function renderDrawer(personId) {
       <section><h4>Barn</h4><ul class="relation-list">${relationRows(closeFamily.children)}</ul></section>
     </div>
     <h3>Lägg till relation</h3>
-    <div class="add-relation"><input list="drawer-person-options" data-new-relation-person placeholder="Välj person …"><select data-new-relation-kind><option value="parent">är förälder till vald person</option><option value="child">är barn till vald person</option><option value="partner">är partner med vald person</option><option value="former">var tidigare partner</option></select><button type="button" data-action="add-relation">Lägg till</button></div>
+    <div class="add-relation"><input list="drawer-person-options" data-new-relation-person placeholder="Välj person …"><select data-new-relation-kind><option value="parent">är förälder till vald person</option><option value="child">är barn till vald person</option><option value="sibling">är syskon med vald person</option><option value="partner">är partner med vald person</option><option value="former">var tidigare partner</option></select><button type="button" data-action="add-relation">Lägg till</button></div>
     <p><a class="cross-app-link" href="../batregister/?person=${encodeURIComponent(person.id)}">Visa båtar kopplade till ${escapeHtml(person.display_name)}</a></p>
-    <h3>Källa</h3><p class="drawer-meta">${escapeHtml(person.source || '—')}${person.wiki_page ? ` · ${escapeHtml(person.wiki_page)}` : ''}</p>
     <div class="danger-zone"><button type="button" class="danger-button" data-action="delete-person">Ta bort personen…</button></div>`;
   drawer.classList.add('open');
   drawer.setAttribute('aria-hidden', 'false');
@@ -570,6 +695,7 @@ function closeDrawer(clearSelection = true) {
   document.body.classList.remove('drawer-open');
   if (clearSelection) {
     ui.selectedPersonId = null;
+    ui.selectedGroup = null;
     document.body.classList.remove('has-selection');
     contentNode.querySelectorAll('.is-selected,.is-related').forEach((node) => node.classList.remove('is-selected', 'is-related'));
   }
@@ -578,6 +704,7 @@ function closeDrawer(clearSelection = true) {
 function selectPerson(personId, scroll = false) {
   if (!graph.byId.has(personId)) return;
   ui.selectedPersonId = personId;
+  ui.selectedGroup = null;
   ui.review = false;
   render();
   if (scroll) {
@@ -591,6 +718,137 @@ function parseFieldValue(element) {
   if (element.dataset.valueType === 'number') return text === '' ? null : Number(text);
   if (element.dataset.valueType === 'boolean') return text === 'true';
   return text === '' ? null : text;
+}
+
+function groupRecordsForType(entityType) {
+  return entityType === FAMILY_UNIT_TYPE ? currentFamilyUnits : currentKinGroups;
+}
+
+function groupTypeName(entityType) {
+  return entityType === FAMILY_UNIT_TYPE ? 'Familj' : 'Släktgrupp';
+}
+
+function renderGroupDrawer(entityType, groupId) {
+  const group = groupRecordsForType(entityType).find(entry => entry.id === groupId);
+  if (!group) return closeDrawer(false);
+  ui.selectedPersonId = null;
+  ui.selectedGroup = { entityType, id: groupId };
+  const anchors = (group.anchor_person_ids || []).map(personId => familyContext.peopleById.get(personId)).filter(Boolean);
+  const parentId = entityType === KIN_GROUP_TYPE ? group.parent_group_ids?.[0] || '' : group.kin_group_ids?.[0] || '';
+  const parentOptions = currentKinGroups.filter(entry => entry.id !== group.id)
+    .map(entry => `<option value="${escapeAttribute(entry.id)}" ${entry.id === parentId ? 'selected' : ''}>${escapeHtml(displayReference(entry))}</option>`).join('');
+  drawerContent.innerHTML = `<h2>${escapeHtml(group.name || groupTypeName(entityType))}</h2><p class="drawer-meta">${escapeHtml(group.reference_code || '')} · stabil referenskod</p>
+    <section class="belonging-card"><div><span>Full läsbar referens</span><strong>${escapeHtml(displayReference(group))}</strong></div><div><span>Status</span><strong>${isConfirmed(group.confirmed) ? 'Bekräftad' : 'Ej bekräftad'}</strong></div></section>
+    <h3>${escapeHtml(groupTypeName(entityType))}</h3>
+    <div class="editor-grid">
+      <label class="editor-field wide"><span>Namn</span><input data-group-field="name" value="${escapeAttribute(group.name || '')}"></label>
+      <label class="editor-field"><span>Bekräftelse</span><select data-group-field="confirmed" data-value-type="boolean">${selectOptions([['false', 'ej bekräftad'], ['true', 'bekräftad']], String(isConfirmed(group.confirmed)))}</select></label>
+      ${entityType === KIN_GROUP_TYPE ? `<label class="editor-field"><span>Art</span><select data-group-field="kind">${selectOptions(Object.entries(KIN_GROUP_KINDS), group.kind || 'family_circle')}</select></label>` : ''}
+      <label class="editor-field wide"><span>Omfattning</span><select data-group-field="membership_rule">${selectOptions(Object.entries(MEMBERSHIP_RULES), group.membership_rule || (entityType === FAMILY_UNIT_TYPE ? 'anchors_and_children' : 'explicit'))}</select></label>
+      <label class="editor-field wide"><span>${entityType === FAMILY_UNIT_TYPE ? 'Tillhör släktgrupp' : 'Överordnad släktgrupp'}</span><select data-group-parent><option value="">Ingen vald</option>${parentOptions}</select></label>
+    </div>
+    <h3>Ankarpersoner</h3>
+    <ul class="property-link-list">${anchors.map(person => `<li class="property-link-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button><button type="button" class="icon-button" data-remove-group-anchor="${escapeAttribute(person.id)}">×</button></li>`).join('') || '<li class="empty-note">Inga ankarpersoner</li>'}</ul>
+    <div class="add-relation"><input list="drawer-person-options" data-new-group-anchor placeholder="Välj person …"><button type="button" data-action="add-group-anchor">Lägg till ankare</button></div>
+    <p class="drawer-note">Namnet och visningen får ändras. Referenskoden och det interna id:t förblir desamma. Släktled räknas från ankarpersonerna och är aldrig globala.</p>
+    <div class="danger-zone"><button type="button" class="danger-button" data-action="delete-group">Ta bort ${entityType === FAMILY_UNIT_TYPE ? 'familjen' : 'släktgruppen'}…</button></div>`;
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('drawer-open');
+}
+
+async function createGroup(entityType) {
+  const records = groupRecordsForType(entityType);
+  const id = `${entityType}:${crypto.randomUUID()}`;
+  const referenceCode = nextReferenceCode(entityType, records);
+  const name = entityType === FAMILY_UNIT_TYPE ? 'Ny familj' : 'Ny släktgrupp';
+  await syncEdit(async () => {
+    await repository.restoreEntity(entityType, id);
+    await repository.setFields([
+      { entityType, entityId: id, field: 'reference_code', value: referenceCode },
+      { entityType, entityId: id, field: 'name', value: name },
+      { entityType, entityId: id, field: 'confirmed', value: false },
+      { entityType, entityId: id, field: 'anchor_person_ids', value: [] },
+      { entityType, entityId: id, field: 'membership_rule', value: entityType === FAMILY_UNIT_TYPE ? 'anchors_and_children' : 'explicit' },
+      ...(entityType === KIN_GROUP_TYPE ? [{ entityType, entityId: id, field: 'kind', value: 'family_circle' }] : []),
+    ]);
+  });
+  renderGroupDrawer(entityType, id);
+}
+
+async function updateGroupParent(value) {
+  const selected = ui.selectedGroup;
+  if (!selected) return;
+  const field = selected.entityType === FAMILY_UNIT_TYPE ? 'kin_group_ids' : 'parent_group_ids';
+  await syncEdit(() => repository.setField(selected.entityType, selected.id, field, value ? [value] : []));
+}
+
+async function addGroupAnchor() {
+  const selected = ui.selectedGroup;
+  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
+  const input = drawerContent.querySelector('[data-new-group-anchor]');
+  const person = lookupPerson(input?.value);
+  if (!group || !person) return setEditStatus('Välj en entydig person ur listan.', 'error');
+  const anchors = [...new Set([...(group.anchor_person_ids || []), person.id])];
+  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'anchor_person_ids', anchors));
+}
+
+async function removeGroupAnchor(personId) {
+  const selected = ui.selectedGroup;
+  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
+  if (!group) return;
+  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'anchor_person_ids', (group.anchor_person_ids || []).filter(id => id !== personId)));
+}
+
+async function deleteGroup() {
+  const selected = ui.selectedGroup;
+  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
+  if (!group || !window.confirm(`Ta bort ${displayReference(group)}? Personer och personrelationer påverkas inte.`)) return;
+  await syncEdit(() => repository.deleteEntity(selected.entityType, selected.id));
+  ui.selectedGroup = null;
+  closeDrawer(false);
+}
+
+async function applyFamilyModelLocal() {
+  if (!isSourceTree) throw new Error('Familjemodellen kan bara aktiveras från den privata arbetskopian.');
+  const response = await fetch(LOCAL_FAMILY_MODEL_URL, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Familjemodellen kunde inte läsas (${response.status}).`);
+  const plan = await response.json();
+  if (plan.schema_version !== 1 || !Array.isArray(plan.relations) || !Array.isArray(plan.family_units) || !Array.isArray(plan.kin_groups)) throw new Error('Familjemodellen har fel format.');
+  const personIds = new Set(currentPeople.map(person => person.id));
+  const groups = [
+    ...plan.family_units.map(group => ({ entityType: FAMILY_UNIT_TYPE, ...group })),
+    ...plan.kin_groups.map(group => ({ entityType: KIN_GROUP_TYPE, ...group })),
+  ];
+  for (const relation of plan.relations) if (!personIds.has(relation.from_person_id) || !personIds.has(relation.to_person_id)) throw new Error(`Okänd person i familjemodellen: ${relation.from_person_id} / ${relation.to_person_id}`);
+  for (const group of groups) for (const personId of [...(group.anchor_person_ids || []), ...(group.explicit_person_ids || [])]) if (!personIds.has(personId)) throw new Error(`Okänd ankarperson i ${group.reference_code}: ${personId}`);
+  const relationEntities = plan.relations.map(relation => ({
+    entityType: 'relation',
+    id: relationEntityId(relation.kind, relation.from_person_id, relation.to_person_id),
+    fields: {
+      kind: relation.kind,
+      from_person_id: relation.from_person_id,
+      to_person_id: relation.to_person_id,
+      user_confirmed: Boolean(relation.confirmed),
+      confidence: null,
+      form: null,
+      note: null,
+      ...(relation.parent_role ? { parent_role: relation.parent_role } : {}),
+    },
+  }));
+  await repository.restoreEntities([
+    ...relationEntities.map(entity => ({ entityType: entity.entityType, entityId: entity.id })),
+    ...groups.map(group => ({ entityType: group.entityType, entityId: group.id })),
+  ]);
+  await repository.setFields([
+    ...relationEntities.flatMap(entity => Object.entries(entity.fields).map(([field, value]) => ({ entityType: entity.entityType, entityId: entity.id, field, value }))),
+    ...groups.flatMap(group => Object.entries(group).filter(([field]) => !['entityType', 'id'].includes(field)).map(([field, value]) => ({ entityType: group.entityType, entityId: group.id, field, value }))),
+  ]);
+  await store.putMeta(FAMILY_MODEL_META, { applied: true, migration_id: plan.migration_id, applied_at: new Date().toISOString() });
+  familyModelButton.hidden = true;
+  render();
+  setEditStatus('Familjemodellen sparades lokalt · synkar med Dropbox…');
+  await syncNow();
 }
 
 async function syncEdit(action) {
@@ -633,7 +891,6 @@ async function addPropertyLink() {
       { entityType: 'property-link', entityId: id, field: 'person_id', value: personId },
       { entityType: 'property-link', entityId: id, field: 'property_id', value: propertyId },
       { entityType: 'property-link', entityId: id, field: 'confirmed', value: true },
-      { entityType: 'property-link', entityId: id, field: 'source', value: 'Direkt i Matrikeln' },
     ]);
   });
 }
@@ -664,6 +921,8 @@ async function addRelation() {
     kind = 'foralder-barn';
   } else if (kind === 'former') {
     kind = 'tidigare';
+  } else if (kind === 'sibling') {
+    kind = 'syskon';
   } else {
     kind = 'partner';
   }
@@ -679,9 +938,8 @@ async function addRelation() {
       { entityType: 'relation', entityId: id, field: 'from_person_id', value: from },
       { entityType: 'relation', entityId: id, field: 'to_person_id', value: to },
       { entityType: 'relation', entityId: id, field: 'form', value: null },
-      { entityType: 'relation', entityId: id, field: 'confidence', value: 'säker' },
-      { entityType: 'relation', entityId: id, field: 'user_confirmed', value: 'ja' },
-      { entityType: 'relation', entityId: id, field: 'source', value: 'Direkt i Matrikeln' },
+      { entityType: 'relation', entityId: id, field: 'confidence', value: null },
+      { entityType: 'relation', entityId: id, field: 'user_confirmed', value: true },
       { entityType: 'relation', entityId: id, field: 'note', value: null },
     ]);
   });
@@ -771,6 +1029,7 @@ async function syncNow() {
     const result = await engine.syncOnce();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     render();
+    familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
     if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
     else setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
     return result;
@@ -827,6 +1086,7 @@ async function bootstrapLocal() {
   await store.putMeta(BOOTSTRAP_META, { pending: true, device_id: document.device_id, migration_id: document.migration_id, operations: document.operations.length });
   bootstrapButton.hidden = true;
   render();
+  familyModelButton.hidden = Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied);
   setStatus('Godkänd startkopia aktiverad lokalt · väntar på Dropbox', 'ok');
 }
 
@@ -859,6 +1119,10 @@ function findPerson() {
 }
 
 contentNode.addEventListener('click', (event) => {
+  if (event.target.closest('[data-action="create-family-unit"]')) return createGroup(FAMILY_UNIT_TYPE);
+  if (event.target.closest('[data-action="create-kin-group"]')) return createGroup(KIN_GROUP_TYPE);
+  const groupButton = event.target.closest('[data-group-id]');
+  if (groupButton) return renderGroupDrawer(groupButton.dataset.groupType, groupButton.dataset.groupId);
   const personButton = event.target.closest('[data-person-id]');
   if (personButton) selectPerson(personButton.dataset.personId, false);
 });
@@ -873,10 +1137,29 @@ drawer.addEventListener('click', (event) => {
   if (removeProperty) deletePropertyLink(removeProperty.dataset.deletePropertyLink);
   if (event.target.closest('[data-action="add-relation"]')) addRelation();
   if (event.target.closest('[data-action="add-property"]')) addPropertyLink();
+  if (event.target.closest('[data-action="add-group-anchor"]')) addGroupAnchor();
+  const removeAnchor = event.target.closest('[data-remove-group-anchor]');
+  if (removeAnchor) removeGroupAnchor(removeAnchor.dataset.removeGroupAnchor);
+  if (event.target.closest('[data-action="delete-group"]')) deleteGroup();
   if (event.target.closest('[data-action="delete-person"]')) deletePerson();
 });
 
 drawer.addEventListener('change', (event) => {
+  const groupField = event.target.closest('[data-group-field]');
+  if (groupField && ui.selectedGroup) {
+    const value = parseFieldValue(groupField);
+    if (groupField.dataset.groupField === 'name' && !value) {
+      setEditStatus('Gruppnamnet får inte vara tomt.', 'error');
+      return renderGroupDrawer(ui.selectedGroup.entityType, ui.selectedGroup.id);
+    }
+    syncEdit(() => repository.setField(ui.selectedGroup.entityType, ui.selectedGroup.id, groupField.dataset.groupField, value));
+    return;
+  }
+  const groupParent = event.target.closest('[data-group-parent]');
+  if (groupParent && ui.selectedGroup) {
+    updateGroupParent(groupParent.value);
+    return;
+  }
   const personField = event.target.closest('[data-person-field]');
   if (personField) {
     const field = personField.dataset.personField;
@@ -945,6 +1228,7 @@ document.querySelectorAll('[data-view-mode]').forEach((button) => button.addEven
 $('#review-button').addEventListener('click', () => { ui.review = !ui.review; render(); });
 connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(() => {}));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) => setStatus(error.message, 'error')));
+familyModelButton.addEventListener('click', () => applyFamilyModelLocal().catch(error => setEditStatus(error.message, 'error')));
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
@@ -956,6 +1240,7 @@ async function init() {
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: deviceId() }).init();
   bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
+  familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || personRecords().length === 0;
   connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
   connectButton.disabled = !DROPBOX_CLIENT_ID;
   $('#year-slider').max = new Date().getFullYear();
