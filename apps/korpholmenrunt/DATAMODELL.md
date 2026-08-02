@@ -1,0 +1,39 @@
+# Datamodell för Korpholmen runt
+
+| Entitet | Ansvar |
+|---|---|
+| `race-source` | Källfil, kontrollsumma, tabell och importtid. |
+| `race-edition` | Ett registrerat tävlingsår och dess sammanfattning. |
+| `race-result` | En källrad/resultatpost med råvärden och normaliserade analysfält. |
+| `race-person-link` | En deltagarroll och dess koppling till Matrikelns person-ID. |
+| `person-ref` | Lokal referenskatalog över Matrikelns stabila personer. |
+| `boat-ref` | Lokal referenskatalog över Båtregistrets stabila båtar. |
+| `source-note` | Tomma rader, förklaringar och övrigt som inte är resultat. |
+
+## Källtrohet
+
+`*_raw` är ordagranna värden från Access-tabellen och ändras aldrig tyst.
+Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden kan
+tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
+`60+` och `80,95` bevaras men flaggas för granskning.
+
+## Registerkopplingar
+
+En person- eller båtlänk har `match_status`:
+
+- `kopplad` — entydig exakt träff på fullständigt namn eller båtalias;
+- `föreslagen` — en eller flera kandidater, inklusive unikt förnamn, kräver beslut;
+- `saknas` — ingen rimlig registerträff;
+- `manuell` — användaren har valt stabilt ID i appen.
+
+Ett unikt förnamn får ett kandidat-ID så att materialet kan utforskas, men
+markeras alltid som obekräftat och ligger kvar i granskningskön. Sammansatta
+eller oklara källfält bevaras som en enda råuppgift tills de delas genom en
+granskningsoperation.
+
+## Masterprincip
+
+Den kanoniska levande mastern är den materialiserade operationsströmmen i
+appen/Dropbox. SQLite-filen är en reproducerbar analyskopia, inte en parallell
+sanning. Nya uppgifter läggs som oföränderliga operationer; källimporten byggs
+om bara när en ny källversion uttryckligen har lagts till.

@@ -1,0 +1,10 @@
+{
+  "name": "Korpholmen runt – resultat & rekord",
+  "short_name": "Korpholmen runt",
+  "description": "Resultat, rekord, deltagare och båtar i Korpholmen runt",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3efe4",
+  "theme_color": "#123c46"
+}
