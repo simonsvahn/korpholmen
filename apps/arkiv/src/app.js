@@ -23,7 +23,7 @@ const isSourceTree = location.pathname.includes('/apps/arkiv/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:dokumentarkiv-2026-08-02-42-handlingar';
 const ENTITY_TYPES = ['person', 'båt', 'plats', 'fastighet', 'hus', 'organisation'];
-const ui = { search: '', category: 'Alla', entityType: 'alla', selectedId: '', sourceOpen: false };
+const ui = { search: '', categories: new Set(), entityType: 'alla', selectedId: '', sourceOpen: false };
 let store;
 let repository;
 let accessToken = null;
@@ -94,7 +94,7 @@ function filteredDocuments() {
   const query = normalize(ui.search.trim());
   return documentRecords().filter(document => {
     const entities = (document.entity_ids || []).map(id => map.get(id)).filter(Boolean);
-    if (ui.category !== 'Alla' && document.category !== ui.category) return false;
+    if (ui.categories.size && !ui.categories.has(document.category)) return false;
     if (ui.entityType !== 'alla' && !entities.some(entity => entity.entity_type === ui.entityType)) return false;
     if (!query) return true;
     return normalize([document.title, document.document_type, document.document_date, document.transcript, ...entities.map(entity => entity.name)].join(' ')).includes(query);
@@ -108,7 +108,10 @@ function entityBadge(entity) {
 
 function renderFilters(documents) {
   const categories = ['Alla', ...new Set(documentRecords().map(document => document.category))];
-  $('#category-filters').innerHTML = categories.map(category => `<button type="button" data-category="${escapeAttribute(category)}" class="${ui.category === category ? 'vald' : ''}" aria-pressed="${ui.category === category}">${escapeHtml(category)}</button>`).join('');
+  $('#category-filters').innerHTML = categories.map(category => {
+    const selected = category === 'Alla' ? ui.categories.size === 0 : ui.categories.has(category);
+    return `<button type="button" data-category="${escapeAttribute(category)}" class="${selected ? 'vald' : ''}" aria-pressed="${selected}">${escapeHtml(category)}</button>`;
+  }).join('');
   $('#result-count').textContent = String(documents.length);
   $('#document-total').textContent = String(documentRecords().length);
   const years = documentRecords().map(document => document.year).filter(Boolean);
@@ -230,14 +233,22 @@ async function bootstrapLocal() {
 $('#search').addEventListener('input', event => { ui.search = event.target.value; render(); });
 $('#clear-search').addEventListener('click', () => { ui.search = ''; $('#search').value = ''; render(); });
 $('#entity-filter').addEventListener('change', event => { ui.entityType = event.target.value; render(); });
-$('#category-filters').addEventListener('click', event => { const button = event.target.closest('[data-category]'); if (button) { ui.category = button.dataset.category; render(); } });
+$('#category-filters').addEventListener('click', event => {
+  const button = event.target.closest('[data-category]');
+  if (!button) return;
+  const category = button.dataset.category;
+  if (category === 'Alla') ui.categories.clear();
+  else if (ui.categories.has(category)) ui.categories.delete(category);
+  else ui.categories.add(category);
+  render();
+});
 listNode.addEventListener('click', event => { const button = event.target.closest('[data-document-id]'); if (button) { ui.selectedId = button.dataset.documentId; ui.sourceOpen = false; render(); document.querySelector('.papper')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
 document.addEventListener('click', event => {
   const entityButton = event.target.closest('[data-entity-id]');
   if (entityButton) { const entity = entityMap().get(entityButton.dataset.entityId); if (entity) { ui.search = entity.name; ui.entityType = ENTITY_TYPES.includes(entity.entity_type) ? entity.entity_type : 'alla'; $('#search').value = ui.search; $('#entity-filter').value = ui.entityType; render(); } }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'source') { ui.sourceOpen = !ui.sourceOpen; render(); }
-  if (action === 'clear') { ui.search = ''; ui.category = 'Alla'; ui.entityType = 'alla'; $('#search').value = ''; $('#entity-filter').value = 'alla'; render(); }
+  if (action === 'clear') { ui.search = ''; ui.categories.clear(); ui.entityType = 'alla'; $('#search').value = ''; $('#entity-filter').value = 'alla'; render(); }
   if (action === 'connect') connectDropbox().catch(error => setStatus(error.message, 'error'));
 });
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
