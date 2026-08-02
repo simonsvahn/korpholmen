@@ -10,7 +10,7 @@ som GitHub.
   bilder och länkar till Matrikelns person-ID.
 - `apps/fastigheter/` — källkod och privat master för registerenheter,
   historiska jordlotter, ägande, bruk, transaktioner och källbelägg.
-- `apps/arkiv/` — källkod och privat operationsmaster för ordagranna,
+- `apps/dokumentarkiv/` — källkod och privat operationsmaster för ordagranna,
   sökbara avskrifter och granskade registerkopplingar.
 - `apps/korpholmenrunt/` — källkod, privat resultatsmaster och granskade länkar
   till Matrikelns person-ID och Båtregistrets båt-ID.
@@ -18,8 +18,8 @@ som GitHub.
   för matrikelutgåvor, medlemsstatus, klubbnamn och båtförekomster.
 - `packages/core/` — gemensam datafri motor för operationer, IndexedDB,
   Dropbox-synk och OAuth.
-- `matrikel/`, `batregister/`, `fastigheter/`, `arkiv/`, `korpholmenrunt/` och
-  `klubbhistorik/` — datafria
+- `matrikel/`, `batregister/`, `fastigheter/`, `dokumentarkiv/`,
+  `korpholmenrunt/` och `klubbhistorik/` — datafria
   publiceringspaket för GitHub Pages.
 
 Den gemensamma begrepps- och ansvarsfördelningen för nära familj,

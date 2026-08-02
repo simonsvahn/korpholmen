@@ -178,7 +178,7 @@ namnrymd:
 /matrikel/ops
 /batregister/ops       + /batregister/bilder
 /fastigheter/ops
-/arkiv/ops
+/dokumentarkiv/ops
 /korpholmenrunt/ops
 /klubbhistorik/ops
 ```

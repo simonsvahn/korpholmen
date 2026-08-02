@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const OUT=resolve(ROOT,'../../arkiv');
+const OUT=resolve(ROOT,'../../dokumentarkiv');
 const CORE=resolve(ROOT,'../../packages/core');
 const FILES=['index.html','styles.css','manifest.webmanifest','sw.js','og.png','src/config.js'];
 const CORE_FILES=['data-layer.js','domain/canonical.js','domain/hlc.js','domain/materializer.js','domain/operations.js','domain/repository.js','storage/indexeddb.js','storage/memory.js','sync/batch.js','sync/dropbox-transport.js','sync/errors.js','sync/memory-transport.js','sync/oauth-flow.js','sync/oauth-pkce.js','sync/sync-engine.js'];
