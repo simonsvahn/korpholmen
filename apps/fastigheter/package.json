@@ -1,0 +1,10 @@
+{
+  "name": "korpholmen-fastigheter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:migration": "node verktyg/bygg-startmaster.mjs && python3 verktyg/bygg-sqlite.py",
+    "build:publish": "node verktyg/bygg-publicering.mjs",
+    "test": "node test/harness.mjs"
+  }
+}
