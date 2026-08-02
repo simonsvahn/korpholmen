@@ -1,5 +1,9 @@
 # Korpholmen runt
 
+Tävlingsappens ansvar och dess stabila länkar till Matrikel och Båtregister
+finns i den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md); entiteterna
+finns i [`DATAMODELL.md`](DATAMODELL.md).
+
 Lokal-först-master och analysapp för Korpholmen runt. Access-källans alla
 resultatrader bevaras ordagrant i en privat, reproducerbar operationsmaster.
 Normaliserade tider, klasser och bankoder ligger bredvid råvärdena och kan

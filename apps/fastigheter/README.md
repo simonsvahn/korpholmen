@@ -1,5 +1,9 @@
 # Fastighetshistorik — privat lokal-först-master
 
+Fastighetshistorikens plats i appfamiljen finns i den gemensamma
+[`ARKITEKTUR.md`](../../ARKITEKTUR.md); den konkreta modellen finns i
+[`DATAMODELL.md`](DATAMODELL.md).
+
 Detta är den kanoniska databasen för Korpholmens fastigheter och deras
 historia. Appen använder samma operationslogg, IndexedDB-lager, Dropbox-synk
 och datafria publiceringsmodell som Matrikeln och Båtregistret.

@@ -1,5 +1,8 @@
 # Båtregister
 
+Båtregistrets ansvar för stabila båtar och dess ID-länkar till övriga mastrar
+finns i den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md).
+
 Redigerbar lokal-först-master för KBK:s båtar och båtbilder. Appskalet är
 datafritt på GitHub Pages. Privat båtdata ligger lokalt i IndexedDB och synkas
 som oföränderliga operationsbatcher till `/batregister/ops` i samma Dropbox

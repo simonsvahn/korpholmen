@@ -1,5 +1,8 @@
 # Dokumentarkiv
 
+Dokumentarkivets roll som ordagrann källmaster, inte entitetsmaster, finns i
+den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md).
+
 Dokumentarkivet visar fullständiga, ordagranna avskrifter från
 `Digitalisering 2026` i ett läsbart dokumentformat. Handlingarna går att söka
 och filtrera efter kategori och strukturerad entitet, exempelvis person, båt,
