@@ -73,7 +73,7 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -86,6 +86,13 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("opsRoot:'/korpholmenrunt/ops'"));
   assert.ok(app.includes("source_id:prior?.source_id??'race-source:user'"));
   assert.ok(app.includes("!result||reviewPending(result)?'granskning krävs':'granskad'"));
+  assert.ok(app.includes('Båt / register'));
+  assert.ok(app.includes('Besättning / register'));
+  assert.ok(app.includes('Förslag i Matrikeln:'));
+  assert.ok(app.includes('Förslag i Båtregistret:'));
+  assert.ok(app.includes('data-action="open-register"'));
+  assert.ok(matchingStyles.includes('.registeretikett'));
+  assert.ok(matchingStyles.includes('.registernamn'));
   assert.ok(app.includes("updateViaCache:'none'"));
   assert.ok(serviceWorker.includes("if(request.mode==='navigate')"));
   assert.ok(serviceWorker.includes("fetch(request,{cache:'no-store'})"));

@@ -98,3 +98,78 @@
   border: 1px solid var(--linje);
   color: var(--text);
 }
+
+.registerlista {
+  display: grid;
+  gap: 8px;
+}
+
+.registerpost {
+  display: grid;
+  gap: 3px;
+  min-width: 150px;
+}
+
+.registerhuvud {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.registernamn {
+  color: var(--text);
+  font: 600 12px var(--serif);
+}
+
+a.registernamn {
+  color: var(--hav);
+  text-decoration-color: color-mix(in srgb, var(--guld) 65%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a.registernamn:hover {
+  color: var(--rod);
+}
+
+.registeretikett {
+  background: color-mix(in srgb, #347159 13%, transparent);
+  border: 1px solid color-mix(in srgb, #347159 35%, var(--linje));
+  border-radius: 999px;
+  color: #276048;
+  display: inline-block;
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  padding: 2px 5px;
+  text-transform: uppercase;
+}
+
+.registeretikett.saknas {
+  background: color-mix(in srgb, var(--rod) 8%, transparent);
+  border-color: color-mix(in srgb, var(--rod) 25%, var(--linje));
+  color: var(--rod);
+}
+
+.registerroll,
+.registerkalla,
+.registersaknas {
+  color: var(--mjuk);
+  display: block;
+  font: 700 8px var(--sans);
+}
+
+.registerroll {
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.registerkalla a {
+  font: inherit;
+}
+
+.topregister {
+  display: grid;
+  gap: 7px;
+}
