@@ -1,4 +1,4 @@
-const CACHE='korpholmen-dokumentarkiv-2026-08-03-arkivatlas-1';
+const CACHE='korpholmen-dokumentarkiv-2026-08-03-dropbox-sokvag-2';
 const CORE=self.location.pathname.includes('/apps/dokumentarkiv/')?'../../packages/core':'./core';
 const SHELL=['./','./index.html','./styles.css?v=2026-08-03-1','./manifest.webmanifest','./og.png','./src/app.js?v=2026-08-03-1','./src/config.js',`${CORE}/data-layer.js`,`${CORE}/domain/canonical.js`,`${CORE}/domain/hlc.js`,`${CORE}/domain/materializer.js`,`${CORE}/domain/operations.js`,`${CORE}/domain/repository.js`,`${CORE}/storage/indexeddb.js`,`${CORE}/storage/memory.js`,`${CORE}/sync/batch.js`,`${CORE}/sync/dropbox-transport.js`,`${CORE}/sync/errors.js`,`${CORE}/sync/memory-transport.js`,`${CORE}/sync/oauth-flow.js`,`${CORE}/sync/oauth-pkce.js`,`${CORE}/sync/sync-engine.js`];
 self.addEventListener('install',event=>{const fresh=SHELL.map(path=>new Request(new URL(path,self.location.href),{cache:'reload'}));event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(fresh)).then(()=>self.skipWaiting()))});

@@ -113,7 +113,17 @@ export class DropboxTransport {
   async listChanges(cursor = null) {
     let result;
     if (cursor) {
-      result = await this.rpc('/files/list_folder/continue', { cursor });
+      try {
+        result = await this.rpc('/files/list_folder/continue', { cursor });
+      } catch (error) {
+        // En cursor är bunden till mappen som listades. Om appens namnrymd har
+        // flyttats eller bytt namn kan Dropbox svara path/not_found i stället
+        // för reset. Låt synkmotorn börja om från den aktuella ops-mappen.
+        if (error instanceof TransportError && error.status === 409 && String(error.code).includes('path/not_found')) {
+          throw new CursorResetError(error.code);
+        }
+        throw error;
+      }
     } else {
       await this.ensureFolder(this.opsRoot);
       result = await this.rpc('/files/list_folder', {

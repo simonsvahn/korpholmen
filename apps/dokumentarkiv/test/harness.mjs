@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import { DropboxTransport, materialize, validateOperation } from '../../../packages/core/data-layer.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -36,6 +36,23 @@ await test('startmastern innehåller hela det aktuella arkivet och giltiga opera
   assert.ok(documents.some(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte'));
   assert.ok(documents.some(item=>item.title==='Protokoll vid extra sammanträde med Korpholmens Båtklubb på Yxlan'));
   assert.equal(documents.find(item=>item.title==='Korpholmens Båtklubbs förvaltningsberättelse för 1954').id,'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md');
+});
+
+await test('Dropbox-synken återhämtar sig när en gammal mappcursor saknar sökväg',async()=>{
+  const transport=new DropboxTransport({
+    accessToken:'test-token',
+    opsRoot:'/dokumentarkiv/ops',
+    fetchImpl:async()=>({
+      ok:false,
+      status:409,
+      headers:{get:()=>null},
+      text:async()=>JSON.stringify({error_summary:'path/not_found/..'}),
+    }),
+  });
+  await assert.rejects(
+    ()=>transport.listChanges('cursor-från-arkiv-mappen'),
+    error=>error?.name==='CursorResetError',
+  );
 });
 
 await test('registerkopplingar skiljer exakt träff, granskning och saknad entitet',()=>{
