@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -205,7 +205,7 @@ function parseModernRows(text,documentId,releaseId){
 
 function primaryRank(document){
   const order=document.release.sort_order;
-  return {'numbers-export':100,'förnamn':90,'ålder':80,'källordning':70,'kbk-snurra':60,'efternamn':50,'födelseår':40,'födelsedatum':40,'ö':30,'kbk-namn':20,'relation':10}[order]||0;
+  return {'ålder':100,'födelsedatum':90,'födelseår':80,'numbers-export':70,'källordning':60,'kbk-snurra':50,'förnamn':40,'efternamn':30,'ö':20,'kbk-namn':10,'relation':0}[order]??-1;
 }
 
 async function buildModernDocuments(){
@@ -229,12 +229,18 @@ async function buildModernDocuments(){
     for(const name of extractNames)originalFiles.push(await fileInfo(name,`${canonicalBase}-textextrakt.txt`,{role:'läskopia',page:null}));
     const snapshotText=currentSnapshotText(text);
     const memberRows=parseModernRows(snapshotText,documentId,release.id);
-    documents.push({schema_version:1,document:{id:documentId,label:preferredLabel.replace(/\.pdf$/i,''),source_type:'PDF-export av Vem är vem',is_primary_for_release:false,transcription_method:'strukturerad tolkning av PDF-textlagret',transcription_status:'maskinellt parserad och radkontrollerad',original_files:originalFiles},release,columns:[{id:'age',label_raw:'I år/Fyller i år'},{id:'first_name',label_raw:'Förnamn'},{id:'last_name',label_raw:'Efternamn'},{id:'birth_year',label_raw:'Född/Födelseår'},{id:'birth_date',label_raw:'Födelsedatum'},{id:'island',label_raw:'Ö'},{id:'club_name',label_raw:'KBK-namn'},{id:'relation',label_raw:'Hör till/Hemma hos'}],sections:[{id:`section:${documentId}:listed`,kind:'member',category:'listed',label_raw:'Vem är vem',page:1,start_order:1,end_order:memberRows.length}],member_rows:memberRows,boat_rows:[],document_notes:['Sorteringsvarianter med samma release.id är olika återgivningar av samma konceptuella utgåva och importeras inte som dubbla personer.',...(snapshotText.length<text.length?['PDF-filen innehåller även äldre, inbäddade sorteringsbilagor. De finns kvar i källkopian men räknas inte som personer i denna utgåva.']:[])]});
+    documents.push({schema_version:1,document:{id:documentId,label:preferredLabel.replace(/\.pdf$/i,''),source_type:'PDF-export av Vem är vem',is_primary_for_release:false,transcription_method:'strukturerad tolkning av PDF-textlagret',transcription_status:'maskinellt parserad och radkontrollerad',original_files:originalFiles},release,columns:[{id:'age',label_raw:'I år/Fyller i år'},{id:'first_name',label_raw:'Förnamn'},{id:'last_name',label_raw:'Efternamn'},{id:'birth_year',label_raw:'Född/Födelseår'},{id:'birth_date',label_raw:'Födelsedatum'},{id:'island',label_raw:'Ö'},{id:'club_name',label_raw:'KBK-namn'},{id:'relation',label_raw:'Hör till/Hemma hos'}],sections:[{id:`section:${documentId}:listed`,kind:'member',category:'listed',label_raw:'Vem är vem',page:1,start_order:1,end_order:memberRows.length}],member_rows:memberRows,boat_rows:[],document_notes:[...(snapshotText.length<text.length?['PDF-filen innehåller även äldre, inbäddade sorteringsbilagor. De finns kvar i arkivoriginalet men räknas inte som personer i denna utgåva.']:[])]});
   }
   const byRelease=new Map();
   for(const document of documents){const id=document.release.id;if(!byRelease.has(id))byRelease.set(id,[]);byRelease.get(id).push(document)}
-  for(const variants of byRelease.values())variants.sort((a,b)=>primaryRank(b)-primaryRank(a)||a.document.id.localeCompare(b.document.id,'sv'))[0].document.is_primary_for_release=true;
-  return documents;
+  const selected=[];
+  for(const variants of byRelease.values()){
+    const chosen=variants.sort((a,b)=>primaryRank(b)-primaryRank(a)||a.document.id.localeCompare(b.document.id,'sv'))[0];
+    chosen.document.is_primary_for_release=true;
+    chosen.document_notes.unshift(`Endast en sorteringsvariant lagras för utgåvan; vald ordning: ${chosen.release.sort_order}. Ålder eller födelsedatum prioriteras när sådan källa finns.`);
+    selected.push(chosen);
+  }
+  return selected;
 }
 
 function pageForPerson(release,status,index){
@@ -270,6 +276,11 @@ async function hydrateHistorical(document){
 await mkdir(OUTPUT,{recursive:true});await mkdir(ORIGINALS,{recursive:true});
 const documents=[];
 if(HISTORICAL_INPUT){const input=JSON.parse(await readFile(resolve(HISTORICAL_INPUT),'utf8'));if(!Array.isArray(input))throw new Error('--historical måste peka på en JSON-array.');for(const document of input)documents.push(await hydrateHistorical(document))}
+else{
+  const existingFiles=(await readdir(OUTPUT)).filter(file=>/^matrikel-(?:1980|1982|1986|1987|1988)-.*\.json$/.test(file)).sort();
+  if(existingFiles.length!==5)throw new Error(`Fem befintliga historiska JSON-underlag krävs när --historical saknas; hittade ${existingFiles.length}.`);
+  for(const file of existingFiles)documents.push(await hydrateHistorical(JSON.parse(await readFile(resolve(OUTPUT,file),'utf8'))));
+}
 documents.push(...await build1991And1998());
 documents.push(...await buildModernDocuments());
 
@@ -281,6 +292,8 @@ for(const document of documents){
   if(document.document.is_primary_for_release){if(primaryByRelease.has(document.release.id))throw new Error(`Flera primärdokument: ${document.release.id}`);primaryByRelease.set(document.release.id,document.document.id)}
   await writeFile(resolve(OUTPUT,filename),`${JSON.stringify(document,null,2)}\n`);
 }
+let pruned=0;
+for(const file of (await readdir(OUTPUT)).filter(file=>/^matrikel-.*\.json$/.test(file)))if(!names.has(file)){await unlink(resolve(OUTPUT,file));pruned+=1}
 const releaseIds=[...new Set(documents.map(document=>document.release.id))];
 for(const releaseId of releaseIds)if(!primaryByRelease.has(releaseId))throw new Error(`Primärdokument saknas: ${releaseId}`);
-console.log(`Matrikel-JSON byggd: ${documents.length} källdokument, ${releaseIds.length} utgåvor, ${documents.reduce((sum,document)=>sum+document.member_rows.length,0)} strukturerade medlemsrader och ${documents.reduce((sum,document)=>sum+document.boat_rows.length,0)} båtrader.`);
+console.log(`Matrikel-JSON byggd: ${documents.length} källdokument, ${releaseIds.length} utgåvor, ${documents.reduce((sum,document)=>sum+document.member_rows.length,0)} strukturerade medlemsrader och ${documents.reduce((sum,document)=>sum+document.boat_rows.length,0)} båtrader. ${pruned} inaktuella sorteringsvarianter togs bort.`);

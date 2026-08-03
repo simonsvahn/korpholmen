@@ -35,7 +35,8 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
 
 - `privat/kallkopior/` — bytebevarade källkopior och godkända matchningsbeslut;
 - `privat/kallkopior/matriklar/*.json` — samtliga matrikeldokument i samma
-  validerade format; en fil per faktisk käll-/sorteringsvariant;
+  validerade format; exakt en vald fil per matrikelutgåva. Varianten med ålder
+  eller födelsedatum som ledande fält prioriteras när den finns;
 - `privat/kallkopior/matriklar/original/` — kanoniskt namngivna, bytebevarade
   privata kopior. Originalnamn och originalets SHA-256 ligger i varje JSON;
 - `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
@@ -50,7 +51,8 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   radräkning och återanvändning för hela den gemensamma importen;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
-  1998 samt den normaliserade borttagningen av Ted Thunborgs extra 2025-rad.
+  1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad och
+  beslutet om en aktiv sorteringsvariant per modern matrikel.
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
@@ -62,6 +64,7 @@ efterkontroll; Båtregistret förblir ensam master för själva båten.
 ## Kommandon
 
 ```sh
+npm run build:sources
 npm run build:migration
 npm run validate:sources
 npm test

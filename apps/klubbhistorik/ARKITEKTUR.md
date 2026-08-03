@@ -193,7 +193,7 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 |---|---|
 | 23 källsnapshots: 1980–1998 samt moderna exporttillfällen 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
-| 41 sorterings-/källdokument med exakt en primär variant per snapshot | Byggt |
+| 23 valda JSON-källdokument, exakt ett per snapshot | Byggt |
 | Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
 | Fullständiga sida 2-avsnitt för 1980/1986 samt matriklarna 1982/1987/1988 | Byggt |
 | Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
@@ -210,14 +210,14 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 1. Lämna arkivoriginalet orört. Skapa en begripligt namngiven, bytebevarad
    privat källkopia och registrera både originalnamn, kopienamn och SHA-256.
-2. Skapa en JSON-fil enligt `schema/matrikel-source.schema.json` för varje
-   faktisk käll- eller sorteringsvariant.
-3. Skapa eller återanvänd rätt `matrikel-release` och markera exakt en variant
-   som primär.
+2. Skapa en JSON-fil enligt `schema/matrikel-source.schema.json` för den valda
+   källvarianten. Välj i första hand varianten med ålder eller födelsedatum
+   som ledande fält; lagra inte alternativa sorteringar som egna JSON-filer.
+3. Skapa eller återanvänd rätt `matrikel-release` och koppla det enda aktiva
+   `source-document` som utgåvan ska använda.
 4. Importera varje synlig källrad, även tomnoter, dubbletter och svårtolkade
    värden som annars skulle kunna falla bort.
-5. Skapa förekomster utan att ändra källtexten. Icke-primära sorteringar får
-   inte skapa dubblettförekomster.
+5. Skapa förekomster utan att ändra källtexten.
 6. Matcha bara entydiga fall automatiskt; lägg resten i granskningskö.
 7. Kör `node verktyg/validera-matrikel-json.mjs` och jämför radantal,
    kontrollpunkter, källhashar och operationshash i test.

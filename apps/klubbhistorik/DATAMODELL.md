@@ -5,17 +5,18 @@ utbyggnader finns i [`ARKITEKTUR.md`](ARKITEKTUR.md).
 
 ## Människan, källan och tolkningen
 
-`matrikel-release` beskriver en konceptuell utgåva. Flera PDF-sorteringar av
-samma lista kan senare kopplas till samma utgåva som olika `source-document`.
+`matrikel-release` beskriver en konceptuell utgåva. Varje utgåva har exakt
+ett aktivt `source-document` och exakt en validerad JSON-fil. Om arkivet
+innehåller flera PDF-sorteringar väljs varianten med ålder eller födelsedatum
+som ledande fält i första hand;
+i annat fall används den enda eller mest kompletta varianten. Alternativa
+arkivoriginal ändras inte, men de ingår inte som egna JSON-dokument i mastern.
 
 Alla privata matrikelkällor har dessutom samma validerade JSON-format
-`matrikel-source.schema.json`. En JSON-fil motsvarar ett faktiskt
-källdokument eller en faktisk sorteringsvariant och innehåller alltid samma
+`matrikel-source.schema.json`. En JSON-fil motsvarar den valda återgivningen
+av en matrikelutgåva och innehåller alltid samma
 topplager: `document`, `release`, `columns`, `sections`, `member_rows`,
-`boat_rows` och `document_notes`. Exakt ett dokument per `matrikel-release`
-är primärt och får skapa person- och båtförekomster. Övriga varianter bevarar
-fil, hash, sorteringsordning och strukturerade rader utan att dubblera
-historiska personer.
+`boat_rows` och `document_notes`.
 
 `person-occurrence` är en ordagrann rad i medlemskolumnen. Den bär bland annat
 utgåva, ordning, råtext, medlemskategori, rått invalår, det personnamn som kan

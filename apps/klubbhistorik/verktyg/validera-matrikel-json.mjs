@@ -42,6 +42,7 @@ const releases=new Map();
 for(const document of documents){const id=document.release.id;if(!releases.has(id))releases.set(id,[]);releases.get(id).push(document)}
 const discrepancies=[];const duplicateRows=[];const releaseCounts={};
 for(const [releaseId,variants] of releases){
+  if(variants.length!==1)throw new Error(`${releaseId}: exakt en JSON-variant krävs, fick ${variants.length}.`);
   const primary=variants.filter(document=>document.document.is_primary_for_release);
   if(primary.length!==1)throw new Error(`${releaseId}: förväntade ett primärdokument, fick ${primary.length}.`);
   const primaryRows=primary[0].member_rows.filter(row=>row.category!=='blank'&&row.person_name_raw);

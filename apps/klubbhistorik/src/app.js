@@ -30,7 +30,7 @@ const releaseCompare=(a,b)=>releaseMoment(a).localeCompare(releaseMoment(b),'sv'
 const releases=()=>recordList('matrikel-release').sort(releaseCompare);
 const personOccurrences=()=>recordList('person-occurrence').sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order);
 const boatOccurrences=()=>recordList('boat-occurrence').sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order);
-const sourceRows=()=>recordList('source-row').sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.kind.localeCompare(b.kind)||a.order-b.order);
+const sourceRows=()=>recordList('source-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.kind.localeCompare(b.kind)||a.order-b.order);
 const personRefs=()=>recordList('person-ref').sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
 const boatRefs=()=>recordList('boat-ref').sort((a,b)=>boatOptionLabel(a).localeCompare(boatOptionLabel(b),'sv'));
 const personMap=()=>new Map(personRefs().map(item=>[item.external_id,item]));
@@ -84,7 +84,7 @@ function boatReferenceHtml(reference){
 }
 function layerSwitch(){return `<div class="lagervaxel"><button class="${ui.layer==='source'?'aktiv':''}" data-layer="source">Som källan skrevs</button><button class="${ui.layer==='normalized'?'aktiv':''}" data-layer="normalized">Normaliserad värld</button></div>`}
 function kindSwitch(release){return `<div class="typvaxel"><button class="${ui.kind==='person'?'aktiv':''}" data-kind="person">Personer</button><button class="${ui.kind==='boat'?'aktiv':''}" data-kind="boat" ${release.boat_occurrence_count?'':'disabled'}>Båtar</button></div>`}
-function canonicalSourceRows(releaseId,kind){const all=sourceRows().filter(item=>item.release_id===releaseId&&item.kind===kind);const canonical=all.filter(item=>item.source_document_id&&item.id.startsWith('source-row:canonical:'));return canonical.length?canonical:all}
+function canonicalSourceRows(releaseId,kind){const all=sourceRows().filter(item=>item.release_id===releaseId&&item.kind===kind);const selectedDocumentId=releaseMap().get(releaseId)?.source_document_id;const selected=all.filter(item=>item.source_document_id===selectedDocumentId&&item.id.startsWith('source-row:canonical:'));if(selected.length)return selected;const canonical=all.filter(item=>item.source_document_id&&item.id.startsWith('source-row:canonical:'));return canonical.length?canonical:all}
 function sourcePage(item){const page=Number(item?.source_page);return Number.isFinite(page)&&page>0?page:1}
 function sourceRowsByPage(rows){const pages=new Map();for(const item of rows){const page=sourcePage(item);if(!pages.has(page))pages.set(page,[]);pages.get(page).push(item)}return pages}
 function splitHistoricMemberRow(item){
