@@ -58,6 +58,12 @@ När ett importerat namn redigeras i appen återanvänds dess namnpost och dess
 källor, datering och notering bevaras; borttagning blir en senare tombstone i
 operationshistoriken.
 
+När ett plats- eller byggnadsobjekt tas bort i appen tombstonas objektet och
+dess aktiva namn-, relations-, fastighets- och kartpostkopplingar tillsammans.
+De oföränderliga `map-entry`-källraderna raderas aldrig. På så vis försvinner
+objektet ur den aktiva östrukturen utan att källmaterial eller åtgärdshistorik
+går förlorade.
+
 ## Lagring
 
 Källkopior och reproducerbara migreringar ligger privat under `privat/`.

@@ -47,6 +47,21 @@ export function splitList(value) {
   return [...new Set(String(value || '').split(/[\n,;]+/).map(item => item.trim()).filter(Boolean))];
 }
 
+export function masterDeletionRefs({ type, id, names = [], relations = [], propertyLinks = [], mapEntryLinks = [] }) {
+  if (!['place', 'building'].includes(type) || !id) return [];
+  const refs = [{ entityType: type, entityId: id }];
+  const add = (entityType, records) => records.forEach(record => refs.push({ entityType, entityId: record.id }));
+
+  add('name-record', names.filter(record => record.target_type === type && record.target_id === id));
+  add('place-relation', relations.filter(record =>
+    (record.child_type === type && record.child_id === id)
+      || (type === 'place' && record.parent_place_id === id)));
+  add('object-property-link', propertyLinks.filter(record => record.target_type === type && record.target_id === id));
+  add('map-entry-link', mapEntryLinks.filter(record => record.target_type === type && record.target_id === id));
+
+  return [...new Map(refs.map(ref => [`${ref.entityType}\u0000${ref.entityId}`, ref])).values()];
+}
+
 function correctedPropertyIds(entry) {
   const correction = String(entry.prior_correction || '');
   const corrected = /^Fastighet\b/i.test(correction) ? propertyIdsFromText(correction) : [];

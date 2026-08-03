@@ -19,6 +19,7 @@ brett kalkylblad.
   operationer.
 - Ogranskade kartposter får inte automatiskt bli plats-, byggnads- eller fastighetsmaster.
 - Plats- och byggnadsobjekt har stabila ID:n; namn och relationer är separata, källspårbara poster.
+- Borttagning tombstonar masterobjektet och dess kopplingar i operationshistoriken; kartans källrader raderas aldrig.
 - Dropbox-namnrymden är `/kartdata/ops`, separat från
   Fastighetshistorikens `/fastigheter/ops`.
 - Det publika paketet är datafritt; bara appskalet publiceras.

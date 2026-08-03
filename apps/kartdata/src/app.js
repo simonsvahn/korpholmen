@@ -17,6 +17,7 @@ import {
   classLabel,
   effectiveEntry,
   entrySearchText,
+  masterDeletionRefs,
   normalizeIslandDisplay,
   objectTypeLabel,
   proposedReview,
@@ -25,7 +26,7 @@ import {
   sourceIdNumber,
   splitList,
   stableEntityId,
-} from './model.js?v=2026-08-03-5';
+} from './model.js?v=2026-08-04-1';
 
 const $ = selector => document.querySelector(selector);
 const content = $('#content');
@@ -369,6 +370,7 @@ function renderMasterDrawer(type = 'place', id = null) {
       <label class="span-2">Käll-ID:n<input name="source_ids" value="${escapeAttribute((form.source_ids || []).join(', '))}" placeholder="KARTA-2025, BIO-SIMON"></label>
       <label class="span-2">Notering<textarea name="note" rows="4">${escapeHtml(form.note || '')}</textarea></label>
       <div class="form-actions span-2"><button class="primary" type="submit">Spara masterobjekt</button></div>
+      ${record ? `<div class="danger-zone span-2"><div><strong>Ta bort objektet</strong><small>Objektets namn, relationer och kopplingar tas bort ur den aktiva mastern. Kartans ursprungliga källrader ligger alltid kvar oförändrade.</small></div><button type="button" class="delete-button" data-action="delete-master">Ta bort ${type === 'place' ? 'platsen' : 'byggnaden'}</button></div>` : ''}
     </form></section>`;
   drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false;
 }
@@ -474,6 +476,35 @@ async function saveMaster(formNode) {
   selectedMaster = { type, id };
   render();
   setStatus('Masterobjekt sparat lokalt · synkar när Dropbox är tillgänglig', 'ok');
+  if (navigator.onLine !== false) syncNow().catch(() => {});
+}
+
+async function deleteMaster() {
+  if (!selectedMaster?.id) return;
+  const { type, id } = selectedMaster;
+  const record = masterRecords().find(item => item.entity_type === type && item.id === id);
+  if (!record) return closeDrawer();
+  const refs = masterDeletionRefs({
+    type,
+    id,
+    names: nameRecords(),
+    relations: placeRelations(),
+    propertyLinks: propertyLinks(),
+    mapEntryLinks: mapEntryLinks(),
+  });
+  const linkedSources = refs.filter(ref => ref.entityType === 'map-entry-link').length;
+  const childRelations = placeRelations().filter(item => type === 'place' && item.parent_place_id === id).length;
+  const consequences = [
+    `${refs.length - 1} tillhörande namn, relationer och kopplingar`,
+    linkedSources ? `${linkedSources} kartpost${linkedSources === 1 ? '' : 'er'} mister sin masterkoppling` : null,
+    childRelations ? `${childRelations} underordnat objekt mister sin platsrelation` : null,
+  ].filter(Boolean).join('. ');
+  const confirmed = window.confirm(`Ta bort ${record.preferred_name || id} ur östrukturen?\n\n${consequences}. Kartans ursprungliga källrader raderas inte. Åtgärden sparas i historiken.`);
+  if (!confirmed) return;
+  await repository.deleteEntities(refs);
+  closeDrawer();
+  render();
+  setStatus(`${record.preferred_name || id} borttagen ur mastern · källraderna är bevarade`, 'ok');
   if (navigator.onLine !== false) syncNow().catch(() => {});
 }
 
@@ -640,6 +671,7 @@ drawer.addEventListener('click', event => {
   if (event.target.closest('[data-action="close"]')) closeDrawer();
   if (event.target.closest('[data-action="approve-proposal"]')) approveProposal().catch(error => setStatus(error.message, 'error'));
   if (event.target.closest('[data-action="reset-review"]')) resetReview().catch(error => setStatus(error.message, 'error'));
+  if (event.target.closest('[data-action="delete-master"]')) deleteMaster().catch(error => setStatus(error.message, 'error'));
 });
 drawer.addEventListener('submit', event => {
   event.preventDefault();

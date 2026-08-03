@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
-import { effectiveEntry, objectTypeLabel, proposedReview, propertyIdsFromText, splitList, stableEntityId } from '../src/model.js';
+import { effectiveEntry, masterDeletionRefs, objectTypeLabel, proposedReview, propertyIdsFromText, splitList, stableEntityId } from '../src/model.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
@@ -122,6 +122,38 @@ await test('översiktskortens typetikett visar meningsfull undertyp', () => {
   assert.deepEqual(splitList('KARTA-2025, BIO-SIMON\nKARTA-2025'), ['KARTA-2025', 'BIO-SIMON']);
 });
 
+await test('borttagning omfattar masterobjektets följdposter men aldrig kartans källrad', () => {
+  const refs = masterDeletionRefs({
+    type: 'place', id: 'korpholmen',
+    names: [
+      { id: 'name-1', target_type: 'place', target_id: 'korpholmen' },
+      { id: 'name-other', target_type: 'place', target_id: 'sviholmen' },
+    ],
+    relations: [
+      { id: 'relation-parent', child_type: 'place', child_id: 'sahlskar', parent_place_id: 'korpholmen' },
+      { id: 'relation-child', child_type: 'place', child_id: 'korpholmen', parent_place_id: 'annat' },
+      { id: 'relation-other', child_type: 'place', child_id: 'sviholmen', parent_place_id: 'annat' },
+    ],
+    propertyLinks: [
+      { id: 'property-1', target_type: 'place', target_id: 'korpholmen' },
+      { id: 'property-other', target_type: 'place', target_id: 'sviholmen' },
+    ],
+    mapEntryLinks: [
+      { id: 'entry-link-1', map_entry_id: 'K1', target_type: 'place', target_id: 'korpholmen' },
+      { id: 'entry-link-other', map_entry_id: 'K2', target_type: 'place', target_id: 'sviholmen' },
+    ],
+  });
+  assert.deepEqual(refs, [
+    { entityType: 'place', entityId: 'korpholmen' },
+    { entityType: 'name-record', entityId: 'name-1' },
+    { entityType: 'place-relation', entityId: 'relation-parent' },
+    { entityType: 'place-relation', entityId: 'relation-child' },
+    { entityType: 'object-property-link', entityId: 'property-1' },
+    { entityType: 'map-entry-link', entityId: 'entry-link-1' },
+  ]);
+  assert.ok(!refs.some(ref => ref.entityType === 'map-entry'));
+});
+
 await test('appen skiljer källgranskning från platsmaster och har fyra arbetsvyer', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
   const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
@@ -133,6 +165,8 @@ await test('appen skiljer källgranskning från platsmaster och har fyra arbetsv
   assert.ok(app.includes("opsRoot: '/kartdata/ops'"));
   assert.ok(app.includes('PLACE_NAMES_META'));
   assert.ok(app.includes('Källspårbara namnposter'));
+  assert.ok(app.includes('data-action="delete-master"'));
+  assert.ok(app.includes('Kartans ursprungliga källrader ligger alltid kvar oförändrade'));
   assert.ok(html.includes('data-view="atlas"'));
   assert.ok(html.includes('data-view="structure"'));
   assert.ok(html.includes('data-view="queue"'));
