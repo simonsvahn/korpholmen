@@ -3,7 +3,7 @@ import { basename, resolve } from 'node:path';
 import { canonicalStringify } from '../../../packages/core/domain/canonical.js';
 import { createClock, parseHLC } from '../../../packages/core/domain/hlc.js';
 import { materialize } from '../../../packages/core/domain/materializer.js';
-import { createRestoreOperation, createSetOperation } from '../../../packages/core/domain/operations.js';
+import { createDeleteOperation, createRestoreOperation, createSetOperation } from '../../../packages/core/domain/operations.js';
 import { batchPath, createBatch, validateBatch } from '../../../packages/core/sync/batch.js';
 
 const [opsArgument, outputArgument, planArgument] = process.argv.slice(2);
@@ -54,9 +54,11 @@ for (const change of plan.changes) {
   seenEntities.add(key);
   const existing = before.getEntity(entityType, entityId);
   const deleted = before.getEntity(entityType, entityId, { includeDeleted: true });
+  if (change.create === true && change.delete === true) throw new Error(`Entiteten kan inte både skapas och raderas: ${entityType}:${entityId}`);
   if (change.create === true && existing) throw new Error(`Entiteten finns redan: ${entityType}:${entityId}`);
   if (change.create !== true && !existing) throw new Error(`Entiteten saknas: ${entityType}:${entityId}`);
   if (change.create === true && deleted?.deleted) throw new Error(`Entiteten är tombstonad och får inte återanvändas: ${entityType}:${entityId}`);
+  if (change.delete === true && (change.set || change.array_updates)) throw new Error(`En radering får inte samtidigt ändra fält: ${entityType}:${entityId}`);
   const fields = structuredClone(existing?.fields || {});
   for (const [field, expected] of Object.entries(change.expect || {})) {
     if (!same(fields[field], expected)) {
@@ -71,7 +73,7 @@ for (const change of plan.changes) {
     for (const value of update.add || []) if (!values.some(existingValue => same(existingValue, value))) values.push(value);
     fields[field] = update.sort === false ? values : values.sort((left, right) => String(left).localeCompare(String(right), 'sv'));
   }
-  prepared.push({ entityType, entityId, create: change.create === true, previous: existing?.fields || {}, fields });
+  prepared.push({ entityType, entityId, create: change.create === true, delete: change.delete === true, previous: existing?.fields || {}, fields });
 }
 
 const operations = [];
@@ -82,11 +84,19 @@ const addRestore = ({ entityType, entityId }) => {
   sequence += 1;
   operations.push(createRestoreOperation({ deviceId: plan.migration_id, seq: sequence, entityType, entityId, hlc: clock.tick() }));
 };
+const addDelete = ({ entityType, entityId }) => {
+  sequence += 1;
+  operations.push(createDeleteOperation({ deviceId: plan.migration_id, seq: sequence, entityType, entityId, hlc: clock.tick() }));
+};
 const addSet = ({ entityType, entityId, field, value }) => {
   sequence += 1;
   operations.push(createSetOperation({ deviceId: plan.migration_id, seq: sequence, entityType, entityId, field, value, hlc: clock.tick() }));
 };
 for (const entry of prepared) {
+  if (entry.delete) {
+    addDelete(entry);
+    continue;
+  }
   if (entry.create) addRestore(entry);
   for (const [field, value] of Object.entries(entry.fields)) {
     if (!entry.create && same(entry.previous[field], value)) continue;
@@ -103,6 +113,11 @@ for (const check of plan.verify || []) {
   for (const [field, expected] of Object.entries(check.fields || {})) {
     if (!same(entity.fields[field], expected)) throw new Error(`Verifieringen misslyckades för ${check.entity_type}:${check.entity_id}.${field}.`);
   }
+}
+for (const check of plan.verify_deleted || []) {
+  const entity = after.getEntity(check.entity_type, check.entity_id);
+  const tombstone = after.getEntity(check.entity_type, check.entity_id, { includeDeleted: true });
+  if (entity || !tombstone?.deleted) throw new Error(`Raderingsverifieringen misslyckades för ${check.entity_type}:${check.entity_id}.`);
 }
 
 await mkdir(outputDirectory, { recursive: true });

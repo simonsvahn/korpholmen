@@ -24,6 +24,7 @@ const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
 const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-01');
 const CORRECTIONS=resolve(ROOT,'privat/korrigeringar');
+const PETER_CORRECTION=resolve(CORRECTIONS,'2026-08-03-peter-identitetsdelning.json');
 const readJson=async path=>JSON.parse(await readFile(path,'utf8'));
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
@@ -32,6 +33,12 @@ async function test(name,action){try{await action();passed+=1;console.log(`✓ $
 const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
 const imageManifest=await readJson(resolve(PRIVATE,'bildmanifest.json'));
 const decisions=await readJson(resolve(ROOT,'privat/kallkopior/byggkit/godkanda-kopplingar-2026-08-01.json'));
+const firstPeterBuild=spawnSync(process.execPath,['verktyg/bygg-peter-identitetsdelning.mjs'],{cwd:ROOT,encoding:'utf8'});
+assert.equal(firstPeterBuild.status,0,firstPeterBuild.stderr||firstPeterBuild.stdout);
+const firstPeterBytes=await readFile(PETER_CORRECTION);
+const secondPeterBuild=spawnSync(process.execPath,['verktyg/bygg-peter-identitetsdelning.mjs'],{cwd:ROOT,encoding:'utf8'});
+assert.equal(secondPeterBuild.status,0,secondPeterBuild.stderr||secondPeterBuild.stdout);
+const secondPeterBytes=await readFile(PETER_CORRECTION);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readJson(resolve(CORRECTIONS,file))));
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
@@ -41,11 +48,16 @@ const matrikelPrivate=resolve(ROOT,'../matrikel/privat');
 const matrikelMigration=resolve(matrikelPrivate,'migrering-2026-08-01');
 const matrikelDocuments=await Promise.all(['initial-ops.json','ui-metadata-ops.json','approved-excel-ops.json'].map(file=>readJson(resolve(matrikelMigration,file))));
 const familyBatch=await readJson(resolve(matrikelPrivate,'familjemodell-2026-08-02-batch.json'));
-const matrikelState=materialize([...matrikelDocuments.flatMap(item=>item.operations),...familyBatch.ops]);
+const matrikelPeterCorrectionDirectory=resolve(matrikelPrivate,'korrigeringar/utdata-peter-2026-08-03');
+const matrikelPeterCorrectionFiles=(await readdir(matrikelPeterCorrectionDirectory)).filter(file=>file.endsWith('.json')).sort();
+const matrikelPeterCorrectionDocuments=await Promise.all(matrikelPeterCorrectionFiles.map(file=>readJson(resolve(matrikelPeterCorrectionDirectory,file))));
+const matrikelPeterCorrectionOperations=matrikelPeterCorrectionDocuments.flatMap(item=>item.ops||item.operations||[]);
+const matrikelState=materialize([...matrikelDocuments.flatMap(item=>item.operations),...familyBatch.ops,...matrikelPeterCorrectionOperations]);
 const entityRows=type=>matrikelState.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
 const familyContext=buildFamilyContext({people:entityRows('person'),relations:entityRows('relation'),familyUnits:entityRows('family-unit'),kinGroups:entityRows(KIN_GROUP_TYPE)});
 
 await test('startmastern och rättelserna innehåller 169 båtar och giltiga operationer',()=>{
+  assert.equal(sha256(firstPeterBytes),sha256(secondPeterBytes));
   document.operations.forEach(validateOperation);
   correctionOperations.forEach(validateOperation);
   assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
@@ -54,6 +66,14 @@ await test('startmastern och rättelserna innehåller 169 båtar och giltiga ope
   assert.ok(state.listEntities('family').length>4);
   assert.equal(state.listEntities('boat-family-link').length,9);
   for(const family of decisions.families)assert.ok(state.listEntities('family').some(entity=>entity.entity_id===family.id),family.id);
+});
+
+await test('Junior Peter hålls isär från Peter-Pedal i båtägandet',()=>{
+  assert.equal(state.getEntity('boat-person-link','lassemaja--peterholm'),null);
+  assert.equal(state.getEntity('boat-person-link','tillfälligheten--peterholm'),null);
+  assert.equal(state.getEntity('boat-person-link','lassemaja--peterneretnieks').fields.person_display_name,'Peter Neretnieks');
+  assert.equal(state.getEntity('boat-person-link','tillfälligheten--peterneretnieks').fields.person_id,'peterneretnieks');
+  assert.equal(state.getEntity('boat-person-link','bossanova--peterholm').fields.person_id,'peterholm');
 });
 
 await test('Filifjonkan I och II är två båtar utan att ettans historik går förlorad',()=>{
@@ -73,17 +93,19 @@ await test('Filifjonkan I och II är två båtar utan att ettans historik går f
 });
 
 await test('alla säkra båt-person-länkar pekar på en person i Matrikeln',async()=>{
-  const path=resolve(ROOT,'../matrikel/privat/migrering-2026-08-01');
-  const docs=await Promise.all(['initial-ops.json','ui-metadata-ops.json','approved-excel-ops.json'].map(file=>readJson(resolve(path,file))));
-  const matrikel=materialize(docs.flatMap(item=>item.operations));
-  const people=new Set(matrikel.listEntities('person').map(person=>person.entity_id));
+  const people=new Set(matrikelState.listEntities('person').map(person=>person.entity_id));
   for(const link of state.listEntities('boat-person-link'))assert.ok(people.has(link.fields.person_id),link.fields.person_id);
   for(const family of state.listEntities('family'))for(const personId of family.fields.explicit_person_ids||[])assert.ok(people.has(personId),personId);
 });
 
 await test('godkända och avvisade kopplingar hålls isär',()=>{
   const links=new Set(state.listEntities('boat-person-link').map(link=>`${link.fields.boat_id}--${link.fields.person_id}`));
-  for(const link of decisions.approved_person_links)assert.ok(links.has(`${link.boat_id}--${link.person_id}`),`Godkänd länk saknas: ${link.boat_id} → ${link.person_id}`);
+  const supersededApprovedLinks=new Set(correctionDocuments.flatMap(document=>(document.supersedes||[]).map(item=>item.entity_id)));
+  for(const link of decisions.approved_person_links){
+    const key=`${link.boat_id}--${link.person_id}`;
+    if(supersededApprovedLinks.has(key))assert.ok(!links.has(key),`Återkallad länk är fortfarande aktiv: ${link.boat_id} → ${link.person_id}`);
+    else assert.ok(links.has(key),`Godkänd länk saknas: ${link.boat_id} → ${link.person_id}`);
+  }
   for(const link of decisions.rejected_person_suggestions)assert.ok(!links.has(`${link.boat_id}--${link.person_id}`),`Avvisad länk återkom: ${link.boat_id} → ${link.person_id}`);
   assert.ok(links.has('gerry--lisaböving'));
   assert.ok(!links.has('gerry--lisalifilipåkerman'));

@@ -128,6 +128,11 @@ flowchart LR
   prövats i Matrikel.
 - Historiska klubbnamn behandlas likadant: ordagrann form i förekomsten,
   avsiktlig och kanonisk klubbnamnshistorik i Matrikel efter granskning.
+- Ett tidigare mänskligt godkännande kan återkallas additivt. Källraden ligger
+  kvar, den felaktiga identitetslänken ersätts av en senare operation och ett
+  felaktigt `name-change-candidate` tombstonas. Peter-rättelsen 2026-08-03 är
+  kontrollfallet: Peter Neretnieks och Peter Holm hålls isär, medan Anna
+  Neretnieks → Anna Holm registreras som det verkliga namnbytet.
 
 ## Båtar och ägande
 

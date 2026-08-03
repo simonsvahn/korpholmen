@@ -27,6 +27,12 @@ Spårbara rättelser efter grundimporten ligger som privata operationsdokument i
 varje korrigeringsenhet som en ny oföränderlig Dropbox-batch; tidigare batcher
 skrivs aldrig över.
 
+En korrigering av personidentitet får bara byta länken, aldrig båtens råa
+ägartext. Rättelsen 2026-08-03 tombstonar därför de tidigare länkarna
+Lasse-Maja/Tillfälligheten → Peter Holm och skapar motsvarande länkar till
+Peter Neretnieks, eftersom källfältet uttryckligen anger »Junior Peter = Peter
+Neretnieks«. Den oberoende BossaNova → Peter Holm-länken lämnas oförändrad.
+
 På localhost kan startkopian aktiveras och därefter laddas upp till Dropbox.
 Entydiga personnamn och klubbnamn länkas automatiskt till Matrikelns stabila
 person-ID. Därutöver bygger startmastern reproducerbart på Simons uttryckligen

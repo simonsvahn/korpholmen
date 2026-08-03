@@ -60,6 +60,11 @@ const archive = JSON.parse(archiveRaw);
 const operationsDocument = JSON.parse(opsRaw);
 const metadataDocument = JSON.parse(await readFile(resolve(PRIVATE, 'ui-metadata-ops.json'), 'utf8'));
 const approvedDocument = JSON.parse(await readFile(resolve(PRIVATE, 'approved-excel-ops.json'), 'utf8'));
+const familyBatch = JSON.parse(await readFile(resolve(ROOT, 'privat/familjemodell-2026-08-02-batch.json'), 'utf8'));
+const peterCorrectionDirectory = resolve(ROOT, 'privat/korrigeringar/utdata-peter-2026-08-03');
+const peterCorrectionFiles = (await readdir(peterCorrectionDirectory)).filter(file => file.endsWith('.json')).sort();
+const peterCorrectionDocuments = await Promise.all(peterCorrectionFiles.map(file => readFile(resolve(peterCorrectionDirectory, file), 'utf8').then(JSON.parse)));
+const peterCorrectionOperations = peterCorrectionDocuments.flatMap(document => document.ops || document.operations || []);
 
 await test('startmastern är kryptografiskt låst', async () => {
   assert.equal(typeof manifest.source.sha256, 'string');
@@ -140,6 +145,34 @@ await test('1 114 godkända Exceloperationer ger livsstatus och fastighetskoppli
     assert.ok(propertyIds.has(link.fields.property_id), `Okänd fastighet i fastighetskoppling: ${link.entity_id}`);
     assert.equal(link.fields.confirmed, true);
   }
+});
+
+await test('Peter-identiteterna och Annas namnbyte är rättade additivt', () => {
+  const state = materialize([
+    ...operationsDocument.operations,
+    ...metadataDocument.operations,
+    ...approvedDocument.operations,
+    ...familyBatch.ops,
+    ...peterCorrectionOperations,
+  ]);
+  assert.equal(state.listEntities('person').length, 215);
+  assert.equal(state.listEntities('relation').length, 235);
+  const peterNeretnieks = state.getEntity('person', 'peterneretnieks');
+  const peterHolm = state.getEntity('person', 'peterholm');
+  const annaHolm = state.getEntity('person', 'annaholm');
+  assert.equal(peterNeretnieks.fields.birth, 1965);
+  assert.equal(peterNeretnieks.fields.club_name, 'Broder Peter-K');
+  assert.equal(peterHolm.fields.birth, 1971);
+  assert.equal(peterHolm.fields.family, 'Holm');
+  assert.equal(peterHolm.fields.ui_is_inlaw, true);
+  assert.equal(annaHolm.fields.birth_name, 'Anna Neretnieks');
+  assert.equal(annaHolm.fields.ui_is_inlaw, false);
+  assert.ok(annaHolm.fields.aliases.includes('Anna Neretnieks'));
+  assert.equal(state.getEntity('relation', 'relation:foralder-barn:ivarsneretnieks:peterholm'), null);
+  assert.equal(state.getEntity('relation', 'relation:foralder-barn:margaretaneretnieks:peterholm'), null);
+  assert.equal(state.getEntity('relation', 'relation:foralder-barn:ivarsneretnieks:peterneretnieks').fields.user_confirmed, true);
+  assert.equal(state.getEntity('relation', 'relation:foralder-barn:margaretaneretnieks:annaholm').fields.user_confirmed, true);
+  assert.equal(state.getEntity('relation', 'relation:partner:annaholm:peterholm').fields.form, 'gift');
 });
 
 await test('livs- och fastighetsfilter samt härledd ö fungerar tillsammans', () => {

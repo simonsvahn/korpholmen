@@ -101,6 +101,27 @@ Klubbhistorik skiljer dessutom källtext från källayout. Ett särskilt
 med flera namngivna personer delas i personförekomster, medan en ren
 familjeetikett bevaras som grupptext.
 
+### När ett tidigare godkännande visar sig vara fel
+
+Ett mänskligt godkännande är ett granskningsbeslut, inte en ofelbar del av
+källan. Om senare belägg visar att två personer har slagits ihop felaktigt ska
+systemet därför:
+
+1. behålla de ordagranna källförekomsterna och det äldre beslutet i
+   operationshistoriken;
+2. återkalla den felaktiga länken med en senare operation eller tombstone;
+3. skapa saknad stabil identitet i Matrikel och länka om samtliga
+   förekomster i Klubbhistorik och andra refererande appar;
+4. rätta verkliga namnbyten separat från identitetsdelningen;
+5. testa samtidiga källrader som negativ kontroll, så att de två identiteterna
+   inte kan slås ihop igen av en framtida import.
+
+Rättelsen 2026-08-03 är referensfallet: **Peter Neretnieks** och **Peter
+Holm** står samtidigt i matriklarna 2020–2025 och ska därför ha skilda
+person-ID:n. Det verkliga namnbytet är i stället **Anna Neretnieks → Anna
+Holm**. Båtreferenser som uttryckligen skriver »Junior Peter = Peter
+Neretnieks« pekas om, medan BossaNova-länken till Peter Holm lämnas orörd.
+
 ## Tid är en förstaklassdimension
 
 Apparna skiljer mellan minst två tider:

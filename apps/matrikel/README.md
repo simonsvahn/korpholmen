@@ -32,7 +32,16 @@ batcher. Den 2026-08-02 omfattar den 214 personer, 233 personrelationer, 49
 FAMILJ och 25 SLÄKT. Korrigeringar byggs med
 `verktyg/skapa-korrigeringsbatch.mjs` mot en privat, förhandsgranskad plan.
 Verktyget kontrollerar förväntat startläge och slutläge innan en ny batch får
-skapas; äldre batcher ändras aldrig.
+skapas; äldre batcher ändras aldrig. Planformatet kan även göra en uttrycklig
+tombstone-radering med `"delete": true` och verifiera resultatet med
+`verify_deleted`.
+
+Identitetsrättelsen 2026-08-03 finns som privat plan och genererad batch under
+`privat/korrigeringar/`. Den skapar `peterneretnieks`, tar bort de två
+felaktiga föräldrabanden till `peterholm`, registrerar Anna Neretnieks som
+Anna Holms födelsenamn och lämnar det äldre felläget kvar som återkallad
+operationshistorik. Efter att batchen distribuerats är omfattningen 215
+personer och 235 personrelationer.
 
 De separata äldre Chrome- och Safari-exporterna slogs inte ihop. Deras
 kontrollsummor och den uttryckliga behandlingen `arkiverad-men-inte-sammanslagen`

@@ -101,6 +101,13 @@ En avgjord källdubblett hanteras med en append-only tombstone på den extra
 `occurrence_ids` och en `normalization_note` som pekar ut den bevarade
 normaliserade förekomsten.
 
+Samma mekanism gäller ett felaktigt identitetsbeslut. Beslutsoperationen
+raderas inte ur historiken: en senare korrigering länkar om alla berörda
+`person-occurrence`, tombstonar felaktiga namnbyteskandidater och skapar en ny
+kandidat för det namnbyte som källserien faktiskt stödjer. Ett test över år
+där båda namnen står på varsin rad används som spärr mot framtida
+återsammanslagning.
+
 ## Matchningsstatus
 
 - `kopplad` — entydig maskinell träff;

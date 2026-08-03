@@ -22,6 +22,7 @@ const MATRIKEL_2010_REPORT=resolve(MIGRATION,'kontrollrapport-matrikel-2010.json
 const TED_CORRECTION=resolve(CORRECTIONS,'2026-08-03-ted-thunborg-dublett.json');
 const VARIANT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-en-sorteringsvariant-per-matrikel.json');
 const ANNUAL_CORRECTION=resolve(CORRECTIONS,'2026-08-03-kalltrogen-layout-v3.json');
+const PETER_CORRECTION=resolve(CORRECTIONS,'2026-08-03-peter-identitetsdelning.json');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -33,6 +34,7 @@ async function test(name,action){
 function buildMigration(){
   const commands=[
     ['verktyg/bygg-en-matrikel-per-ar.mjs'],
+    ['verktyg/bygg-peter-identitetsdelning.mjs'],
   ];
   for(const command of commands){
     const result=spawnSync(process.execPath,command,{cwd:ROOT,encoding:'utf8'});
@@ -52,6 +54,7 @@ const first2010ReportBytes=await readFile(MATRIKEL_2010_REPORT);
 const firstTedBytes=await readFile(TED_CORRECTION);
 const firstVariantBytes=await readFile(VARIANT_CORRECTION);
 const firstAnnualBytes=await readFile(ANNUAL_CORRECTION);
+const firstPeterBytes=await readFile(PETER_CORRECTION);
 buildMigration();
 const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
@@ -64,6 +67,7 @@ const second2010ReportBytes=await readFile(MATRIKEL_2010_REPORT);
 const secondTedBytes=await readFile(TED_CORRECTION);
 const secondVariantBytes=await readFile(VARIANT_CORRECTION);
 const secondAnnualBytes=await readFile(ANNUAL_CORRECTION);
+const secondPeterBytes=await readFile(PETER_CORRECTION);
 const document=JSON.parse(secondBytes);
 const report=JSON.parse(secondReportBytes);
 const supplementDocument=JSON.parse(secondSupplementBytes);
@@ -75,6 +79,7 @@ const matrikel2010Report=JSON.parse(second2010ReportBytes);
 const tedDocument=JSON.parse(secondTedBytes);
 const variantDocument=JSON.parse(secondVariantBytes);
 const annualDocument=JSON.parse(secondAnnualBytes);
+const peterDocument=JSON.parse(secondPeterBytes);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
@@ -103,6 +108,7 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(sha256(firstTedBytes),sha256(secondTedBytes));
   assert.equal(sha256(firstVariantBytes),sha256(secondVariantBytes));
   assert.equal(sha256(firstAnnualBytes),sha256(secondAnnualBytes));
+  assert.equal(sha256(firstPeterBytes),sha256(secondPeterBytes));
   assert.equal(document.operations_sha256,sha256(Buffer.from(JSON.stringify(document.operations))));
   assert.equal(supplementDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(supplementDocument.operations))));
   assert.equal(syncDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(syncDocument.operations))));
@@ -110,6 +116,7 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(tedDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(tedDocument.operations))));
   assert.equal(variantDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(variantDocument.operations))));
   assert.equal(annualDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(annualDocument.operations))));
+  assert.equal(peterDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(peterDocument.operations))));
 });
 
 await test('alla operationer är giltiga och unika',()=>{
@@ -245,7 +252,7 @@ await test('den tryckta radlayouten är explicit och 1998 återges utan indexpar
 await test('person- och båtkopplingar pekar bara på respektive master',()=>{
   const personIds=new Set(personRefs.map(ref=>ref.external_id));
   const boatIds=new Set(boatRefs.map(ref=>ref.external_id));
-  assert.equal(personIds.size,214);
+  assert.equal(personIds.size,215);
   assert.equal(boatIds.size,169);
   for(const item of people.filter(row=>row.person_id&&row.confirmed))assert.ok(personIds.has(item.person_id),item.person_id);
   for(const item of boats.filter(row=>row.boat_id&&row.confirmed))assert.ok(boatIds.has(item.boat_id),item.boat_id);
@@ -253,7 +260,7 @@ await test('person- och båtkopplingar pekar bara på respektive master',()=>{
 
 await test('osäkra identiteter ligger öppet i granskningskön',()=>{
   const unresolved=people.filter(item=>!item.person_id||!item.confirmed);
-  assert.equal(unresolved.length,197);
+  assert.equal(unresolved.length,191);
   const originalUnresolved=unresolved.filter(item=>['matrikel-1980','matrikel-1986'].includes(item.release_id)&&!item.id.includes(':canonical:'));
   assert.deepEqual(originalUnresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
   assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
@@ -362,7 +369,17 @@ await test('flerspersonrader blir personer men gruppetiketter blir inte personer
 
 await test('källdubbletter bevaras medan Ted Thunborg bara räknas en gång',()=>{
   assert.equal(report.duplicate_person_groups.length,2);
-  assert.ok(report.duplicate_person_groups.some(group=>group.raw_names.includes('Peter Neretnieks')&&group.raw_names.includes('Peter Holm')));
+  const activePeterNeretnieks=people.filter(item=>item.retained!==false&&item.person_name_raw==='Peter Neretnieks');
+  const activePeterHolm=people.filter(item=>item.retained!==false&&item.person_name_raw==='Peter Holm');
+  assert.equal(activePeterNeretnieks.length,14);
+  assert.equal(activePeterHolm.length,6);
+  assert.ok(activePeterNeretnieks.every(item=>item.person_id==='peterneretnieks'));
+  assert.ok(activePeterHolm.every(item=>item.person_id==='peterholm'));
+  for(const year of [2020,2021,2022,2023,2024,2025]){
+    const pair=people.filter(item=>item.retained!==false&&item.release_id===`matrikel-${year}`&&['Peter Neretnieks','Peter Holm'].includes(item.person_name_raw));
+    assert.equal(pair.length,2);
+    assert.equal(new Set(pair.map(item=>item.person_id)).size,2);
+  }
   assert.ok(report.duplicate_person_groups.some(group=>group.raw_names.filter(name=>name==='Ted Thunborg').length===2));
   assert.equal(people.some(item=>item.id==='person-occurrence:matrikel-2025:145'),false);
   assert.equal(people.filter(item=>item.release_id==='matrikel-2025'&&item.person_id==='tedthunborg').length,1);
@@ -375,8 +392,10 @@ await test('källdubbletter bevaras medan Ted Thunborg bara räknas en gång',()
 await test('bara belagda verkliga namnbyten registreras som kandidater',()=>{
   const changes=rows('name-change-candidate');
   assert.equal(changes.length,3);
-  assert.deepEqual(changes.map(item=>`${item.from_name} → ${item.to_name}`).sort(),['Christina Une → Christina Lindblom','Lotta Bethge → Lotta Svahn','Peter Neretnieks → Peter Holm']);
+  assert.deepEqual(changes.map(item=>`${item.from_name} → ${item.to_name}`).sort(),['Anna Neretnieks → Anna Holm','Christina Une → Christina Lindblom','Lotta Bethge → Lotta Svahn']);
   assert.ok(changes.find(item=>item.person_id==='christinakisselindblom').basis.includes('källform Christina Lindbom'));
+  assert.ok(people.filter(item=>item.retained!==false&&item.person_name_raw==='Anna Neretnieks').every(item=>item.person_id==='annaholm'));
+  assert.equal(rows('person-ref').find(item=>item.external_id==='peterneretnieks').club_name,'Broder Peter-K');
   assert.ok(changes.every(item=>item.writes_to_person_master===false&&item.status==='belagd kandidat'));
 });
 
