@@ -11,7 +11,7 @@ const BOAT_KEYS=['id','order','page','category','raw_text','source_annotation','
 const COMPONENT_KEYS=['order','raw_text','prefix','boat_name_raw','registry_year_raw','registry_year','registry_years'];
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
-const rowKey=row=>`${normalize(row.person_name_raw)}|${row.birth_year||row.birth_date_raw||''}`;
+const rowKey=row=>`${normalize(row.person_name_raw)}|${normalize(row.club_name_core_raw||row.club_name_raw)}|${row.birth_year||row.birth_date_raw||row.induction_year_raw||''}`;
 const difference=(left,right)=>[...left].filter(value=>!right.has(value));
 
 const files=(await readdir(SOURCE_DIR)).filter(file=>file.endsWith('.json')).sort((a,b)=>a.localeCompare(b,'sv'));

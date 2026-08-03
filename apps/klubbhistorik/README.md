@@ -9,12 +9,15 @@ bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
-Mastern omfattar 13 årsvisa matriklar från juli 1980 till augusti 2025. I de
+Mastern omfattar 14 årsvisa matriklar från juli 1980 till augusti 2025,
+inklusive den tvåsidiga medlemsmatrikeln 2010. I de
 historiska matriklarna bevaras medlems- och fartygskolumnen var för sig,
 inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
 fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källan;
 appen påstår därför inte att en båt på en viss rad ägdes av personen på
 motsvarande rad.
+2010 års källa saknar fartygskolumn; det bevaras som en källegenskap och
+tolkas inte som att klubben saknade båtar.
 
 Vyn **Medlemsmatris** visar en rad per säkert identifierad person, belagt
 invalsår, personnamn, klubbnamn och födelseår samt ett färgkodat kryss per
@@ -51,11 +54,15 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   för tilläggsutgåvorna;
 - `privat/migrering-2026-08-02/kontrollrapport-synkade-matriklar.json` —
   radräkning och återanvändning för hela den gemensamma importen;
+- `privat/migrering-2026-08-02/kontrollrapport-matrikel-2010.json` —
+  radräkning, identitetsförslag och öppna kontrollpunkter för 2010;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
   1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad,
   beslutet om en sorteringsvariant och den senare preciseringen till exakt en
-  aktiv matrikel per kalenderår.
+  aktiv matrikel per kalenderår. 2010 ligger i en ny append-only-batch, följd
+  av en ny årsvalsbatch; de tidigare Dropbox-distribuerade batcherna skrivs
+  inte över.
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.

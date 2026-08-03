@@ -13,4 +13,6 @@ export const LOCAL_BOOTSTRAP_URLS = [
   './privat/korrigeringar/2026-08-03-ted-thunborg-dublett.json',
   './privat/korrigeringar/2026-08-03-en-sorteringsvariant-per-matrikel.json',
   './privat/korrigeringar/2026-08-03-en-matrikel-per-ar.json',
+  './privat/korrigeringar/2026-08-03-matrikel-2010.json',
+  './privat/korrigeringar/2026-08-03-en-matrikel-per-ar-v2.json',
 ];

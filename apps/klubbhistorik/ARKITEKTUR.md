@@ -192,9 +192,10 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 | Område | Status |
 |---|---|
-| 13 årsvisa matriklar: 1980–1998 samt 2020–2025 | Byggt |
+| 14 årsvisa matriklar: 1980–1998, 2010 samt 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
-| 13 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
+| 14 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
+| 2010: 77 källrader på två fotograferade sidor, utan fartygskolumn | Byggt |
 | Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
 | Fullständiga sida 2-avsnitt för 1980/1986 samt matriklarna 1982/1987/1988 | Byggt |
 | Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |

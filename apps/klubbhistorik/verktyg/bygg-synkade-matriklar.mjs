@@ -11,11 +11,15 @@ const PEOPLE_PATH=resolve(PRIVATE,'kallkopior/matrikel-initial-archive.json');
 const BOATS_PATH=resolve(PRIVATE,'kallkopior/batregister-initial-ops.json');
 const BASE_PATH=resolve(PRIVATE,'migrering-2026-08-02/initial-ops.json');
 const CORRECTIONS=resolve(PRIVATE,'korrigeringar');
-const OUT_FILE='2026-08-03-synkade-matriklar.json';
+const args=process.argv.slice(2);
+const valueAfter=flag=>{const index=args.indexOf(flag);return index>=0?args[index+1]:null};
+const ONLY_YEAR=valueAfter('--only-year')?Number(valueAfter('--only-year')):null;
+if(ONLY_YEAR!==null&&(!Number.isInteger(ONLY_YEAR)||ONLY_YEAR<1900||ONLY_YEAR>2100))throw new Error('Ogiltigt år för --only-year.');
+const OUT_FILE=valueAfter('--out-file')||'2026-08-03-synkade-matriklar.json';
 const OUT_PATH=resolve(CORRECTIONS,OUT_FILE);
-const REPORT_PATH=resolve(PRIVATE,'migrering-2026-08-02/kontrollrapport-synkade-matriklar.json');
-const DEVICE='ingest-klubbhistorik-synkade-matriklar-2026-08-03';
-const CLOCK_MS=Date.UTC(2026,7,3,18,0,0);
+const REPORT_PATH=resolve(PRIVATE,`migrering-2026-08-02/kontrollrapport-${ONLY_YEAR?`matrikel-${ONLY_YEAR}`:'synkade-matriklar'}.json`);
+const DEVICE=ONLY_YEAR?`ingest-klubbhistorik-matrikel-${ONLY_YEAR}-2026-08-03`:'ingest-klubbhistorik-synkade-matriklar-2026-08-03';
+const CLOCK_MS=ONLY_YEAR?Date.UTC(2026,7,3,23,0,0):Date.UTC(2026,7,3,18,0,0);
 
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
@@ -25,7 +29,7 @@ const array=value=>Array.isArray(value)?value:value?[value]:[];
 const pad=value=>String(value).padStart(3,'0');
 
 const [peopleArchive,boatDocument,baseDocument]=await Promise.all([readFile(PEOPLE_PATH,'utf8').then(JSON.parse),readFile(BOATS_PATH,'utf8').then(JSON.parse),readFile(BASE_PATH,'utf8').then(JSON.parse)]);
-const downstreamFiles=new Set([OUT_FILE,'2026-08-03-ted-thunborg-dublett.json']);
+const downstreamFiles=new Set(ONLY_YEAR?[OUT_FILE,'2026-08-03-en-matrikel-per-ar-v2.json']:[OUT_FILE,'2026-08-03-ted-thunborg-dublett.json']);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&!downstreamFiles.has(file)).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(document=>document.operations||document.ops||[]);
@@ -33,15 +37,16 @@ const historicalState=materialize([...baseDocument.operations,...correctionOpera
 const people=peopleArchive.persons.map(person=>({id:person.id,...person.fields}));
 const boatState=materialize(boatDocument.operations);
 const boats=boatState.listEntities('boat').map(entity=>({id:entity.entity_id,...entity.fields}));
-const sourceFiles=(await readdir(SOURCES)).filter(file=>file.endsWith('.json')).sort((a,b)=>a.localeCompare(b,'sv'));
+const sourceFiles=(await readdir(SOURCES)).filter(file=>file.endsWith('.json')&&(!ONLY_YEAR||file===`matrikel-${ONLY_YEAR}.json`)).sort((a,b)=>a.localeCompare(b,'sv'));
+if(ONLY_YEAR&&sourceFiles.length!==1)throw new Error(`Årsfilen matrikel-${ONLY_YEAR}.json saknas.`);
 const sourceDocuments=await Promise.all(sourceFiles.map(async file=>{const bytes=await readFile(resolve(SOURCES,file));return {file,bytes,json:JSON.parse(bytes)}}));
 const primaryDocuments=sourceDocuments.filter(source=>source.json.document.is_primary_for_release);
 
-const personNameIndex=new Map();const firstNameIndex=new Map();const clubNameIndex=new Map();const clubCoreIndex=new Map();
+const personNameIndex=new Map();const personCompactIndex=new Map();const firstNameIndex=new Map();const clubNameIndex=new Map();const clubCoreIndex=new Map();
 function indexPush(index,key,value){if(!key)return;if(!index.has(key))index.set(key,[]);index.get(key).push(value)}
 for(const person of people){
   const names=unique([person.display_name,person.full_name,person.birth_name,...array(person.aliases)]);
-  for(const name of names){indexPush(personNameIndex,normalize(name),person);indexPush(firstNameIndex,normalize(name).split(' ')[0],person)}
+  for(const name of names){indexPush(personNameIndex,normalize(name),person);indexPush(personCompactIndex,compact(name),person);indexPush(firstNameIndex,normalize(name).split(' ')[0],person)}
   if(person.club_name){indexPush(clubNameIndex,normalize(person.club_name),person);indexPush(clubCoreIndex,normalize(person.club_name).replace(/^(broder|syster|s)\s+/,'').trim(),person)}
 }
 const historicalPersonIndex=new Map();
@@ -50,6 +55,8 @@ function birthCompatible(person,birthYear){return !birthYear||!person.birth||Num
 function personMatch(item){
   const exact=unique((personNameIndex.get(normalize(item.person_name_raw))||[]).filter(person=>birthCompatible(person,item.birth_year)).map(person=>person.id));
   if(exact.length===1)return {person_id:exact[0],match_status:'kopplad',match_method:'exakt personnamn',candidate_ids:exact,confirmed:true};
+  const compactExact=unique((personCompactIndex.get(compact(item.person_name_raw))||[]).filter(person=>birthCompatible(person,item.birth_year)).map(person=>person.id));
+  if(compactExact.length===1)return {person_id:compactExact[0],match_status:'kopplad',match_method:'entydigt personnamn utan hänsyn till mellanrum',candidate_ids:compactExact,confirmed:true};
   const historical=unique(historicalPersonIndex.get(normalize(item.person_name_raw))||[]);
   if(historical.length===1)return {person_id:historical[0],match_status:'godkand',match_method:'tidigare källbelagd personidentitet',candidate_ids:historical,confirmed:true};
   const club=item.club_name_raw?unique((clubNameIndex.get(normalize(item.club_name_raw))||[]).filter(person=>birthCompatible(person,item.birth_year)).map(person=>person.id)):[];
@@ -142,8 +149,9 @@ for(const source of primaryDocuments){
 
 const releaseIds=releases.slice().sort((a,b)=>a.as_of.localeCompare(b.as_of)||a.title.localeCompare(b.title,'sv')||a.id.localeCompare(b.id,'sv')).map(release=>release.id);
 const root=historicalState.getEntity('club-history-root','club-history-root:kbk')?.fields||{};
-set('club-history-root','club-history-root:kbk','release_ids',unique([...releaseIds,...array(root.release_ids).filter(id=>!releaseIds.includes(id))]));
-set('club-history-root','club-history-root:kbk','canonical_source_hashes',Object.fromEntries(sourceDocuments.map(source=>[source.json.document.id,sha256(source.bytes)])));
+const mergedReleaseIds=unique([...releaseIds,...array(root.release_ids)]).sort((a,b)=>(Number(a.match(/\d{4}/)?.[0])||9999)-(Number(b.match(/\d{4}/)?.[0])||9999)||a.localeCompare(b,'sv'));
+set('club-history-root','club-history-root:kbk','release_ids',mergedReleaseIds);
+set('club-history-root','club-history-root:kbk','canonical_source_hashes',{...(root.canonical_source_hashes||{}),...Object.fromEntries(sourceDocuments.map(source=>[source.json.document.id,sha256(source.bytes)]))});
 set('club-history-root','club-history-root:kbk','canonical_schema_version',1);
 
 const finalState=materialize([...baseDocument.operations,...correctionOperations,...operations]);
@@ -152,7 +160,7 @@ const releaseCounts=Object.fromEntries(releases.map(release=>[release.id,{person
 const unresolvedPeople=newPeople.filter(item=>!item.person_id||!item.confirmed).map(item=>({occurrence_id:item.id,release_id:item.release_id,raw_name:item.person_name_raw,status:item.match_status,candidate_ids:item.candidate_ids}));
 const unresolvedBoats=newBoats.filter(item=>!item.boat_id||!item.confirmed).map(item=>({occurrence_id:item.id,release_id:item.release_id,raw_name:item.boat_name_raw,status:item.match_status,candidate_ids:item.candidate_ids}));
 const counts={source_documents:sourceDocuments.length,releases:releases.length,source_rows:sourceRows.length,new_person_occurrences:newPeople.length,reused_person_occurrences:reusedPeople.length,new_boat_occurrences:newBoats.length,reused_boat_occurrences:reusedBoats.length,unresolved_new_people:unresolvedPeople.length,unresolved_new_boats:unresolvedBoats.length,operations:operations.length};
-const document={operations_version:1,migration_id:'klubbhistorik-synkade-matriklar-2026-08-03',device_id:DEVICE,operations_sha256:sha256(Buffer.from(JSON.stringify(operations))),counts,operations};
+const document={operations_version:1,migration_id:ONLY_YEAR?`klubbhistorik-matrikel-${ONLY_YEAR}-2026-08-03`:'klubbhistorik-synkade-matriklar-2026-08-03',device_id:DEVICE,operations_sha256:sha256(Buffer.from(JSON.stringify(operations))),counts,operations};
 const report={generated_on:'2026-08-03',contract:'Källrader och sorteringsvarianter bevaras; befintliga identitetsbeslut skrivs inte över.',release_counts:releaseCounts,counts,unresolved_people:unresolvedPeople,unresolved_boats:unresolvedBoats};
 await mkdir(CORRECTIONS,{recursive:true});
 await writeFile(OUT_PATH,`${JSON.stringify(document,null,2)}\n`);

@@ -9,10 +9,10 @@ const PRIVATE=resolve(ROOT,'privat');
 const SOURCES=resolve(PRIVATE,'kallkopior/matriklar');
 const BASE_PATH=resolve(PRIVATE,'migrering-2026-08-02/initial-ops.json');
 const CORRECTIONS=resolve(PRIVATE,'korrigeringar');
-const OUT_FILE='2026-08-03-en-matrikel-per-ar.json';
+const OUT_FILE='2026-08-03-en-matrikel-per-ar-v2.json';
 const OUT_PATH=resolve(CORRECTIONS,OUT_FILE);
-const DEVICE='correction-klubbhistorik-en-matrikel-per-ar-2026-08-03';
-const CLOCK_MS=Date.UTC(2026,7,3,22,0,0);
+const DEVICE='correction-klubbhistorik-en-matrikel-per-ar-v2-2026-08-03';
+const CLOCK_MS=Date.UTC(2026,7,3,23,30,0);
 
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
@@ -48,8 +48,9 @@ function directPerson(document,row){
   const oldDocumentId=document.document.selected_source_document_id||document.document.id;
   const oldReleaseId=document.document.selected_source_release_id||document.release.id;
   const oldRowId=`source-row:canonical:${oldDocumentId}:member:${pad(row.order)}`;
-  let matches=previousPeople.filter(item=>item.canonical_source_row_id===oldRowId||item.source_row_id===oldRowId);
-  if(matches.length!==1)matches=previousPeople.filter(item=>item.release_id===oldReleaseId&&item.membership_status===row.category&&normalize(item.raw_text)===normalize(row.raw_text));
+  let matches=previousPeople.filter(item=>item.retained!==false&&(item.canonical_source_row_id===oldRowId||item.source_row_id===oldRowId));
+  if(matches.length!==1)matches=previousPeople.filter(item=>item.retained!==false&&item.release_id===document.release.id&&item.membership_status===row.category&&normalize(item.raw_text)===normalize(row.raw_text));
+  if(matches.length!==1)matches=previousPeople.filter(item=>item.retained!==false&&item.release_id===oldReleaseId&&item.membership_status===row.category&&normalize(item.raw_text)===normalize(row.raw_text));
   if(matches.length!==1)throw new Error(`Kunde inte återanvända exakt en personförekomst för ${document.release.id}, rad ${row.order}: ${row.person_name_raw} (${matches.length}).`);
   return matches[0];
 }
@@ -58,8 +59,9 @@ function directBoat(document,row,component){
   const oldDocumentId=document.document.selected_source_document_id||document.document.id;
   const oldReleaseId=document.document.selected_source_release_id||document.release.id;
   const oldRowId=`source-row:canonical:${oldDocumentId}:boat:${pad(row.order)}`;
-  let matches=previousBoats.filter(item=>(item.canonical_source_row_id===oldRowId||item.source_row_id===oldRowId)&&item.component_order===component.order);
-  if(matches.length!==1)matches=previousBoats.filter(item=>item.release_id===oldReleaseId&&item.source_line_order===row.order&&item.component_order===component.order&&normalize(item.raw_text)===normalize(component.raw_text));
+  let matches=previousBoats.filter(item=>item.retained!==false&&(item.canonical_source_row_id===oldRowId||item.source_row_id===oldRowId)&&item.component_order===component.order);
+  if(matches.length!==1)matches=previousBoats.filter(item=>item.retained!==false&&item.release_id===document.release.id&&item.source_line_order===row.order&&item.component_order===component.order&&normalize(item.raw_text)===normalize(component.raw_text));
+  if(matches.length!==1)matches=previousBoats.filter(item=>item.retained!==false&&item.release_id===oldReleaseId&&item.source_line_order===row.order&&item.component_order===component.order&&normalize(item.raw_text)===normalize(component.raw_text));
   if(matches.length!==1)throw new Error(`Kunde inte återanvända exakt en båtförekomst för ${document.release.id}, rad ${row.order}.${component.order}: ${component.boat_name_raw} (${matches.length}).`);
   return matches[0];
 }
@@ -145,7 +147,7 @@ setFields('club-history-root','club-history-root:kbk',{
 });
 
 const counts={active_releases:activeReleaseIds.size,active_source_documents:activeDocumentIds.size,active_source_rows:activeRowIds.size,active_person_occurrences:activePersonIds.size,active_boat_occurrences:activeBoatIds.size,retired_releases:retiredReleases,retired_source_documents:retiredDocuments,retired_source_rows:retiredRows,retired_person_occurrences:retiredPeople,retired_boat_occurrences:retiredBoats,operations:operations.length};
-const output={operations_version:1,correction_id:'en-matrikel-per-kalenderar',device_id:DEVICE,reason:'Klubbhistorik ska ha exakt en validerad JSON och en aktiv matrikelutgåva per kalenderår. Tidigare exporttillfällen bevaras oförändrade i operationshistoriken men markeras inaktiva.',selection,counts,operations_sha256:sha256(Buffer.from(JSON.stringify(operations))),operations};
+const output={operations_version:1,correction_id:'en-matrikel-per-kalenderar-v2',device_id:DEVICE,reason:'Klubbhistorik ska ha exakt en validerad JSON och en aktiv matrikelutgåva per kalenderår. V2 lägger till medlemsmatrikeln 2010 utan att skriva över den tidigare, redan distribuerade korrigeringsbatchen.',selection,counts,operations_sha256:sha256(Buffer.from(JSON.stringify(operations))),operations};
 await mkdir(CORRECTIONS,{recursive:true});
 await writeFile(OUT_PATH,`${JSON.stringify(output,null,2)}\n`);
 console.log(`En matrikel per år: ${counts.active_releases} årsutgåvor, ${counts.active_person_occurrences} medlemsförekomster och ${counts.active_boat_occurrences} båtförekomster aktiva; ${counts.retired_releases} tidigare exportutgåvor inaktiverade utan att raderas.`);

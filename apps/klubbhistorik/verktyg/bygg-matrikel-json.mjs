@@ -283,6 +283,142 @@ async function build1991And1998(){
   return documents;
 }
 
+async function build2010(){
+  const documentId='source-document:matrikel-2010:foto';
+  const sourceRows=[
+    [1,'1953','Pyn','Per-Olof'],
+    [1,'1953','Inger'],
+    [1,'1957','Sten','Sten-Algot'],
+    [1,'1957','Karin'],
+    [1,'1959','Bo Pederby','Bo-Bättre','Passiv'],
+    [1,'1959','Barbro Pederby','','Passiv'],
+    [1,'1961','Gunnel Risinger'],
+    [1,'1965','Niquel','Niquel-Elvis'],
+    [1,'1965','Maggan'],
+    [1,'1977','Bosse','Bo-Alexander'],
+    [1,'1977','Karl-Rune'],
+    [1,'1977','Svante-Karl-Oskar'],
+    [1,'1977','Britt-Marie'],
+    [1,'1977','Mats','Karl-Mats'],
+    [1,'1977','Pär','Karl-Pär'],
+    [1,'1978','Johan','Johan-Anders'],
+    [1,'1979','Lotta'],
+    [1,'1979','Karin Åkerlund'],
+    [1,'1980','Nalle','Nalle-Björn'],
+    [1,'1980','Klas','Klas-Allan'],
+    [1,'1981','Agneta'],
+    [1,'1982','Birgitta Pederby','','Ordinarie Passiv medlem'],
+    [1,'1982','Henrik Pederby','Henrik-Gonzales','Ordinarie Passiv medlem'],
+    [1,'1983','Anna'],
+    [1,'1983','Anders-Sören'],
+    [1,'1983','Viveka'],
+    [1,'1984','Marianne'],
+    [1,'1984','Ella'],
+    [1,'1984','Laila'],
+    [1,'1984','Monika Ekström'],
+    [1,'1984','Björn','Björn-Tor'],
+    [1,'1985','Janne','Jan-Bison'],
+    [1,'1986','Mia'],
+    [1,'1986','Nisse','Nisse-Nisse'],
+    [1,'1986','Peter Neretnieks'],
+    [1,'1987','Göran','Göran-Teobald'],
+    [1,'1988','Kaj','Kaj-Gunder'],
+    [1,'1988','Lisa'],
+    [1,'1988','Helene'],
+    [1,'1988','Sussen'],
+    [1,'1988','Pinglan'],
+    [1,'1988','Tesse'],
+    [1,'1989','Åke Lindbom','Åke-Fredrik'],
+    [1,'1989','Karin Bergström'],
+    [1,'1990','Thomas','Thomas-Anders'],
+    [1,'1992','Jenny Ödlund-Åkerman'],
+    [1,'1994','Kjelle','Kjell-Madicken'],
+    [1,'1995','Bertil','Tyko-Bertil','Ordinarie Passiv medlem'],
+    [1,'1995','Caj','','Ordinarie Passiv medlem'],
+    [1,'1996','Benke','Bengt-Lattjo'],
+    [1,'1998','HenrikTunborg','Henrik-Henrik'],
+    [2,'1998','Carina Tunborg'],
+    [2,'1999','Charlotte Jonasson'],
+    [2,'1999','Gunilla Hedström'],
+    [2,'2003','Håkan Leczinski','Håkan-Bill','Död 2010'],
+    [2,'2005','Anders Åhlin','Mac-Anders'],
+    [2,'2005','Kerstin Dalaryd'],
+    [2,'2008','Timo','Tim-Jan'],
+    [2,'19??','Janne','Jan-Viktor'],
+    [2,'19??','Lena'],
+    [2,'19??','Jossan','Johan-Gunder'],
+    [2,'19??','Annika Löfqvist'],
+    [2,'19??','Hasse','Hans-Allan','Död 2010'],
+    [2,'19??','Kisse'],
+    [2,'19??','Mark','Mark-Gunnar'],
+    [2,'19??','Annika Une'],
+    [2,'19??','Görvel'],
+    [2,'1945?','Bibbi','','Död 1997'],
+    [2,'1945?','Carl-Henrik Norlander','','Ordinarie Passiv medlem'],
+    [2,'1945?','Per-Axel Weslien','','Ordinarie Passiv medlem'],
+    [2,'1955?','Petter','Karl-Petter'],
+    [2,'20??','Mats Nilsson'],
+    [2,'1995','Holger Thufvesson','','Korresponderande medlem'],
+    [2,'1995','Ditte Tufvesson','','Korresponderande medlem'],
+    [2,'2010','Carlo','Carl-Norskar'],
+    [2,'2010','Filip','Filip-Film'],
+    [2,'2010','Måns','Måns-Viktor'],
+  ];
+  const rawText=cells=>{const values=[...cells];while(values.at(-1)==='')values.pop();return values.join('\t')};
+  const categoryFor=note=>note.includes('Korresponderande')?'corresponding':note.includes('Passiv')?'passive':note.startsWith('Död')?'listed':'active';
+  const memberRows=sourceRows.map(([page,year,name,club='',note=''],index)=>blankMember({
+    id:`member-row:${documentId}:${pad(index+1)}`,
+    order:index+1,
+    page,
+    category:categoryFor(note),
+    rawText:rawText([year,name,club,note]),
+    inductionYearRaw:year,
+    personName:name,
+    clubCore:club,
+  }));
+  const files=await Promise.all([
+    fileInfo('IMG_7400.HEIC','medlemsmatrikel-2010-sida-1.heic',{role:'original',page:1}),
+    fileInfo('IMG_7401.HEIC','medlemsmatrikel-2010-sida-2.heic',{role:'original',page:2}),
+  ]);
+  return {
+    schema_version:1,
+    document:{
+      id:documentId,
+      label:'Medlemsmatrikel 2010 – Tabell1',
+      source_type:'fotografier av maskinskriven medlemsmatrikel',
+      is_primary_for_release:true,
+      transcription_method:'manuellt kontrollerad bildavskrift',
+      transcription_status:'kontrollerad mot samtliga fotograferade sidor',
+      original_files:files,
+    },
+    release:{
+      id:'matrikel-2010',
+      year:2010,
+      as_of:'2010',
+      as_of_precision:'year',
+      title:'Medlemsmatrikel 2010',
+      release_type:'medlemsmatrikel',
+      sort_order:'källordning',
+      source_date:null,
+      source_signature:null,
+    },
+    columns:[
+      {id:'induction_year',label_raw:''},
+      {id:'member_name',label_raw:''},
+      {id:'club_name_core',label_raw:''},
+      {id:'note',label_raw:''},
+    ],
+    sections:[{id:`section:${documentId}:tabell1`,kind:'member',category:'mixed',label_raw:'Tabell1',page:null,start_order:1,end_order:memberRows.length}],
+    member_rows:memberRows,
+    boat_rows:[],
+    document_notes:[
+      'Årtalet 2010 är handskrivet på sida 1; den tryckta tabellen saknar dateringsrad.',
+      'Tabellens fyra visuella kolumner bevaras tabulatorseparerade i raw_text. Stavningar, frågetecken och anmärkningar återges som i källan.',
+      'Källan har ingen separat fartygskolumn och ger därför inga båt- eller ägarobservationer.',
+    ],
+  };
+}
+
 async function hydrateHistorical(document){
   const originalFiles=[];
   for(const file of document.document.original_files){originalFiles.push(await fileInfo(file.original_filename,file.canonical_filename,{role:file.role||'original',page:file.page??null}))}
@@ -294,11 +430,12 @@ await mkdir(OUTPUT,{recursive:true});await mkdir(ORIGINALS,{recursive:true});
 const documents=[];
 if(HISTORICAL_INPUT){const input=JSON.parse(await readFile(resolve(HISTORICAL_INPUT),'utf8'));if(!Array.isArray(input))throw new Error('--historical måste peka på en JSON-array.');for(const document of input)documents.push(await hydrateHistorical(document))}
 else{
-  const existingFiles=(await readdir(OUTPUT)).filter(file=>/^matrikel-(?:1980|1982|1986|1987|1988)-.*\.json$/.test(file)).sort();
+  const existingFiles=(await readdir(OUTPUT)).filter(file=>/^matrikel-(?:1980|1982|1986|1987|1988)\.json$/.test(file)).sort();
   if(existingFiles.length!==5)throw new Error(`Fem befintliga historiska JSON-underlag krävs när --historical saknas; hittade ${existingFiles.length}.`);
   for(const file of existingFiles)documents.push(await hydrateHistorical(JSON.parse(await readFile(resolve(OUTPUT,file),'utf8'))));
 }
 documents.push(...await build1991And1998());
+documents.push(await build2010());
 documents.push(...await buildModernDocuments());
 
 const names=new Set();const primaryByRelease=new Map();
