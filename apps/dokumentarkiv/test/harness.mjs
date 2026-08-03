@@ -21,7 +21,8 @@ const summary=state.listEntities('archive-summary').map(entity=>({id:entity.enti
 await test('startmastern innehåller hela det aktuella arkivet och giltiga operationer',()=>{
   document.operations.forEach(validateOperation);
   assert.equal(documents.length,document.counts.documents);
-  assert.ok(documents.length>=80);
+  assert.ok(documents.length>=194);
+  assert.equal(document.counts.excluded_documents,0);
   assert.equal(entities.length,document.counts.entities);
   assert.equal(new Set(documents.map(item=>item.id)).size,documents.length);
   assert.ok(documents.every(item=>item.title&&item.document_date&&item.transcript&&item.source_path));
@@ -32,12 +33,17 @@ await test('startmastern innehåller hela det aktuella arkivet och giltiga opera
   assert.ok(documents.flatMap(item=>item.content_images).every(image=>/^\/dokumentarkiv\/bilder\/[a-f0-9]{64}\.(?:jpg|png|webp)$/.test(image.blob_path)));
   assert.ok(documents.every(item=>item.transcript_sha256&&Number.isInteger(item.word_count)));
   assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)));
+  assert.ok(documents.every(item=>![item.title,item.document_date,item.document_type,item.status].some(value=>/^(?:".*"|'.*')$/.test(value))));
   assert.equal(summary.total_documents,documents.length);
   assert.equal(summary.inbox_total_files,summary.inbox_referenced_files+summary.inbox_pending_files.length);
   assert.equal(summary.inbox_pending_files.length,document.counts.pending_inbox_files);
   assert.ok(Array.isArray(summary.story_tracks)&&summary.story_tracks.length>=6);
   assert.ok(documents.some(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte'));
   assert.ok(documents.some(item=>item.title==='Protokoll vid extra sammanträde med Korpholmens Båtklubb på Yxlan'));
+  const protocol1979=documents.find(item=>item.document_date==='1979-07-21'&&item.title==='Protokoll vid Korpholmens Båtklubbs årsmöte');
+  assert.ok(protocol1979);
+  assert.equal(protocol1979.image_count,7);
+  assert.equal(protocol1979.content_images.length,10);
   assert.equal(documents.find(item=>item.title==='Korpholmens Båtklubbs förvaltningsberättelse för 1954').id,'document:01-digitaliserade-dokument-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-1955-04-12-korpholmens-batklubbs-forvaltningsberattelse-for-1954-avskrift-md');
 });
 

@@ -173,10 +173,28 @@ async function findFiles(folder) {
   return result;
 }
 
+function parseFrontmatterValue(value) {
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value.slice(1, -1);
+    }
+  }
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
+  }
+  return value;
+}
+
 function frontmatter(text) {
   const match = text.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
-  return Object.fromEntries(match[1].split('\n').map(line => line.match(/^([^:]+):\s*(.*)$/)).filter(Boolean).map(parts => [parts[1].trim(), parts[2].trim()]));
+  return Object.fromEntries(match[1]
+    .split('\n')
+    .map(line => line.match(/^([^:]+):\s*(.*)$/))
+    .filter(Boolean)
+    .map(parts => [parts[1].trim(), parseFrontmatterValue(parts[2].trim())]));
 }
 
 function transcript(text) {
@@ -294,8 +312,9 @@ for (const sourceFile of sourceFiles) {
   entityIds.forEach(id => usedEntityIds.add(id));
   const date = meta.dokumentdatum || 'okänt';
   const year = date.match(/\d{4}/)?.[0] || null;
-  const imageRows = [...text.matchAll(/^\|\s*(\d{2})\s*\|/gm)].map(match => Number(match[1]));
-  const originalNames = [...text.matchAll(/^\|\s*`([^`]+)`\s*\|/gm)].map(match => match[1]);
+  const provenanceStart = text.indexOf('\n## Ursprungliga filer\n');
+  const provenance = provenanceStart < 0 ? '' : text.slice(provenanceStart).split(/\n### Härledda innehållsbilder/)[0];
+  const originalNames = [...provenance.matchAll(/^\|\s*`([^`]+)`\s*\|/gm)].map(match => match[1]);
   const documentType = meta.dokumenttyp || 'okänd';
   const documentCategory = category(documentType);
   documents.push({
@@ -308,7 +327,7 @@ for (const sourceFile of sourceFiles) {
       document_type: documentType,
       category: documentCategory,
       status: meta.avskriftsstatus || 'okänd',
-      image_count: imageRows.length ? Math.max(...imageRows) : originalNames.length,
+      image_count: originalNames.length,
       source_path: sourcePath,
       transcript: transcription,
       entity_ids: entityIds,
