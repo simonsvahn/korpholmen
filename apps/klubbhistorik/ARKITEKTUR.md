@@ -60,6 +60,12 @@ inte en uppgift om ägande.
 »Medlemsmatrikel juli 1986«. Flera skanningar, sorteringar eller exportformat
 kan senare höra till samma utgåva utan att bli olika historiska år.
 
+En rekonstruerad utgåva är en särskild underklass, inte ett fingerat
+källdokument. Den har `is_reconstruction: true`, tomma
+`source_document_ids`, redovisade evidenskällor, tidsintervall och
+säkerhetsgrad. Grundarmatrikeln får därför vyn **Källunderlag**, aldrig
+**Som källan skrevs**.
+
 ### 4. Förekomsten
 
 `person-occurrence` och `boat-occurrence` betyder att något står i källan.
@@ -103,8 +109,9 @@ flowchart LR
     T -. "ska inte ersättas av" .-> X
 ```
 
-Masterns `as_of` sträcker sig nu från juli 1980 till augusti 2025. Det finns
-en aktiv matrikel per kalenderår, men den valda källans månads- eller
+Masterns `as_of` sträcker sig nu från en märkt rekonstruktion omkring 1945
+till augusti 2025. Det finns en aktiv originalmatrikel per representerat
+kalenderår från 1980, men den valda källans månads- eller
 dagprecision bevaras när den är känd. En
 identitetskoppling som görs 2026 ändrar inte när källobservationen gällde. På
 motsvarande sätt är en matrikel inte bevis för exakt inträdes- eller
@@ -218,6 +225,7 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 | Område | Status |
 |---|---|
+| Grundarmatrikel cirka 1945: 10 personer, bostadsöar, fem evidenskällor | Byggt som märkt rekonstruktion |
 | 14 årsvisa matriklar: 1980–1998, 2010 samt 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
 | Schema v2: 1 606 källayoutrader och explicita medlems-/båtankare | Byggt |
@@ -258,6 +266,11 @@ läggs till som nya operationer och synkas i den egna namnrymden.
    kontrollpunkter, källhashar och operationshash i test.
 8. Låt nya namn-, roll-, ägar- eller fastighetsfynd bli förslag till rätt
    ägarapp, aldrig direkta återskrivningar.
+
+En rekonstruktion följer inte ritualen för en ny originalmatrikel. Den skapas
+som en egen append-only-korrigering med `is_reconstruction`, källista,
+metodnot, tidsintervall och säkerhet per påstående. Den får inte öka antalet
+validerade matrikel-JSON eller `source-document`.
 9. Bygg och läckagekontrollera det datafria publiceringspaketet.
 
 Den konkreta entitetslistan finns i [`DATAMODELL.md`](DATAMODELL.md), och

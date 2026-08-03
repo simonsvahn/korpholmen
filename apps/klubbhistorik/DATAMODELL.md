@@ -5,8 +5,9 @@ utbyggnader finns i [`ARKITEKTUR.md`](ARKITEKTUR.md).
 
 ## Människan, källan och tolkningen
 
-`matrikel-release` beskriver en konceptuell årsutgåva. Varje kalenderår har
-exakt ett aktivt `source-document` och exakt en validerad JSON-fil. Om arkivet
+`matrikel-release` beskriver en konceptuell årsutgåva. Varje kalenderår med
+en bevarad originalmatrikel har exakt ett aktivt `source-document` och exakt
+en validerad JSON-fil. Om arkivet
 innehåller flera PDF-sorteringar väljs varianten med ålder eller födelsedatum
 som ledande fält i första hand;
 i annat fall används den enda eller mest kompletta varianten. Alternativa
@@ -40,6 +41,27 @@ genom att två celler står på samma höjd.
 `person-ref` och `boat-ref` är privata läskopior för sökning och länkning.
 Deras `external_id` är fortsatt auktoritativt i Matrikel respektive
 Båtregister. De är inte nya identitetsmastrar.
+
+## Rekonstruerad grundarmatrikel
+
+`matrikel-grundare-1940-tal` är inte en femtonde matrikel-JSON. Det är en
+append-only, källkorsläst projektion med `is_reconstruction: true`, utan
+`source-document` eller `source-row`. På utgåvan lagras:
+
+- arbetsrubrik och metodnot;
+- intervall 1943–1945, visningsform »cirka 1945« och medelhög tidsmässig
+  säkerhet;
+- fem evidenskällor och vad var och en bidrar med;
+- uttrycklig avgränsning: Bethge-paret har belagt inval 1953 och ingår inte.
+
+Varje rekonstruerad `person-occurrence` har grundarroll, stabilt person-ID,
+normaliserad ö, källans mer precisa platsord, medlems- respektive
+platssäkerhet och en läsbar evidensnot. `induction_year` förblir `null`; den
+separata uppskattningen `induction_year_estimate: 1945` gör att matrisen kan
+visa **ca 1945** utan att förvandla intervallet till ett exakt invalsår.
+Alsvassen lagras som platsdetalj på Yxlan. Därmed kan en senare uppgift om
+Wesliens anknytning till Stugholmen samexistera utan att skriva över den
+tidsbundna grundarobservationen.
 
 ## Tider
 

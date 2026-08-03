@@ -143,11 +143,11 @@ for(const source of sources){
 }
 
 let retiredReleases=0;let retiredDocuments=0;let retiredRows=0;let retiredLayouts=0;let retiredPeople=0;let retiredBoats=0;
-for(const item of previousReleases)if(!activeReleaseIds.has(item.id)){set('matrikel-release',item.id,'retained',false);retiredReleases+=1}
+for(const item of previousReleases)if(!item.is_reconstruction&&!activeReleaseIds.has(item.id)){set('matrikel-release',item.id,'retained',false);retiredReleases+=1}
 for(const item of previousDocuments)if(!activeDocumentIds.has(item.id)){set('source-document',item.id,'retained',false);retiredDocuments+=1}
 for(const item of previousRows)if(!activeRowIds.has(item.id)){set('source-row',item.id,'retained',false);retiredRows+=1}
 for(const item of previousLayouts)if(!activeLayoutIds.has(item.id)){set('source-layout-row',item.id,'retained',false);retiredLayouts+=1}
-for(const item of previousPeople)if(!activePersonIds.has(item.id)){set('person-occurrence',item.id,'retained',false);retiredPeople+=1}
+for(const item of previousPeople)if(!item.is_reconstruction&&!activePersonIds.has(item.id)){set('person-occurrence',item.id,'retained',false);retiredPeople+=1}
 for(const item of previousBoats)if(!activeBoatIds.has(item.id)){set('boat-occurrence',item.id,'retained',false);retiredBoats+=1}
 
 const releaseIds=releases.slice().sort((a,b)=>String(a.as_of).localeCompare(String(b.as_of),'sv')).map(release=>release.id);

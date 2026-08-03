@@ -2,6 +2,16 @@
 .originalrad small{grid-column:2}
 .normaliseringsnot{color:#8a6530!important}
 .kallvarning{margin-bottom:1.1rem}
+.rekonstruktionskort{border-style:dashed;background:linear-gradient(145deg,#fffdf8,#f1ead6)}
+.rekonstruktionsmarke{margin:.55rem 0;color:#8a6530!important;font-size:.76rem;font-weight:780}
+.rekonstruktionsvarning{border-left-color:#8a6530;background:#f5ead0}
+.evidensgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.85rem;margin-bottom:1rem}
+.evidenskort{padding:1rem;border:1px solid #d9cfb6;border-radius:1rem;background:#fffaf0}
+.evidenskort h3{margin:.15rem 0 .45rem;font:500 1.15rem Georgia,serif}
+.evidenskort p:last-child{margin:.35rem 0 0;color:var(--muted);font-size:.84rem;line-height:1.5}
+.evidenschips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.45rem}
+.evidenschips span,.sakerhetsmarke{display:inline-flex;border-radius:999px;background:#e7eee9;padding:.24rem .48rem;color:#365d55;font-size:.68rem;font-weight:780}
+.rekonstruktionstabell td:last-child{min-width:310px;line-height:1.45}
 .kallsidor{display:grid;gap:1.25rem}
 .kallsida{overflow:hidden;border:1px solid var(--line);border-radius:1.1rem;background:var(--paper);box-shadow:var(--shadow)}
 .kallsidhuvud{padding:1rem 1.15rem;border-bottom:1px solid var(--line);background:#f5f1e8}
@@ -54,6 +64,7 @@
 .matriscell span{display:grid;width:1.75rem;height:1.75rem;margin:auto;place-items:center;border-radius:.5rem;font-size:1.05rem;font-weight:900}
 .matris-franvaro{background:#faf8f2!important}
 .matriscell.status-active span,.matrislegend .status-active{background:#276c72;color:white}
+.matriscell.status-founder span,.matrislegend .status-founder{border:1px dashed #8a6530;background:#f5ead0;color:#6d511c}
 .matriscell.status-junior span,.matrislegend .status-junior{background:#cfe7df;color:#17574e}
 .matriscell.status-passive span,.matrislegend .status-passive{background:#eed9a8;color:#6e5014}
 .matriscell.status-corresponding span,.matrislegend .status-corresponding{background:#e8c2b6;color:#783b2f}
