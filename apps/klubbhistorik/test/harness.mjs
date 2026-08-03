@@ -272,7 +272,7 @@ await test('fartygskolumnen skapar aldrig ett dolt ägarpåstående',()=>{
 });
 
 await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',async()=>{
-  const [app,html,model,matrixCss]=await Promise.all([readFile(resolve(ROOT,'src/app.js'),'utf8'),readFile(resolve(ROOT,'index.html'),'utf8'),readFile(resolve(ROOT,'DATAMODELL.md'),'utf8'),readFile(resolve(ROOT,'matrix.css'),'utf8')]);
+  const [app,html,model,matrixCss,serviceWorker]=await Promise.all([readFile(resolve(ROOT,'src/app.js'),'utf8'),readFile(resolve(ROOT,'index.html'),'utf8'),readFile(resolve(ROOT,'DATAMODELL.md'),'utf8'),readFile(resolve(ROOT,'matrix.css'),'utf8'),readFile(resolve(ROOT,'sw.js'),'utf8')]);
   assert.ok(app.includes('Som källan skrevs'));
   assert.ok(app.includes('Normaliserad värld'));
   assert.ok(app.includes('Frånvaro är inte ett utträde'));
@@ -301,6 +301,8 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(matrixCss.includes('.matriscell.status-junior'));
   assert.ok(matrixCss.includes('.kallmatrikel'));
   assert.ok(matrixCss.includes('min-width:760px'));
+  assert.ok(serviceWorker.includes("url.pathname.endsWith('/index.html')"));
+  assert.ok(serviceWorker.includes("isAppNavigation?'./index.html':request"));
   assert.ok(model.includes('HLC på en'));
   assert.ok(model.includes('operation är transaktionstid'));
   assert.ok(model.includes('inte automatiskt vem'));
