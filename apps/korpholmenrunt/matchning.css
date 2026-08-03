@@ -173,3 +173,32 @@ a.registernamn:hover {
   display: grid;
   gap: 7px;
 }
+
+.tavlandegrupp {
+  border: 1px solid var(--linje);
+  display: grid;
+  gap: 15px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 13px 14px 14px;
+}
+
+.tavlandegrupp[hidden] {
+  display: none;
+}
+
+.tavlandegrupp legend {
+  color: var(--hav);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+@media(max-width:680px) {
+  .tavlandegrupp {
+    grid-template-columns: 1fr;
+  }
+}

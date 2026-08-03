@@ -9,8 +9,8 @@
   <meta property="og:description" content="Hela loppets moderna resultathistoria i en levande, korslänkad app.">
   <meta property="og:image" content="./og.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-03-4">
-  <link rel="stylesheet" href="./matchning.css?v=2026-08-03-4">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-03-5">
+  <link rel="stylesheet" href="./matchning.css?v=2026-08-03-5">
   <title>Korpholmen runt – resultat & rekord</title>
 </head>
 <body>
@@ -51,9 +51,9 @@
         <label>Granskningsläge<select id="edit-review-status"><option value="granskning krävs">Granskning krävs</option><option value="granskad">Granskad</option></select></label>
         <label class="bred">Båtens namn i källan<input id="edit-boat-raw"></label>
         <label class="bred">Kopplad båt<select id="edit-boat-id"><option value="">Inte kopplad</option></select></label>
-        <label>Kapten<input id="edit-captain"></label>
-        <label>Besättning 1<input id="edit-crew-1"></label>
-        <label>Besättning 2<input id="edit-crew-2"></label>
+        <fieldset class="tavlandegrupp"><legend>Tävlande 1</legend><label>Namn i källan<input id="edit-captain"></label><label>Kopplad i Matrikeln<select id="edit-person-1-id"><option value="">Inte kopplad</option></select></label></fieldset>
+        <fieldset class="tavlandegrupp"><legend>Tävlande 2</legend><label>Namn i källan<input id="edit-crew-1"></label><label>Kopplad i Matrikeln<select id="edit-person-2-id"><option value="">Inte kopplad</option></select></label></fieldset>
+        <fieldset id="edit-participant-3-group" class="tavlandegrupp" hidden><legend>Tävlande 3 · äldre källrad</legend><label>Namn i källan<input id="edit-crew-2"></label><label>Kopplad i Matrikeln<select id="edit-person-3-id"><option value="">Inte kopplad</option></select></label></fieldset>
         <label class="bred">Oklara uppgifter, en per rad<textarea id="edit-review-issues" rows="3"></textarea></label>
         <label class="bred">Anteckning<textarea id="edit-notes" rows="3"></textarea></label>
       </div>
@@ -61,6 +61,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./src/app.js?v=2026-08-03-4"></script>
+  <script type="module" src="./src/app.js?v=2026-08-03-5"></script>
 </body>
 </html>

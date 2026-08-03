@@ -74,12 +74,15 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
   for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell'])assert.ok(app.includes(capability));
-  for(const control of ['edit-review-status','edit-review-issues'])assert.ok(html.includes(control));
+  for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
-  assert.ok(app.includes("['Kapten',result.captain_raw]"));
-  assert.ok(app.includes("['Besättning 1',result.crew_1_raw]"));
-  assert.ok(app.includes("['Besättning 2',result.crew_2_raw]"));
+  assert.ok(app.includes("['Tävlande 1',result.captain_raw]"));
+  assert.ok(app.includes("['Tävlande 2',result.crew_1_raw]"));
+  assert.ok(app.includes("['Tävlande 3',result.crew_2_raw]"));
+  assert.ok(app.includes("method:'valt i resultatdialogen'"));
+  assert.ok(app.includes("participantRoleLabel(link.source_field||link.role)"));
+  assert.ok(matchingStyles.includes('.tavlandegrupp'));
   assert.ok(app.includes('matchContext(result,bMap)'));
   assert.equal((app.match(/\$\{matchContext\(result,bMap\)\}/g)||[]).length,3);
   assert.ok(matchingStyles.includes('.matchkontext'));
@@ -87,7 +90,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("source_id:prior?.source_id??'race-source:user'"));
   assert.ok(app.includes("!result||reviewPending(result)?'granskning krävs':'granskad'"));
   assert.ok(app.includes('Båt / register'));
-  assert.ok(app.includes('Besättning / register'));
+  assert.ok(app.includes('Tävlande / register'));
   assert.ok(app.includes('Förslag i Matrikeln:'));
   assert.ok(app.includes('Förslag i Båtregistret:'));
   assert.ok(app.includes('data-action="open-register"'));
