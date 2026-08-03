@@ -169,6 +169,58 @@ a.registernamn:hover {
   font: inherit;
 }
 
+.registerforslag {
+  display: grid;
+  gap: 4px;
+}
+
+.forslagsrad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.forslagsval {
+  display: inline-flex;
+}
+
+.forslagsknapp,
+.forslagsgranska {
+  align-items: center;
+  background: color-mix(in srgb, var(--guld) 13%, white);
+  border: 1px solid color-mix(in srgb, var(--guld) 45%, var(--linje));
+  color: var(--mork);
+  display: inline-flex;
+  font: 750 8px var(--sans);
+  min-height: 24px;
+}
+
+.forslagsknapp {
+  border-radius: 5px 0 0 5px;
+  cursor: pointer;
+  padding: 4px 7px;
+}
+
+.forslagsknapp:only-child {
+  border-radius: 5px;
+}
+
+.forslagsgranska {
+  border-left: 0;
+  border-radius: 0 5px 5px 0;
+  justify-content: center;
+  padding: 4px 6px;
+  text-decoration: none;
+}
+
+.forslagsknapp:hover,
+.forslagsknapp:focus-visible,
+.forslagsgranska:hover,
+.forslagsgranska:focus-visible {
+  background: var(--guld);
+  color: white;
+}
+
 .topregister {
   display: grid;
   gap: 7px;

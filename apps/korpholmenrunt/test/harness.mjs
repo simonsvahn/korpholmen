@@ -73,7 +73,7 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','splitParticipantSortNames','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -100,10 +100,14 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes('inline-person-options'));
   assert.ok(app.includes('inline-boat-options'));
   assert.ok(app.includes('inline-class-options'));
+  assert.ok(app.includes('data-action="quick-confirm-person"'));
+  assert.ok(app.includes('data-action="quick-confirm-boat"'));
   assert.ok(app.includes("field:'class_match_method'"));
+  assert.ok(app.includes("field:'match_method',value:'bekräftat från förslag i resultatlistan'"));
   assert.ok(matchingStyles.includes('.sortknapp'));
   assert.ok(matchingStyles.includes('.snabbval'));
   assert.ok(matchingStyles.includes('.sorteringsperson'));
+  assert.ok(matchingStyles.includes('.forslagsknapp'));
   assert.ok(app.includes("updateViaCache:'none'"));
   assert.ok(serviceWorker.includes("if(request.mode==='navigate')"));
   assert.ok(serviceWorker.includes("fetch(request,{cache:'no-store'})"));
