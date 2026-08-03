@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve, relative, basename, sep } from 'node:path';
+import { dirname, resolve, relative, basename, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -168,7 +168,7 @@ async function findFiles(folder) {
   for (const entry of await readdir(folder, { withFileTypes: true })) {
     const fullPath = resolve(folder, entry.name);
     if (entry.isDirectory()) result.push(...await findFiles(fullPath));
-    else if (entry.isFile() && entry.name !== '.gitkeep') result.push(fullPath);
+    else if (entry.isFile() && !['.gitkeep', '.DS_Store'].includes(entry.name)) result.push(fullPath);
   }
   return result;
 }
@@ -185,6 +185,44 @@ function transcript(text) {
   const body = text.slice(start + '\n## Avskrift\n'.length);
   const end = body.search(/\n## (?:Osäkra läsningar|Identifieringar|Anmärkningar)/);
   return (end < 0 ? body : body.slice(0, end)).trim();
+}
+
+const imageMimeType = extension => ({
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+})[extension.toLocaleLowerCase('sv')] || null;
+
+async function contentImages(transcription, sourceFile) {
+  const result = [];
+  const pattern = /!\[([^\]]*)\]\((?:<([^>]+)>|([^)]+))\)/g;
+  for (const match of transcription.matchAll(pattern)) {
+    const alt = match[1].trim();
+    const filename = String(match[2] || match[3] || '').trim();
+    if (!filename || filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+      throw new Error(`Ogiltig innehållsbild i ${sourceFile}: ${filename}`);
+    }
+    if (!/ – innehållsbild \d{2}\.(?:jpe?g|png|webp)$/iu.test(filename.normalize('NFD'))) {
+      throw new Error(`Innehållsbilden följer inte namnregeln i ${sourceFile}: ${filename}`);
+    }
+    const sourcePath = resolve(dirname(sourceFile), filename);
+    const bytes = await readFile(sourcePath);
+    const extension = extname(filename).toLocaleLowerCase('sv');
+    const mimeType = imageMimeType(extension);
+    if (!mimeType) throw new Error(`Bildformatet stöds inte: ${filename}`);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    result.push({
+      order: result.length + 1,
+      alt,
+      filename,
+      sha256,
+      mime_type: mimeType,
+      blob_path: `/dokumentarkiv/bilder/${sha256}${extension === '.jpeg' ? '.jpg' : extension}`,
+      source_file: sourcePath,
+    });
+  }
+  return result;
 }
 
 function category(type) {
@@ -235,13 +273,12 @@ function documentId(sourcePath, title) {
 const sourceFiles = (await findTranscripts(documentRoot)).sort((a, b) => a.localeCompare(b, 'sv'));
 const documents = [];
 const includedSourceFiles = [];
+const includedContentImages = [];
 const excludedDocuments = [];
-const allTranscriptTexts = [];
 const usedEntityIds = new Set();
 
 for (const sourceFile of sourceFiles) {
   const text = await readFile(sourceFile, 'utf8');
-  allTranscriptTexts.push(text);
   const meta = frontmatter(text);
   const sourcePath = relative(digitalRoot, sourceFile).split(sep).join('/');
   if (!PUBLISHABLE_STATUSES.has(meta.avskriftsstatus)) {
@@ -250,6 +287,8 @@ for (const sourceFile of sourceFiles) {
   }
   includedSourceFiles.push(sourceFile);
   const transcription = transcript(text);
+  const documentContentImages = await contentImages(transcription, sourceFile);
+  includedContentImages.push(...documentContentImages);
   const search = normalize(`${meta.titel || ''}\n${transcription}`);
   const entityIds = entityRegistry.filter(entity => entity.aliases.some(alias => search.includes(normalize(alias)))).map(entity => entity.id);
   entityIds.forEach(id => usedEntityIds.add(id));
@@ -281,6 +320,7 @@ for (const sourceFile of sourceFiles) {
       word_count: transcription.split(/\s+/).filter(Boolean).length,
       has_uncertainty: /\[(?:osäker|osäkert|oläsligt)/i.test(transcription),
       original_filenames: originalNames,
+      content_images: documentContentImages.map(({ source_file, ...image }) => image),
     },
   });
 }
@@ -289,10 +329,10 @@ if (!documents.length) throw new Error('Inga publicerbara avskrifter hittades');
 if (new Set(documents.map(document => document.id)).size !== documents.length) throw new Error('Dokument-ID:n är inte unika');
 
 const inboxFiles = (await findFiles(inboxRoot)).sort((a, b) => a.localeCompare(b, 'sv'));
-const normalizedSources = normalize(allTranscriptTexts.join('\n'));
-const pendingInboxFiles = inboxFiles
-  .filter(path => !normalizedSources.includes(normalize(basename(path))))
-  .map(path => relative(inboxRoot, path).split(sep).join('/'));
+// Efter enstegsflödets hashverifierade arkivering ska endast verkligt
+// obehandlade eller avvikande filer ligga kvar i inkorgen. Ett omnämnt filnamn
+// räcker inte för att dölja filen ur arbetskön.
+const pendingInboxFiles = inboxFiles.map(path => relative(inboxRoot, path).split(sep).join('/'));
 const statusCounts = Object.fromEntries([...new Set(documents.map(document => document.fields.status))]
   .sort((a, b) => a.localeCompare(b, 'sv'))
   .map(status => [status, documents.filter(document => document.fields.status === status).length]));
@@ -304,7 +344,7 @@ const archiveSummary = {
   status_counts: statusCounts,
   decade_counts: decadeCounts,
   inbox_total_files: inboxFiles.length,
-  inbox_referenced_files: inboxFiles.length - pendingInboxFiles.length,
+  inbox_referenced_files: 0,
   inbox_pending_files: pendingInboxFiles,
   excluded_documents: excludedDocuments,
   story_tracks: STORY_TRACKS.map(({ pattern, ...track }) => ({ ...track, count: documents.filter(document => document.fields.story_track_ids.includes(track.id)).length })),
@@ -351,6 +391,10 @@ for (const [field, value] of Object.entries(archiveSummary)) set('archive-summar
 
 const sourceHash = createHash('sha256');
 for (const sourceFile of includedSourceFiles) sourceHash.update(await readFile(sourceFile));
+for (const image of [...new Map(includedContentImages.map(item => [item.sha256, item])).values()].sort((a, b) => a.sha256.localeCompare(b.sha256))) {
+  sourceHash.update(await readFile(image.source_file));
+}
+for (const inboxFile of inboxFiles.map(path => relative(inboxRoot, path).split(sep).join('/')).sort((a, b) => a.localeCompare(b, 'sv'))) sourceHash.update(inboxFile);
 await mkdir(OUT, { recursive: true });
 await writeFile(resolve(OUT, 'initial-ops.json'), `${JSON.stringify({
   operations_version: 1,
@@ -361,5 +405,10 @@ await writeFile(resolve(OUT, 'initial-ops.json'), `${JSON.stringify({
   excluded_documents: excludedDocuments,
   operations,
 }, null, 2)}\n`);
+await writeFile(resolve(OUT, 'innehållsbilder.json'), `${JSON.stringify({
+  version: 1,
+  images: [...new Map(includedContentImages.map(image => [image.sha256, image])).values()]
+    .sort((a, b) => a.blob_path.localeCompare(b.blob_path, 'sv')),
+}, null, 2)}\n`);
 
-console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);
+console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${includedContentImages.length} innehållsbilder, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);

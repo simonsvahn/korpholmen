@@ -27,6 +27,9 @@ await test('startmastern innehåller hela det aktuella arkivet och giltiga opera
   assert.ok(documents.every(item=>item.title&&item.document_date&&item.transcript&&item.source_path));
   assert.ok(documents.every(item=>Array.isArray(item.entity_ids)));
   assert.ok(documents.every(item=>Array.isArray(item.story_track_ids)));
+  assert.ok(documents.every(item=>Array.isArray(item.content_images)));
+  assert.ok(documents.flatMap(item=>item.content_images).length>=6);
+  assert.ok(documents.flatMap(item=>item.content_images).every(image=>/^\/dokumentarkiv\/bilder\/[a-f0-9]{64}\.(?:jpg|png|webp)$/.test(image.blob_path)));
   assert.ok(documents.every(item=>item.transcript_sha256&&Number.isInteger(item.word_count)));
   assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)));
   assert.equal(summary.total_documents,documents.length);
@@ -91,6 +94,8 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(app.includes('renderWork'));
   assert.ok(app.includes('renderQuestion'));
   assert.ok(app.includes('transcriptVersions'));
+  assert.ok(app.includes('syncContentImages'));
+  assert.ok(app.includes("document.addEventListener('visibilitychange'"));
   assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
   assert.ok(app.includes("location.pathname.includes('/apps/dokumentarkiv/')"));
   assert.ok(app.includes("new URL('dokumentarkiv/', redirectUri())"));
@@ -103,7 +108,22 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(styles.includes('.arsmatris'));
   assert.ok(styles.includes('.sambandskarta'));
   assert.ok(styles.includes('.platskarta'));
+  assert.ok(styles.includes('.innehallsbild'));
   assert.ok(styles.includes('@media print'));
+});
+
+await test('enstegsflödet planerar säker arkivering och hashbaserad bildpublicering',async()=>{
+  const [publisher,archiver,seed]=await Promise.all([
+    readFile(resolve(ROOT,'verktyg/publicera-dokumentarkiv.mjs'),'utf8'),
+    readFile(resolve(ROOT,'verktyg/arkivera-inkorgsoriginal.mjs'),'utf8'),
+    readFile(resolve(ROOT,'verktyg/skriv-dropbox-startmaster.mjs'),'utf8'),
+  ]);
+  assert.ok(publisher.includes('aterstallArkivering'));
+  assert.ok(publisher.includes('planeraArkivering'));
+  assert.ok(archiver.includes('Hash ändrades vid flytt'));
+  assert.ok(archiver.includes('02 Arkiverade inkorgsoriginal'));
+  assert.ok(seed.includes('innehållsbilder.json'));
+  assert.ok(seed.includes('COPYFILE_EXCL'));
 });
 
 await test('publiceringsbygget är datafritt',()=>{

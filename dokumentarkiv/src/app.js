@@ -20,6 +20,8 @@ const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/dokumentarkiv/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:dokumentarkiv:current';
+const CONTENT_IMAGE_KEY_PREFIX = 'dokumentarkiv:innehållsbild:';
+const AUTO_SYNC_INTERVAL = 120_000;
 const ENTITY_TYPES = ['person', 'båt', 'plats', 'fastighet', 'hus', 'organisation'];
 const STOP_WORDS = new Set('och eller men att det den de som när var vad hur vem vilka från till med för vid ett en av på om i ur har hade finns blev blir kan ska skulle är var'.split(' '));
 const ui = {
@@ -33,6 +35,7 @@ let historyOperations = [];
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
+const contentImageUrls = new Map();
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const escapeAttribute = escapeHtml;
@@ -87,7 +90,18 @@ function tableCells(line) {
   return line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
 }
 
-function markdown(value) {
+function contentImageFigure(raw, documentRecord) {
+  const match = String(raw || '').match(/^!\[([^\]]*)\]\((?:<([^>]+)>|([^)]+))\)\s*$/);
+  if (!match) return '';
+  const alt = match[1].trim();
+  const filename = String(match[2] || match[3] || '').trim();
+  const image = (documentRecord?.content_images || []).find(item => normalize(item.filename) === normalize(filename));
+  if (!image) return '';
+  const url = contentImageUrls.get(image.sha256);
+  return `<figure class="innehallsbild">${url ? `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(alt || image.alt || '')}" loading="lazy">` : '<div class="bildplatshallare">Innehållsbilden hämtas från Dropbox…</div>'}<figcaption>${escapeHtml(alt || image.alt || filename)}</figcaption></figure>`;
+}
+
+function markdown(value, documentRecord = null) {
   const lines = String(value || '').split('\n');
   const output = [];
   let list = [];
@@ -101,6 +115,8 @@ function markdown(value) {
       continue;
     }
     if (code) { code.push(raw); continue; }
+    const imageFigure = contentImageFigure(raw, documentRecord);
+    if (imageFigure) { flushList(); output.push(imageFigure); continue; }
     if (/^\|.+\|$/.test(raw) && /^\|?[\s:|-]+\|/.test(lines[index + 1] || '')) {
       flushList();
       const header = tableCells(raw);
@@ -249,7 +265,7 @@ function documentCard(document, selectedId = '') {
 function readerHtml(selected, map) {
   if (!selected) return emptyState('Ingen handling hittades', 'Prova ett annat ord eller rensa något av filtren.', '⌕');
   const entities = (selected.entity_ids || []).map(id => map.get(id)).filter(Boolean);
-  return `<article class="papper"><div class="halslagskant" aria-hidden="true"><i></i><i></i><i></i></div><header class="dokumenthuvud"><div class="dokumentmeta"><span>${escapeHtml(typeLabel(selected.document_type))}</span><span class="status ${selected.status === 'färdig' ? 'klar' : 'kontroll'}">${escapeHtml(selected.status)}</span></div><p class="dokumentdatum">${escapeHtml(dateLabel(selected.document_date))}</p><h2>${escapeHtml(selected.title)}</h2><p class="ingress">Ordagrann avskrift från ${plural(selected.image_count || 0, 'bild eller sida', 'bilder eller sidor')}. Stavning, interpunktion och dokumentets egen ton är bevarade.</p><div class="entitetsrad">${entities.map(entityBadge).join('')}</div></header><div class="ornament" aria-hidden="true"><span>§</span></div><div class="avskriftstext">${markdown(selected.transcript)}</div><footer class="dokumentfot"><button type="button" data-action="source">${ui.sourceOpen ? 'Dölj källuppgift' : 'Visa källuppgift'}</button><span>Avskrift · Digitalisering 2026</span></footer>${ui.sourceOpen ? `<div class="kallruta"><strong>Källfil</strong><code>${escapeHtml(selected.source_path)}</code><p>Datering: ${escapeHtml(selected.dating)}. Avskriften visas utan modernisering.</p><p>Textfingeravtryck: <code>${escapeHtml(String(selected.transcript_sha256 || '').slice(0, 16))}…</code></p></div>` : ''}${versionHistoryHtml(selected)}</article>`;
+  return `<article class="papper"><div class="halslagskant" aria-hidden="true"><i></i><i></i><i></i></div><header class="dokumenthuvud"><div class="dokumentmeta"><span>${escapeHtml(typeLabel(selected.document_type))}</span><span class="status ${selected.status === 'färdig' ? 'klar' : 'kontroll'}">${escapeHtml(selected.status)}</span></div><p class="dokumentdatum">${escapeHtml(dateLabel(selected.document_date))}</p><h2>${escapeHtml(selected.title)}</h2><p class="ingress">Ordagrann avskrift från ${plural(selected.image_count || 0, 'bild eller sida', 'bilder eller sidor')}. Stavning, interpunktion och dokumentets egen ton är bevarade.</p><div class="entitetsrad">${entities.map(entityBadge).join('')}</div></header><div class="ornament" aria-hidden="true"><span>§</span></div><div class="avskriftstext">${markdown(selected.transcript, selected)}</div><footer class="dokumentfot"><button type="button" data-action="source">${ui.sourceOpen ? 'Dölj källuppgift' : 'Visa källuppgift'}</button><span>Avskrift · Digitalisering 2026</span></footer>${ui.sourceOpen ? `<div class="kallruta"><strong>Källfil</strong><code>${escapeHtml(selected.source_path)}</code><p>Datering: ${escapeHtml(selected.dating)}. Avskriften visas utan modernisering.</p><p>Textfingeravtryck: <code>${escapeHtml(String(selected.transcript_sha256 || '').slice(0, 16))}…</code></p></div>` : ''}${versionHistoryHtml(selected)}</article>`;
 }
 
 function entityListHtml(documents, map) {
@@ -383,6 +399,51 @@ function render() {
 
 async function refreshHistory() { historyOperations = store ? await store.getAllOps() : []; }
 
+function allContentImages() {
+  return [...new Map(documentRecords().flatMap(document => document.content_images || []).map(image => [image.sha256, image])).values()];
+}
+
+function rememberContentImage(image, blob) {
+  if (contentImageUrls.has(image.sha256)) return;
+  contentImageUrls.set(image.sha256, URL.createObjectURL(blob));
+}
+
+async function contentImageHash(blob) {
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function loadCachedContentImages() {
+  for (const image of allContentImages()) {
+    if (contentImageUrls.has(image.sha256)) continue;
+    const blob = await store.getBlob(`${CONTENT_IMAGE_KEY_PREFIX}${image.sha256}`);
+    if (blob) rememberContentImage(image, blob);
+  }
+}
+
+async function syncContentImages(transport) {
+  const images = allContentImages();
+  let downloaded = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < images.length) {
+      const image = images[next++];
+      if (contentImageUrls.has(image.sha256)) continue;
+      let blob = await store.getBlob(`${CONTENT_IMAGE_KEY_PREFIX}${image.sha256}`);
+      if (!blob) {
+        const remote = await transport.getBlob(image.blob_path);
+        blob = new Blob([await remote.arrayBuffer()], { type: image.mime_type });
+        if (await contentImageHash(blob) !== image.sha256) throw new Error(`Innehållsbilden har fel kontrollsumma: ${image.filename}`);
+        await store.putBlob(`${CONTENT_IMAGE_KEY_PREFIX}${image.sha256}`, blob);
+        downloaded += 1;
+      }
+      rememberContentImage(image, blob);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, images.length) }, () => worker()));
+  return { total: images.length, downloaded };
+}
+
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
   try { return await navigator.serviceWorker.register('./sw.js', { scope: './' }); }
@@ -430,7 +491,9 @@ async function syncNow() {
     const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-dokumentarkiv', opsRoot: '/dokumentarkiv/ops' });
     const bootstrap = await uploadBootstrapOps(transport);
     const result = await new SyncEngine({ repository, transport }).syncOnce();
-    await refreshHistory(); render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
+    await refreshHistory();
+    const images = await syncContentImages(transport);
+    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
     return result;
   })().catch(error => {
     console.error(error);
@@ -519,6 +582,8 @@ connectButton.addEventListener('click', () => currentAccessToken().then(token =>
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
 window.addEventListener('online', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
+document.addEventListener('visibilitychange', () => { if (store && document.visibilityState === 'visible') syncNow().catch(() => {}); });
+setInterval(() => { if (store && document.visibilityState === 'visible' && navigator.onLine !== false) syncNow().catch(() => {}); }, AUTO_SYNC_INTERVAL);
 
 async function init() {
   const serviceWorkerPromise = registerServiceWorker();
@@ -526,6 +591,7 @@ async function init() {
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: deviceId() }).init();
   await refreshHistory();
+  await loadCachedContentImages();
   bootstrapButton.hidden = !isSourceTree;
   render();
   await completeOAuthCallbackIfNeeded();

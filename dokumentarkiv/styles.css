@@ -163,6 +163,10 @@ button { color: inherit; }
 .avskriftstext pre { background: rgba(238,229,210,.62); border-left: 2px solid var(--guld); font-family: "Courier New", Courier, monospace; font-size: 13px; line-height: 1.72; margin: 1.4em -10px; overflow-x: auto; padding: 22px; white-space: pre-wrap; }
 .avskriftstext code { background: rgba(238,229,210,.8); border-radius: 3px; font-family: "Courier New", Courier, monospace; font-size: .82em; padding: 1px 4px; }
 .avskriftstext blockquote { border-left: 2px solid var(--guld); color: var(--svart-mjuk); font-style: italic; margin: 1.5em 0; padding-left: 1em; }
+.innehallsbild { background: #eee7d7; border: 1px solid rgba(18,60,70,.16); margin: 2.2em -18px; padding: 12px; }
+.innehallsbild img { display: block; height: auto; max-height: 72vh; object-fit: contain; width: 100%; }
+.innehallsbild figcaption { color: var(--svart-mjuk); font-family: var(--sans); font-size: 10px; line-height: 1.45; margin-top: 9px; }
+.bildplatshallare { align-items: center; aspect-ratio: 4/3; background: linear-gradient(135deg,rgba(18,60,70,.08),rgba(189,148,81,.12)); color: var(--svart-mjuk); display: flex; font-family: var(--sans); font-size: 11px; justify-content: center; padding: 24px; text-align: center; }
 .tabellram { margin: 1.5em -30px; overflow-x: auto; }
 .avskriftstext table { border-collapse: collapse; font-size: 14px; line-height: 1.45; min-width: 100%; }
 .avskriftstext th, .avskriftstext td { border-bottom: 1px solid rgba(18,60,70,.16); padding: 8px 10px; text-align: left; vertical-align: top; }
