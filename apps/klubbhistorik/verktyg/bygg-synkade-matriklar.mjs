@@ -25,7 +25,8 @@ const array=value=>Array.isArray(value)?value:value?[value]:[];
 const pad=value=>String(value).padStart(3,'0');
 
 const [peopleArchive,boatDocument,baseDocument]=await Promise.all([readFile(PEOPLE_PATH,'utf8').then(JSON.parse),readFile(BOATS_PATH,'utf8').then(JSON.parse),readFile(BASE_PATH,'utf8').then(JSON.parse)]);
-const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&file!==OUT_FILE).sort();
+const downstreamFiles=new Set([OUT_FILE,'2026-08-03-ted-thunborg-dublett.json']);
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&!downstreamFiles.has(file)).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(document=>document.operations||document.ops||[]);
 const historicalState=materialize([...baseDocument.operations,...correctionOperations]);

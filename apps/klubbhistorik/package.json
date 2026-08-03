@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:migration": "node verktyg/bygg-startmaster.mjs && node verktyg/bygg-tillaggs-matriklar.mjs && node verktyg/bygg-synkade-matriklar.mjs",
+    "build:migration": "node verktyg/bygg-startmaster.mjs && node verktyg/bygg-tillaggs-matriklar.mjs && node verktyg/bygg-synkade-matriklar.mjs && node verktyg/bygg-korrigering-ted-thunborg.mjs",
     "validate:sources": "node verktyg/validera-matrikel-json.mjs",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",

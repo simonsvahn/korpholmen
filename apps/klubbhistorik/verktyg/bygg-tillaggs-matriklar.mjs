@@ -30,7 +30,7 @@ const source=JSON.parse(sourceBytes);
 const peopleArchive=JSON.parse(peopleBytes);
 const boatOperations=JSON.parse(boatBytes);
 const baseDocument=JSON.parse(baseBytes);
-const downstreamFiles=new Set([OUT_FILE,'2026-08-03-synkade-matriklar.json']);
+const downstreamFiles=new Set([OUT_FILE,'2026-08-03-synkade-matriklar.json','2026-08-03-ted-thunborg-dublett.json']);
 const priorCorrectionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&!downstreamFiles.has(file)).sort();
 const priorCorrectionDocuments=await Promise.all(priorCorrectionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const priorCorrectionOperations=priorCorrectionDocuments.flatMap(document=>document.operations||document.ops||[]);

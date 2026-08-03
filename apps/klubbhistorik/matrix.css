@@ -1,0 +1,37 @@
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.originalrad small{grid-column:2}
+.normaliseringsnot{color:#8a6530!important}
+.matrissidtitel{align-items:start}
+.matrisinfo{display:grid;grid-template-columns:minmax(260px,1fr) minmax(0,2fr);gap:1rem;align-items:center;margin-bottom:1rem;padding:1rem 1.15rem;border:1px solid var(--line);border-radius:1rem;background:rgba(255,253,248,.9)}
+.matrisinfo p{margin:0;color:var(--muted);line-height:1.5}
+.matrislegend{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.45rem}
+.matrislegend span{display:inline-flex;align-items:center;gap:.25rem;padding:.32rem .55rem;border-radius:999px;font-size:.72rem;font-weight:780}
+.matrisskal{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:1.1rem;background:var(--paper);box-shadow:var(--shadow);overscroll-behavior:contain}
+.matrisskal:focus{outline:3px solid rgba(47,111,120,.3);outline-offset:2px}
+.medlemsmatris{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
+.medlemsmatris th,.medlemsmatris td{height:3.15rem;padding:.58rem .65rem;border-right:1px solid #e6e4dc;border-bottom:1px solid #e6e4dc;background:var(--paper);vertical-align:middle}
+.medlemsmatris thead th{position:sticky;top:0;z-index:4;height:4rem;background:#e8ece8;text-align:center}
+.medlemsmatris tbody tr:hover td,.medlemsmatris tbody tr:hover th{background:#f7f4ec}
+.medlemsmatris .matrismeta{position:sticky;z-index:2;text-align:left;background:#fffdf8}
+.medlemsmatris thead .matrismeta{z-index:6;background:#e8ece8}
+.medlemsmatris .matris-inval{left:0;width:5.3rem;min-width:5.3rem;text-align:center}
+.medlemsmatris .matris-person{left:5.3rem;width:15rem;min-width:15rem}
+.medlemsmatris .matris-klubbnamn{left:20.3rem;width:11rem;min-width:11rem}
+.medlemsmatris .matris-fodd{left:31.3rem;width:5.5rem;min-width:5.5rem;text-align:center;box-shadow:8px 0 12px -12px rgba(23,47,53,.7)}
+.medlemsmatris .matris-person button{border:0;background:transparent;padding:0;color:var(--sea);font-weight:780;text-align:left;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:.2em}
+.medlemsmatris .matris-person button:hover{text-decoration-color:currentColor}
+.matrisutgava{width:4rem;min-width:4rem;padding:.45rem!important;text-align:center!important}
+.matrisutgava span,.matrisutgava small{display:block}
+.matrisutgava span{font-size:.75rem;color:var(--ink)}
+.matrisutgava small{margin-top:.18rem;color:var(--muted);font-size:.62rem;letter-spacing:0;text-transform:none}
+.matriscell{width:4rem;min-width:4rem;padding:.38rem!important;text-align:center}
+.matriscell span{display:grid;width:1.75rem;height:1.75rem;margin:auto;place-items:center;border-radius:.5rem;font-size:1.05rem;font-weight:900}
+.matris-franvaro{background:#faf8f2!important}
+.matriscell.status-active span,.matrislegend .status-active{background:#276c72;color:white}
+.matriscell.status-junior span,.matrislegend .status-junior{background:#cfe7df;color:#17574e}
+.matriscell.status-passive span,.matrislegend .status-passive{background:#eed9a8;color:#6e5014}
+.matriscell.status-corresponding span,.matrislegend .status-corresponding{background:#e8c2b6;color:#783b2f}
+.matriscell.status-listed span,.matrislegend .status-listed{background:#dfe3e1;color:#47595c}
+.matriscell.status-multiple span,.matrislegend .status-multiple{background:repeating-linear-gradient(135deg,#1f626a 0,#1f626a 6px,#d7ae58 6px,#d7ae58 12px);color:white}
+@media(max-width:900px){.matrisinfo{grid-template-columns:1fr}.matrislegend{justify-content:flex-start}.medlemsmatris .matris-klubbnamn,.medlemsmatris .matris-fodd{position:static}.medlemsmatris .matris-fodd{box-shadow:none}}
+@media(max-width:650px){.medlemsmatris .matris-inval{width:4.3rem;min-width:4.3rem}.medlemsmatris .matris-person{left:4.3rem;width:12rem;min-width:12rem}.matrisskal{max-height:68vh}.matrisinfo{padding:.85rem}.matrislegend span{font-size:.66rem}}

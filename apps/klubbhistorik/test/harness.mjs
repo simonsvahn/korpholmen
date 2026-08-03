@@ -17,6 +17,7 @@ const SUPPLEMENT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-matriklar-1991-1998.
 const SUPPLEMENT_REPORT=resolve(MIGRATION,'kontrollrapport-1991-1998.json');
 const SYNC_CORRECTION=resolve(CORRECTIONS,'2026-08-03-synkade-matriklar.json');
 const SYNC_REPORT=resolve(MIGRATION,'kontrollrapport-synkade-matriklar.json');
+const TED_CORRECTION=resolve(CORRECTIONS,'2026-08-03-ted-thunborg-dublett.json');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -26,7 +27,7 @@ async function test(name,action){
 }
 
 function buildMigration(){
-  for(const script of ['verktyg/bygg-startmaster.mjs','verktyg/bygg-tillaggs-matriklar.mjs','verktyg/bygg-synkade-matriklar.mjs']){
+  for(const script of ['verktyg/bygg-startmaster.mjs','verktyg/bygg-tillaggs-matriklar.mjs','verktyg/bygg-synkade-matriklar.mjs','verktyg/bygg-korrigering-ted-thunborg.mjs']){
     const result=spawnSync(process.execPath,[script],{cwd:ROOT,encoding:'utf8'});
     assert.equal(result.status,0,result.stderr||result.stdout);
   }
@@ -39,6 +40,7 @@ const firstSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
 const firstSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
 const firstSyncBytes=await readFile(SYNC_CORRECTION);
 const firstSyncReportBytes=await readFile(SYNC_REPORT);
+const firstTedBytes=await readFile(TED_CORRECTION);
 buildMigration();
 const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
@@ -46,12 +48,14 @@ const secondSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
 const secondSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
 const secondSyncBytes=await readFile(SYNC_CORRECTION);
 const secondSyncReportBytes=await readFile(SYNC_REPORT);
+const secondTedBytes=await readFile(TED_CORRECTION);
 const document=JSON.parse(secondBytes);
 const report=JSON.parse(secondReportBytes);
 const supplementDocument=JSON.parse(secondSupplementBytes);
 const supplementReport=JSON.parse(secondSupplementReportBytes);
 const syncDocument=JSON.parse(secondSyncBytes);
 const syncReport=JSON.parse(secondSyncReportBytes);
+const tedDocument=JSON.parse(secondTedBytes);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
@@ -71,9 +75,11 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(sha256(firstSupplementReportBytes),sha256(secondSupplementReportBytes));
   assert.equal(sha256(firstSyncBytes),sha256(secondSyncBytes));
   assert.equal(sha256(firstSyncReportBytes),sha256(secondSyncReportBytes));
+  assert.equal(sha256(firstTedBytes),sha256(secondTedBytes));
   assert.equal(document.operations_sha256,sha256(Buffer.from(JSON.stringify(document.operations))));
   assert.equal(supplementDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(supplementDocument.operations))));
   assert.equal(syncDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(syncDocument.operations))));
+  assert.equal(tedDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(tedDocument.operations))));
 });
 
 await test('alla operationer är giltiga och unika',()=>{
@@ -87,6 +93,7 @@ await test('alla operationer är giltiga och unika',()=>{
   assert.equal(supplementDocument.counts.operations,10970);
   assert.equal(syncDocument.counts.operations,syncDocument.operations.length);
   assert.equal(syncDocument.counts.operations,92701);
+  assert.equal(tedDocument.operations.length,5);
 });
 
 await test('källkopiorna är kryptografiskt låsta',async()=>{
@@ -111,7 +118,7 @@ await test('alla matrikel-JSON följer samma schema och källhashar',()=>{
   assert.equal(validation.source_duplicate_groups[0].key,'ted thunborg|2021');
 });
 
-await test('23 utgåvor och alla 2 819 medlemsrader finns kvar',()=>{
+await test('23 utgåvor och 2 818 normaliserade medlemsförekomster finns kvar',()=>{
   assert.equal(releases.length,23);
   assert.deepEqual(releases.map(release=>release.id).sort(),Object.keys(syncReport.release_counts).sort());
   assert.deepEqual(report.release_counts['matrikel-1980'],{person_rows:41,boat_source_rows:32,boat_occurrences:46,connected_person_rows:40,unresolved_person_rows:1});
@@ -121,7 +128,7 @@ await test('23 utgåvor och alla 2 819 medlemsrader finns kvar',()=>{
   assert.deepEqual(supplementReport.release_counts['matrikel-1998'].person_categories,{active:63,passive:2,junior:42,corresponding:4});
   assert.equal(supplementReport.release_counts['matrikel-1991'].person_rows,96);
   assert.equal(supplementReport.release_counts['matrikel-1998'].person_rows,111);
-  assert.equal(people.length,2819);
+  assert.equal(people.length,2818);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='active').length,35);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='passive').length,6);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='junior').length,30);
@@ -238,10 +245,15 @@ await test('1991 och 1998 bevarar medlems- och fartygskategorierna',()=>{
   assert.equal(commaName.raw_text,'S/S Smör, Ost och Sill(1994)');
 });
 
-await test('dubbletter och ogiltiga källvärden rättas inte bort',()=>{
+await test('källdubbletter bevaras medan Ted Thunborg bara räknas en gång',()=>{
   assert.equal(report.duplicate_person_groups.length,2);
   assert.ok(report.duplicate_person_groups.some(group=>group.raw_names.includes('Peter Neretnieks')&&group.raw_names.includes('Peter Holm')));
   assert.ok(report.duplicate_person_groups.some(group=>group.raw_names.filter(name=>name==='Ted Thunborg').length===2));
+  assert.equal(people.some(item=>item.id==='person-occurrence:matrikel-2025:145'),false);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2025'&&item.person_id==='tedthunborg').length,1);
+  const duplicateSource=sourceRows.find(item=>item.id==='source-row:canonical:source-document:matrikel-2025:numbers-export:member:145');
+  assert.deepEqual(duplicateSource.occurrence_ids,[]);
+  assert.match(duplicateSource.normalization_note,/Källdubblett/);
   assert.deepEqual(report.invalid_birth_dates.map(item=>item.raw),['200991020']);
 });
 
@@ -260,7 +272,7 @@ await test('fartygskolumnen skapar aldrig ett dolt ägarpåstående',()=>{
 });
 
 await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',async()=>{
-  const [app,html,model]=await Promise.all([readFile(resolve(ROOT,'src/app.js'),'utf8'),readFile(resolve(ROOT,'index.html'),'utf8'),readFile(resolve(ROOT,'DATAMODELL.md'),'utf8')]);
+  const [app,html,model,matrixCss]=await Promise.all([readFile(resolve(ROOT,'src/app.js'),'utf8'),readFile(resolve(ROOT,'index.html'),'utf8'),readFile(resolve(ROOT,'DATAMODELL.md'),'utf8'),readFile(resolve(ROOT,'matrix.css'),'utf8')]);
   assert.ok(app.includes('Som källan skrevs'));
   assert.ok(app.includes('Normaliserad värld'));
   assert.ok(app.includes('Frånvaro är inte ett utträde'));
@@ -272,9 +284,17 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes('source_page'));
   assert.ok(app.includes('releaseMoment'));
   assert.ok(app.includes('canonicalSourceRows'));
+  assert.ok(app.includes('renderMatrix'));
+  assert.ok(app.includes('Tom ruta betyder endast'));
+  assert.ok(app.includes('Invalsår visas bara när det uttryckligen står i en källa'));
+  assert.ok(app.includes("value!==null&&value!==undefined&&value!==''"));
   assert.ok(app.includes("opsRoot:'/klubbhistorik/ops'"));
   assert.ok(app.includes("name:'kbk-klubbhistorik'"));
   assert.ok(html.includes('matriklar över tid'));
+  assert.ok(html.includes('data-view="matris"'));
+  assert.ok(html.includes('matrix.css'));
+  assert.ok(matrixCss.includes('position:sticky'));
+  assert.ok(matrixCss.includes('.matriscell.status-junior'));
   assert.ok(model.includes('HLC på en'));
   assert.ok(model.includes('operation är transaktionstid'));
   assert.ok(model.includes('inte automatiskt vem'));
@@ -303,15 +323,20 @@ await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
 });
 
 await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
-  const [seed,appPackage]=await Promise.all([
+  const [seed,appPackage,config,app]=await Promise.all([
     readFile(resolve(ROOT,'verktyg/skriv-dropbox-startmaster.mjs'),'utf8'),
     readFile(resolve(ROOT,'package.json'),'utf8'),
+    readFile(resolve(ROOT,'src/config.js'),'utf8'),
+    readFile(resolve(ROOT,'src/app.js'),'utf8'),
   ]);
   assert.ok(seed.includes("endsWith('/Dropbox/Appar/Korpholmen')"));
   assert.ok(seed.includes("'/klubbhistorik/ops'"));
   assert.ok(seed.includes("{flag:'wx'}"));
   assert.ok(seed.includes('Befintlig operationsbatch skiljer sig och skrivs inte över'));
   assert.equal(JSON.parse(appPackage).scripts['seed:dropbox'],'node verktyg/skriv-dropbox-startmaster.mjs');
+  assert.ok(config.includes('LOCAL_BOOTSTRAP_URLS'));
+  assert.ok(config.includes('2026-08-03-ted-thunborg-dublett.json'));
+  assert.ok(app.includes('Full källsäker master inläst lokalt'));
 });
 
 await test('publiceringsbygget är datafritt och länkat från appfamiljen',async()=>{

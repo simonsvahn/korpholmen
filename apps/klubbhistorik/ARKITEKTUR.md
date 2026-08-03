@@ -72,6 +72,13 @@ Tidslinjer, skillnadslistor, personprofiler och namnbytesförslag räknas ur de
 fyra föregående lagren. En omräkning får förändra presentationen men aldrig
 råkällan eller skapa ett nytt bekräftat faktum.
 
+Medlemsmatrisen är en sådan härledd läsvy: en rad per godkänt stabilt
+`person_id`, fasta kolumner för belagt invalår, person, klubbnamn och födelseår
+samt en kolumn per `matrikel-release`. Ett färgat kryss betyder att personen
+är observerad i utgåvan och färgen visar källans medlemskategori. Tom ruta
+betyder bara »inte observerad«, aldrig automatiskt utträde. Omatchade
+personrader får inte placeras i matrisen förrän identiteten är godkänd.
+
 ## Två tidsaxlar
 
 ```mermaid
@@ -153,7 +160,9 @@ stateDiagram-v2
 Den nuvarande importen använder även `kopplad` för en entydig, tillåten
 maskinell träff. Osäkra kandidater får aldrig märkas som bekräftade bara för
 att en algoritm har rankat dem först. Dubblettrader och ogiltiga rådatum ligger
-kvar som egna kontrollpunkter.
+kvar som egna kontrollpunkter. När en dubblett är avgjord, som Ted Thunborg i
+2025 års Numbers-källa, tombstonas endast den extra normaliserade förekomsten;
+båda ordagranna källraderna och en förklarande normaliseringsnot ligger kvar.
 
 ## Lagring och synk
 
@@ -184,7 +193,7 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 | Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
 | Ordagranna person- och båtrader | Byggt |
 | Person- och båtreferenser med granskningskö | Byggt |
-| Källvy, normaliserad vy, tidsjämförelse och personhistorik | Byggt |
+| Källvy, normaliserad vy, medlemsmatris, tidsjämförelse och personhistorik | Byggt |
 | Verkliga namnbyteskandidater utan återskrivning | Byggt |
 | Medlemsroller utöver källans befintliga status | Planerat när nya matriklar ger stöd |
 | Källbelagda ägar- och brukarobservationer | Planerat; aldrig genom radparning |

@@ -67,6 +67,18 @@ utträde eller dödsfall. Ett verkligt namnbyte kan föreslås när två godkän
 förekomster med samma person-ID bär olika normala personnamn. Förslaget är inte
 en skrivning till Matrikelns personmaster.
 
+Medlemsmatrisen lagras inte som en ny master. Den grupperar synliga,
+bekräftade `person-occurrence` efter `person_id` och `release_id`. Invalsår är
+det minsta uttryckligen belagda `induction_year`; det härleds aldrig från den
+första matrikel där personen råkar synas. Klubbnamn och födelseår hämtas i
+första hand från `person-ref` och annars från den senaste kopplade
+förekomsten. Tom matriscell är frånvaro av observation, inte en händelse.
+
+En avgjord källdubblett hanteras med en append-only tombstone på den extra
+`person-occurrence`. Berörda `source-row` behåller råtexten men får tom
+`occurrence_ids` och en `normalization_note` som pekar ut den bevarade
+normaliserade förekomsten.
+
 ## Matchningsstatus
 
 - `kopplad` — entydig maskinell träff;

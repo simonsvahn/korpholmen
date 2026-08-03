@@ -16,6 +16,11 @@ fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källa
 appen påstår därför inte att en båt på en viss rad ägdes av personen på
 motsvarande rad.
 
+Vyn **Medlemsmatris** visar en rad per säkert identifierad person, belagt
+invalsår, personnamn, klubbnamn och födelseår samt ett färgkodat kryss per
+matrikelutgåva. Tabellen har fasta identitetskolumner och en horisontellt
+rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
+
 ## Säkerhetskontrakt
 
 - privata källkopior hashas före import;
@@ -45,7 +50,9 @@ motsvarande rad.
   radräkning och återanvändning för hela den gemensamma importen;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
-  1998. Den gamla startmastern byggs aldrig om i Dropbox;
+  1998 samt den normaliserade borttagningen av Ted Thunborgs extra 2025-rad.
+  Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
+  Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
 
 Båtreferenserna är privata snapshots av all strukturerad metadata i
