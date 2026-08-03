@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://korpholmen.local/schema/matrikel-source.schema.json",
+  "title": "Källtroget matrikeldokument",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document",
+    "release",
+    "columns",
+    "sections",
+    "member_rows",
+    "boat_rows",
+    "document_notes"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "document": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "source_type", "is_primary_for_release", "original_files"]
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "year", "as_of", "title", "release_type", "sort_order"]
+    },
+    "columns": { "type": "array", "items": { "type": "object" } },
+    "sections": { "type": "array", "items": { "type": "object" } },
+    "member_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "order", "page", "category", "raw_text", "source_annotation",
+          "induction_year_raw", "induction_year", "first_name_raw", "last_name_raw",
+          "person_name_raw", "club_name_core_raw", "age_raw", "birth_year_raw",
+          "birth_year", "birth_date_raw", "birth_date", "island_raw",
+          "club_name_raw", "relation_raw"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 },
+          "page": { "type": ["integer", "null"], "minimum": 1 },
+          "category": { "type": "string", "minLength": 1 },
+          "raw_text": { "type": "string" },
+          "source_annotation": { "type": "string" },
+          "induction_year_raw": { "type": "string" },
+          "induction_year": { "type": ["integer", "null"] },
+          "first_name_raw": { "type": "string" },
+          "last_name_raw": { "type": "string" },
+          "person_name_raw": { "type": "string" },
+          "club_name_core_raw": { "type": "string" },
+          "age_raw": { "type": "string" },
+          "birth_year_raw": { "type": "string" },
+          "birth_year": { "type": ["integer", "null"] },
+          "birth_date_raw": { "type": "string" },
+          "birth_date": { "type": ["string", "null"] },
+          "island_raw": { "type": "string" },
+          "club_name_raw": { "type": "string" },
+          "relation_raw": { "type": "string" }
+        }
+      }
+    },
+    "boat_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "order", "page", "category", "raw_text", "source_annotation", "components"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 },
+          "page": { "type": ["integer", "null"], "minimum": 1 },
+          "category": { "type": "string", "minLength": 1 },
+          "raw_text": { "type": "string" },
+          "source_annotation": { "type": "string" },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "order", "raw_text", "prefix", "boat_name_raw",
+                "registry_year_raw", "registry_year", "registry_years"
+              ],
+              "properties": {
+                "order": { "type": "integer", "minimum": 1 },
+                "raw_text": { "type": "string" },
+                "prefix": { "type": "string" },
+                "boat_name_raw": { "type": "string" },
+                "registry_year_raw": { "type": "string" },
+                "registry_year": { "type": ["integer", "null"] },
+                "registry_years": { "type": "array", "items": { "type": "integer" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "document_notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

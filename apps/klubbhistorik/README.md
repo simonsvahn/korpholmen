@@ -9,11 +9,10 @@ bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
-Mastern omfattar matrikelutgåvorna 1980, 1986, 1991, 1998 och 2025. I de fyra
-historiska matriklarna bevaras medlems- och fartygskolumnen var för sig.
-Utgåvorna 1991 och 1998 bevarar dessutom ordinarie aktiva, ordinarie passiva,
-juniorer och korresponderande medlemmar samt källans särskilda avsnitt för
-avregistrerade eller namnändrade fartyg. Kolumnerna är självständiga i källan;
+Mastern omfattar 23 källsnapshots från juli 1980 till augusti 2025. I de
+historiska matriklarna bevaras medlems- och fartygskolumnen var för sig,
+inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
+fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källan;
 appen påstår därför inte att en båt på en viss rad ägdes av personen på
 motsvarande rad.
 
@@ -30,13 +29,20 @@ motsvarande rad.
 ## Privat master
 
 - `privat/kallkopior/` — bytebevarade källkopior och godkända matchningsbeslut;
+- `privat/kallkopior/matriklar/*.json` — samtliga matrikeldokument i samma
+  validerade format; en fil per faktisk käll-/sorteringsvariant;
+- `privat/kallkopior/matriklar/original/` — kanoniskt namngivna, bytebevarade
+  privata kopior. Originalnamn och originalets SHA-256 ligger i varje JSON;
 - `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
-  radspårbar avskrift med kontrollsummor för de sex HEIC-originalen;
+  radspårbart äldre importunderlag, nu ersatt som konsumtionsformat av de
+  synkade filerna ovan men bevarat för reproducerbarhet;
 - `privat/migrering-2026-08-02/initial-ops.json` — reproducerbar startmaster;
 - `privat/migrering-2026-08-02/kontrollrapport.json` — radtäckning,
   kontrollsummor, dubbletter och olösta identiteter;
 - `privat/migrering-2026-08-02/kontrollrapport-1991-1998.json` — motsvarande
   för tilläggsutgåvorna;
+- `privat/migrering-2026-08-02/kontrollrapport-synkade-matriklar.json` —
+  radräkning och återanvändning för hela den gemensamma importen;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
   1998. Den gamla startmastern byggs aldrig om i Dropbox;
@@ -50,6 +56,7 @@ efterkontroll; Båtregistret förblir ensam master för själva båten.
 
 ```sh
 npm run build:migration
+npm run validate:sources
 npm test
 npm run build:publish
 npm run seed:dropbox -- "/Users/.../Dropbox/Appar/Korpholmen"

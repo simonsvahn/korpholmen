@@ -81,10 +81,11 @@ flowchart LR
     T -. "ska inte ersättas av" .-> X
 ```
 
-Masterns `as_of` är 1980, 1986, 1991, 1998 och 2025. En identitetskoppling som görs 2026
-ändrar inte när källobservationen gällde. På motsvarande sätt är en matrikel
-inte bevis för exakt inträdes- eller utträdesdag om den bara visar ett
-ögonblick.
+Masterns `as_of` sträcker sig nu från juli 1980 till augusti 2025, med både
+års-, månads- och dagprecision beroende på vad källan faktiskt anger. En
+identitetskoppling som görs 2026 ändrar inte när källobservationen gällde. På
+motsvarande sätt är en matrikel inte bevis för exakt inträdes- eller
+utträdesdag om den bara visar ett ögonblick.
 
 ## Namn: källform, identitet och verklig förändring
 
@@ -175,8 +176,11 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 | Område | Status |
 |---|---|
-| Utgåvorna 1980, 1986, 1991, 1998 och 2025 | Byggt |
+| 23 källsnapshots: 1980–1998 samt moderna exporttillfällen 2020–2025 | Byggt |
+| Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
+| 41 sorterings-/källdokument med exakt en primär variant per snapshot | Byggt |
 | Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
+| Fullständiga sida 2-avsnitt för 1980/1986 samt matriklarna 1982/1987/1988 | Byggt |
 | Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
 | Ordagranna person- och båtrader | Byggt |
 | Person- och båtreferenser med granskningskö | Byggt |
@@ -189,16 +193,22 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 ## Ritual när en ny matrikel tillkommer
 
-1. Kopiera originalet bytebevarat och registrera kontrollsumma och proveniens.
-2. Skapa eller återanvänd rätt `matrikel-release`.
-3. Importera varje synlig källrad, även tomnoter, dubbletter och svårtolkade
+1. Lämna arkivoriginalet orört. Skapa en begripligt namngiven, bytebevarad
+   privat källkopia och registrera både originalnamn, kopienamn och SHA-256.
+2. Skapa en JSON-fil enligt `schema/matrikel-source.schema.json` för varje
+   faktisk käll- eller sorteringsvariant.
+3. Skapa eller återanvänd rätt `matrikel-release` och markera exakt en variant
+   som primär.
+4. Importera varje synlig källrad, även tomnoter, dubbletter och svårtolkade
    värden som annars skulle kunna falla bort.
-4. Skapa förekomster utan att ändra källtexten.
-5. Matcha bara entydiga fall automatiskt; lägg resten i granskningskö.
-6. Jämför radantal, kontrollpunkter och operationshash i test.
-7. Låt nya namn-, roll-, ägar- eller fastighetsfynd bli förslag till rätt
+5. Skapa förekomster utan att ändra källtexten. Icke-primära sorteringar får
+   inte skapa dubblettförekomster.
+6. Matcha bara entydiga fall automatiskt; lägg resten i granskningskö.
+7. Kör `node verktyg/validera-matrikel-json.mjs` och jämför radantal,
+   kontrollpunkter, källhashar och operationshash i test.
+8. Låt nya namn-, roll-, ägar- eller fastighetsfynd bli förslag till rätt
    ägarapp, aldrig direkta återskrivningar.
-8. Bygg och läckagekontrollera det datafria publiceringspaketet.
+9. Bygg och läckagekontrollera det datafria publiceringspaketet.
 
 Den konkreta entitetslistan finns i [`DATAMODELL.md`](DATAMODELL.md), och
 säkerhetskontrakten samt kommandona finns i [`README.md`](README.md).
