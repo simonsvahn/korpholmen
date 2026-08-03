@@ -15,12 +15,15 @@ const rowKey=row=>`${normalize(row.person_name_raw)}|${row.birth_year||row.birth
 const difference=(left,right)=>[...left].filter(value=>!right.has(value));
 
 const files=(await readdir(SOURCE_DIR)).filter(file=>file.endsWith('.json')).sort((a,b)=>a.localeCompare(b,'sv'));
-const documents=[];const documentIds=new Set();const rowIds=new Set();
+const documents=[];const documentIds=new Set();const rowIds=new Set();const years=new Set();
 for(const file of files){
   const document=JSON.parse(await readFile(resolve(SOURCE_DIR,file),'utf8'));
   if(JSON.stringify(Object.keys(document))!==JSON.stringify(TOP_KEYS))throw new Error(`${file}: osynkade toppnivåfält.`);
   if(document.schema_version!==1)throw new Error(`${file}: fel schemaversion.`);
   if(documentIds.has(document.document.id))throw new Error(`${file}: dubbelt document.id ${document.document.id}.`);documentIds.add(document.document.id);
+  if(file!==`matrikel-${document.release.year}.json`)throw new Error(`${file}: årsfilen ska heta matrikel-${document.release.year}.json.`);
+  if(document.release.id!==`matrikel-${document.release.year}`)throw new Error(`${file}: release.id ska vara matrikel-${document.release.year}.`);
+  if(years.has(document.release.year))throw new Error(`${file}: kalenderåret ${document.release.year} finns i flera JSON-filer.`);years.add(document.release.year);
   for(const row of document.member_rows){
     if(JSON.stringify(Object.keys(row))!==JSON.stringify(MEMBER_KEYS))throw new Error(`${file}: osynkad medlemsrad ${row.id}.`);
     if(rowIds.has(row.id))throw new Error(`${file}: dubbelt rad-id ${row.id}.`);rowIds.add(row.id);
@@ -59,4 +62,4 @@ for(const [releaseId,variants] of releases){
 }
 
 if(discrepancies.length)throw new Error(`Sorteringsvarianter skiljer sig: ${JSON.stringify(discrepancies.slice(0,10))}`);
-console.log(JSON.stringify({schema_version:1,documents:documents.length,releases:releases.size,source_files:documents.reduce((sum,document)=>sum+document.document.original_files.length,0),member_rows_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.member_rows,0),boat_rows_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.boat_rows,0),boat_occurrences_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.boat_occurrences,0),source_duplicate_groups:duplicateRows,release_counts:releaseCounts},null,2));
+console.log(JSON.stringify({schema_version:1,documents:documents.length,releases:releases.size,years:[...years].sort((a,b)=>a-b),source_files:documents.reduce((sum,document)=>sum+document.document.original_files.length,0),member_rows_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.member_rows,0),boat_rows_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.boat_rows,0),boat_occurrences_in_primary_documents:Object.values(releaseCounts).reduce((sum,release)=>sum+release.boat_occurrences,0),source_duplicate_groups:duplicateRows,release_counts:releaseCounts},null,2));

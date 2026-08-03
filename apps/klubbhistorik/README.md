@@ -9,7 +9,7 @@ bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
-Mastern omfattar 23 källsnapshots från juli 1980 till augusti 2025. I de
+Mastern omfattar 13 årsvisa matriklar från juli 1980 till augusti 2025. I de
 historiska matriklarna bevaras medlems- och fartygskolumnen var för sig,
 inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
 fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källan;
@@ -34,9 +34,11 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
 ## Privat master
 
 - `privat/kallkopior/` — bytebevarade källkopior och godkända matchningsbeslut;
-- `privat/kallkopior/matriklar/*.json` — samtliga matrikeldokument i samma
-  validerade format; exakt en vald fil per matrikelutgåva. Varianten med ålder
-  eller födelsedatum som ledande fält prioriteras när den finns;
+- `privat/kallkopior/matriklar/matrikel-ÅÅÅÅ.json` — samtliga
+  matrikeldokument i samma validerade format; exakt en vald fil per kalenderår.
+  Varianten med ålder eller födelsedatum som ledande fält prioriteras när den
+  finns. Övriga årsvarianter ligger kvar som hashad källproveniens i årsfilen,
+  men skapar inte egna matrikelutgåvor;
 - `privat/kallkopior/matriklar/original/` — kanoniskt namngivna, bytebevarade
   privata kopior. Originalnamn och originalets SHA-256 ligger i varje JSON;
 - `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
@@ -51,8 +53,9 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   radräkning och återanvändning för hela den gemensamma importen;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
-  1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad och
-  beslutet om en aktiv sorteringsvariant per modern matrikel.
+  1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad,
+  beslutet om en sorteringsvariant och den senare preciseringen till exakt en
+  aktiv matrikel per kalenderår.
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.

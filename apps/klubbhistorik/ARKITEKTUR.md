@@ -88,8 +88,9 @@ flowchart LR
     T -. "ska inte ersättas av" .-> X
 ```
 
-Masterns `as_of` sträcker sig nu från juli 1980 till augusti 2025, med både
-års-, månads- och dagprecision beroende på vad källan faktiskt anger. En
+Masterns `as_of` sträcker sig nu från juli 1980 till augusti 2025. Det finns
+en aktiv matrikel per kalenderår, men den valda källans månads- eller
+dagprecision bevaras när den är känd. En
 identitetskoppling som görs 2026 ändrar inte när källobservationen gällde. På
 motsvarande sätt är en matrikel inte bevis för exakt inträdes- eller
 utträdesdag om den bara visar ett ögonblick.
@@ -191,9 +192,9 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 | Område | Status |
 |---|---|
-| 23 källsnapshots: 1980–1998 samt moderna exporttillfällen 2020–2025 | Byggt |
+| 13 årsvisa matriklar: 1980–1998 samt 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
-| 23 valda JSON-källdokument, exakt ett per snapshot | Byggt |
+| 13 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
 | Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
 | Fullständiga sida 2-avsnitt för 1980/1986 samt matriklarna 1982/1987/1988 | Byggt |
 | Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
@@ -210,9 +211,11 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 1. Lämna arkivoriginalet orört. Skapa en begripligt namngiven, bytebevarad
    privat källkopia och registrera både originalnamn, kopienamn och SHA-256.
-2. Skapa en JSON-fil enligt `schema/matrikel-source.schema.json` för den valda
-   källvarianten. Välj i första hand varianten med ålder eller födelsedatum
-   som ledande fält; lagra inte alternativa sorteringar som egna JSON-filer.
+2. Skapa `matrikel-ÅÅÅÅ.json` enligt `schema/matrikel-source.schema.json` för
+   den valda årsvarianten. Välj i första hand varianten med ålder eller
+   födelsedatum som ledande fält; lagra inte alternativa sorteringar eller
+   exporttillfällen som egna matrikel-JSON-filer. Bevara dem som hashad
+   källproveniens i årsfilen.
 3. Skapa eller återanvänd rätt `matrikel-release` och koppla det enda aktiva
    `source-document` som utgåvan ska använda.
 4. Importera varje synlig källrad, även tomnoter, dubbletter och svårtolkade

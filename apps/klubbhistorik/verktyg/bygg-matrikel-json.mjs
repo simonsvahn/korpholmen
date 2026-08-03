@@ -205,7 +205,7 @@ function parseModernRows(text,documentId,releaseId){
 
 function primaryRank(document){
   const order=document.release.sort_order;
-  return {'ålder':100,'födelsedatum':90,'födelseår':80,'numbers-export':70,'källordning':60,'kbk-snurra':50,'förnamn':40,'efternamn':30,'ö':20,'kbk-namn':10,'relation':0}[order]??-1;
+  return {'ålder':100,'födelsedatum':90,'födelseår':80,'källordning':70,'numbers-export':60,'kbk-snurra':50,'förnamn':40,'efternamn':30,'ö':20,'kbk-namn':10,'relation':0}[order]??-1;
 }
 
 async function buildModernDocuments(){
@@ -231,13 +231,30 @@ async function buildModernDocuments(){
     const memberRows=parseModernRows(snapshotText,documentId,release.id);
     documents.push({schema_version:1,document:{id:documentId,label:preferredLabel.replace(/\.pdf$/i,''),source_type:'PDF-export av Vem är vem',is_primary_for_release:false,transcription_method:'strukturerad tolkning av PDF-textlagret',transcription_status:'maskinellt parserad och radkontrollerad',original_files:originalFiles},release,columns:[{id:'age',label_raw:'I år/Fyller i år'},{id:'first_name',label_raw:'Förnamn'},{id:'last_name',label_raw:'Efternamn'},{id:'birth_year',label_raw:'Född/Födelseår'},{id:'birth_date',label_raw:'Födelsedatum'},{id:'island',label_raw:'Ö'},{id:'club_name',label_raw:'KBK-namn'},{id:'relation',label_raw:'Hör till/Hemma hos'}],sections:[{id:`section:${documentId}:listed`,kind:'member',category:'listed',label_raw:'Vem är vem',page:1,start_order:1,end_order:memberRows.length}],member_rows:memberRows,boat_rows:[],document_notes:[...(snapshotText.length<text.length?['PDF-filen innehåller även äldre, inbäddade sorteringsbilagor. De finns kvar i arkivoriginalet men räknas inte som personer i denna utgåva.']:[])]});
   }
-  const byRelease=new Map();
-  for(const document of documents){const id=document.release.id;if(!byRelease.has(id))byRelease.set(id,[]);byRelease.get(id).push(document)}
+  const byYear=new Map();
+  for(const document of documents){const year=document.release.year;if(!byYear.has(year))byYear.set(year,[]);byYear.get(year).push(document)}
   const selected=[];
-  for(const variants of byRelease.values()){
-    const chosen=variants.sort((a,b)=>primaryRank(b)-primaryRank(a)||a.document.id.localeCompare(b.document.id,'sv'))[0];
+  for(const [year,variants] of byYear){
+    const ranked=variants.slice().sort((a,b)=>primaryRank(b)-primaryRank(a)||String(b.release.as_of).localeCompare(String(a.release.as_of),'sv')||b.member_rows.length-a.member_rows.length||a.document.id.localeCompare(b.document.id,'sv'));
+    const chosenSource=ranked[0];
+    const chosen=structuredClone(chosenSource);
+    const selectedSourceDocumentId=chosen.document.id;
+    const selectedSourceReleaseId=chosen.release.id;
+    const annualReleaseId=`matrikel-${year}`;
+    const annualDocumentId=`source-document:${annualReleaseId}:arsutgava`;
+    chosen.document.id=annualDocumentId;
+    chosen.document.label=`Vem är vem ${year}`;
     chosen.document.is_primary_for_release=true;
-    chosen.document_notes.unshift(`Endast en sorteringsvariant lagras för utgåvan; vald ordning: ${chosen.release.sort_order}. Ålder eller födelsedatum prioriteras när sådan källa finns.`);
+    chosen.document.selected_source_document_id=selectedSourceDocumentId;
+    chosen.document.selected_source_release_id=selectedSourceReleaseId;
+    chosen.document.original_files=variants.flatMap(variant=>variant.document.original_files.map(file=>({...file,source_release_id:variant.release.id,source_as_of:variant.release.as_of,source_sort_order:variant.release.sort_order,selected_for_annual_json:variant===chosenSource})));
+    chosen.release.id=annualReleaseId;
+    chosen.release.title=`Vem är vem? – ${year}`;
+    chosen.release.annual_policy='en matrikel per kalenderår';
+    chosen.member_rows=chosen.member_rows.map(row=>({...row,id:`member-row:${annualDocumentId}:${pad(row.order)}`}));
+    chosen.sections=chosen.sections.map(section=>({...section,id:`section:${annualDocumentId}:listed`,end_order:chosen.member_rows.length}));
+    chosen.document_notes.unshift(`En årsvis JSON lagras för ${year}. Vald källåtergivning: ${chosen.release.as_of}, ordning ${chosen.release.sort_order}. Ålder eller födelsedatum prioriteras, därefter standardåtergivning och senaste tillgängliga källdatum.`);
+    if(variants.length>1)chosen.document_notes.push(`Samtliga ${variants.length} PDF-/exportvarianter för året finns kvar med filnamn och SHA-256 i document.original_files; de skapar inte egna matrikelutgåvor.`);
     selected.push(chosen);
   }
   return selected;
@@ -287,7 +304,7 @@ documents.push(...await buildModernDocuments());
 const names=new Set();const primaryByRelease=new Map();
 for(const document of documents){
   validate(document);
-  const filename=`${document.document.id.replace(/^source-document:/,'').replaceAll(':','-')}.json`;
+  const filename=`matrikel-${document.release.year}.json`;
   if(names.has(filename))throw new Error(`Dubbel JSON-fil: ${filename}`);names.add(filename);
   if(document.document.is_primary_for_release){if(primaryByRelease.has(document.release.id))throw new Error(`Flera primärdokument: ${document.release.id}`);primaryByRelease.set(document.release.id,document.document.id)}
   await writeFile(resolve(OUTPUT,filename),`${JSON.stringify(document,null,2)}\n`);

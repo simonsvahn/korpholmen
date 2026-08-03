@@ -5,16 +5,16 @@ utbyggnader finns i [`ARKITEKTUR.md`](ARKITEKTUR.md).
 
 ## Människan, källan och tolkningen
 
-`matrikel-release` beskriver en konceptuell utgåva. Varje utgåva har exakt
-ett aktivt `source-document` och exakt en validerad JSON-fil. Om arkivet
+`matrikel-release` beskriver en konceptuell årsutgåva. Varje kalenderår har
+exakt ett aktivt `source-document` och exakt en validerad JSON-fil. Om arkivet
 innehåller flera PDF-sorteringar väljs varianten med ålder eller födelsedatum
 som ledande fält i första hand;
 i annat fall används den enda eller mest kompletta varianten. Alternativa
 arkivoriginal ändras inte, men de ingår inte som egna JSON-dokument i mastern.
 
 Alla privata matrikelkällor har dessutom samma validerade JSON-format
-`matrikel-source.schema.json`. En JSON-fil motsvarar den valda återgivningen
-av en matrikelutgåva och innehåller alltid samma
+`matrikel-source.schema.json`. En JSON-fil heter `matrikel-ÅÅÅÅ.json`,
+motsvarar den valda återgivningen för året och innehåller alltid samma
 topplager: `document`, `release`, `columns`, `sections`, `member_rows`,
 `boat_rows` och `document_notes`.
 
@@ -44,11 +44,12 @@ Källutgåvans `as_of` är domäntid: när ögonblicksbilden avser. HLC på en
 operation är transaktionstid: när en import eller rättelse registrerades.
 Dessa två tider får aldrig blandas ihop.
 
-Flera verkligt olika källsnapshots kan ha samma grova domäntid. Exempelvis är
-2025 års Numbers-export och standardexport två skilda utgåvor med precisionen
-`year`, eftersom innehållet skiljer sig men deras inbördes datum är okänt.
-Den daterade exporten 2025-08-01 är en tredje utgåva. De får inte slås ihop
-bara för att årtalet är detsamma.
+Flera exporter kan finnas inom samma kalenderår. Klubbhistorikens beslutade
+upplösning är en årsutgåva: den valda källans exakta `as_of` bevaras som
+domäntid, medan övriga exporter registreras med filnamn, sortering och SHA-256
+i årsfilens proveniens. De är alltså inte egna kolumner i tidsresan. Tidigare
+importerade exportutgåvor raderas inte ur operationshistoriken utan markeras
+inaktiva.
 
 ## Gemensamt källformat
 
