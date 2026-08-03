@@ -221,6 +221,104 @@ a.registernamn:hover {
   color: white;
 }
 
+.delningsfilter {
+  align-items: center;
+  background: color-mix(in srgb, var(--guld) 11%, white);
+  border: 1px solid color-mix(in srgb, var(--guld) 40%, var(--linje));
+  border-radius: 999px;
+  color: var(--mork);
+  cursor: pointer;
+  display: inline-flex;
+  font: 750 9px var(--sans);
+  gap: 7px;
+  margin-top: 10px;
+  padding: 6px 9px 6px 11px;
+}
+
+.delningsfilter b {
+  align-items: center;
+  background: var(--guld);
+  border-radius: 999px;
+  color: white;
+  display: inline-flex;
+  font-size: 8px;
+  justify-content: center;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0 4px;
+}
+
+.delningsfilter.aktiv,
+.delningsfilter:hover,
+.delningsfilter:focus-visible {
+  background: var(--guld);
+  color: white;
+}
+
+.delningsfilter.aktiv b,
+.delningsfilter:hover b,
+.delningsfilter:focus-visible b {
+  background: white;
+  color: var(--mork);
+}
+
+.namndelning {
+  margin-top: 3px;
+}
+
+.namndelning summary {
+  color: var(--hav);
+  cursor: pointer;
+  font: 750 8px var(--sans);
+  list-style-position: inside;
+  width: fit-content;
+}
+
+.namndelning > small {
+  color: var(--mjuk);
+  display: block;
+  font-size: 8px;
+  line-height: 1.35;
+  margin: 4px 0;
+  max-width: 220px;
+}
+
+.delningsval {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.delningsval button {
+  background: color-mix(in srgb, var(--vatten) 48%, white);
+  border: 1px solid color-mix(in srgb, var(--hav) 28%, var(--linje));
+  border-radius: 5px;
+  color: var(--mork);
+  cursor: pointer;
+  font: 700 8px var(--sans);
+  padding: 5px 7px;
+}
+
+.delningsval button b {
+  color: var(--rod);
+  padding: 0 2px;
+}
+
+.delningsval button:hover,
+.delningsval button:focus-visible {
+  background: var(--hav);
+  color: white;
+}
+
+.delningsval button:hover b,
+.delningsval button:focus-visible b {
+  color: white;
+}
+
+.delningskalla {
+  color: var(--rod);
+}
+
 .topregister {
   display: grid;
   gap: 7px;

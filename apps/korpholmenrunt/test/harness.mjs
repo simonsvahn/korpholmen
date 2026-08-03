@@ -73,7 +73,7 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -81,7 +81,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("['Tävlande 2',result.crew_1_raw]"));
   assert.ok(app.includes("['Tävlande 3',result.crew_2_raw]"));
   assert.ok(app.includes("method:'valt i resultatdialogen'"));
-  assert.ok(app.includes("participantRoleLabel(link.source_field||link.role)"));
+  assert.ok(app.includes('participantRole(link)'));
   assert.ok(matchingStyles.includes('.tavlandegrupp'));
   assert.ok(app.includes('matchContext(result,bMap)'));
   assert.equal((app.match(/\$\{matchContext\(result,bMap\)\}/g)||[]).length,3);
@@ -102,12 +102,18 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes('inline-class-options'));
   assert.ok(app.includes('data-action="quick-confirm-person"'));
   assert.ok(app.includes('data-action="quick-confirm-boat"'));
+  assert.ok(app.includes('data-action="split-participant"'));
+  assert.ok(app.includes('data-action="toggle-split-review"'));
+  assert.ok(app.includes("field:'participant_structure_status'"));
+  assert.ok(app.includes('Källrad före delning:'));
   assert.ok(app.includes("field:'class_match_method'"));
   assert.ok(app.includes("field:'match_method',value:'bekräftat från förslag i resultatlistan'"));
   assert.ok(matchingStyles.includes('.sortknapp'));
   assert.ok(matchingStyles.includes('.snabbval'));
   assert.ok(matchingStyles.includes('.sorteringsperson'));
   assert.ok(matchingStyles.includes('.forslagsknapp'));
+  assert.ok(matchingStyles.includes('.namndelning'));
+  assert.ok(matchingStyles.includes('.delningsfilter'));
   assert.ok(app.includes("updateViaCache:'none'"));
   assert.ok(serviceWorker.includes("if(request.mode==='navigate')"));
   assert.ok(serviceWorker.includes("fetch(request,{cache:'no-store'})"));
