@@ -95,6 +95,12 @@ kan få rättelsemetadata. De blir inte en namnhändelse. Ett verkligt namnbyte
 kan upptäckas i Klubbhistorik men lämnas som förslag tills Matrikelns master
 har godkänt det.
 
+Klubbhistorik skiljer dessutom källtext från källayout. Ett särskilt
+`source-layout-row` kan placera flera båtrader bredvid en medlemsrad eller
+återge rubriker och noter utan att skapa en person–båt-relation. En tryckt rad
+med flera namngivna personer delas i personförekomster, medan en ren
+familjeetikett bevaras som grupptext.
+
 ## Tid är en förstaklassdimension
 
 Apparna skiljer mellan minst två tider:

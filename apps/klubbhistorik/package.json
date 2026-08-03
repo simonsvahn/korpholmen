@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build:sources": "node verktyg/bygg-matrikel-json.mjs",
-    "build:migration": "node verktyg/bygg-startmaster.mjs && node verktyg/bygg-tillaggs-matriklar.mjs && node verktyg/bygg-korrigering-ted-thunborg.mjs && node verktyg/bygg-synkade-matriklar.mjs --only-year 2010 --out-file 2026-08-03-matrikel-2010.json && node verktyg/bygg-en-matrikel-per-ar.mjs",
+    "build:migration": "node verktyg/bygg-en-matrikel-per-ar.mjs",
     "validate:sources": "node verktyg/validera-matrikel-json.mjs",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",

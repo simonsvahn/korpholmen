@@ -19,17 +19,19 @@ Klubbhistorik ska kunna svara på frågor som:
 Appen ska inte avgöra släktskap, stabil personidentitet, stabil båtidentitet
 eller fastighetsägande. Det gör respektive ägarapp.
 
-## Modellens fem lager
+## Modellens sex lager
 
 ```mermaid
 flowchart TB
     S["1. Källdokument och ordagranna källrader"]
-    U["2. Daterad matrikelutgåva"]
-    F["3. Person- och båtförekomster"]
-    K["4. Granskade länkar till externa stabila ID:n"]
-    V["5. Härledda tidslinjer, jämförelser och kontrollrapporter"]
+    L["2. Källans radlayout och avsnitt"]
+    U["3. Daterad matrikelutgåva"]
+    F["4. Person- och båtförekomster"]
+    K["5. Granskade länkar till externa stabila ID:n"]
+    V["6. Härledda tidslinjer, jämförelser och kontrollrapporter"]
 
-    S --> U
+    S --> L
+    L --> U
     S --> F
     U --> F
     F --> K
@@ -44,19 +46,32 @@ flowchart TB
 `source-row` bevarar ordalydelse, ordning och pekare till de förekomster som
 tolkats ur raden. Råtext ändras aldrig när tolkningen rättas.
 
-### 2. Utgåvan
+### 2. Layouten
+
+`source-layout-row` bevarar hur medlemsrad, en eller flera båtrader, rubriker
+och noter faktiskt placeras på varje trycksida. Samma medlemsrad kan ha flera
+båtrader, ingen båtrad eller — vid en fysisk sidupprepning — förekomma på två
+layoutrader utan att personen räknas två gånger. Layoutankaret är uttryckligen
+inte en uppgift om ägande.
+
+### 3. Utgåvan
 
 `matrikel-release` beskriver den konceptuella klubbögonblicksbilden, exempelvis
 »Medlemsmatrikel juli 1986«. Flera skanningar, sorteringar eller exportformat
 kan senare höra till samma utgåva utan att bli olika historiska år.
 
-### 3. Förekomsten
+### 4. Förekomsten
 
 `person-occurrence` och `boat-occurrence` betyder att något står i källan.
 Förekomsten bär råform, källordning, utgåva och eventuell normaliserad
 tolkning. Den är inte samma sak som den stabila personen eller båten.
 
-### 4. Identitetslänken
+En medlemsrad kan vara `person`, `multiple_people`, `group` eller `blank`.
+»Ulla och Stig Freyschuss« skapar två separata, ännu omatchade
+personförekomster med samma källrad. »Familjen Wagstaff« bevaras som grupptext
+men skapar ingen påhittad person.
+
+### 5. Identitetslänken
 
 `person_id` respektive `boat_id` är länkar till Matrikel och Båtregister.
 `person-ref` och `boat-ref` är privata referenssnapshots för sökning och
@@ -66,7 +81,7 @@ bildfilerna. Granskningsvyn kan därför alltid visa särskiljning, typ, modell,
 år, period, ägare, namnhistorik och källor utan att göra Klubbhistorik till
 båtmaster.
 
-### 5. Den härledda vyn
+### 6. Den härledda vyn
 
 Tidslinjer, skillnadslistor, personprofiler och namnbytesförslag räknas ur de
 fyra föregående lagren. En omräkning får förändra presentationen men aldrig
@@ -116,14 +131,15 @@ flowchart LR
 
 ## Båtar och ägande
 
-I 1980 och 1986 års blad är medlems- och fartygskolumnerna inte tillräckligt
-radparade för att bära ägande. Därför gäller:
+I samtliga fotograferade båtmtriklar 1980, 1982, 1986, 1987, 1988, 1991 och
+1998 är medlems- och fartygskolumnernas visuella placering otillräcklig för
+att bära ägande. Därför gäller:
 
-Källvyn ska ändå återge den faktiska trycksidan: `INV. ÅR`, `MEDLEMMAR` och
-`INREG. FARTYG` visas sida vid sida, sida för sida, med källordning och tomma
-layoutbärande rader bevarade. Detta är en typografisk rekonstruktion av
-källdokumentet. Celler på samma höjd får inte materialiseras som en relation
-mellan person och båt.
+Källvyn återger den faktiska trycksidan från explicita `source-layout-row`:
+`INV. ÅR`, `MEDLEMMAR` och `INREG. FARTYG` visas sida vid sida med rätt
+rubriker, noter, fortsättningsrader och fristående avregistreringsavsnitt.
+Detta är en typografisk rekonstruktion av källdokumentet. Celler på samma höjd
+får inte materialiseras som en relation mellan person och båt.
 
 ```mermaid
 flowchart LR
@@ -150,6 +166,11 @@ namnet. Den visar även Båtregistrets särskiljning och matchningsmetadata, til
 exempel »Majsol — Neretnieks · S/S · 1975« respektive »Majsol — Holm · M/S ·
 2013«. Redan godkända manuella kopplingar ligger kvar i en efterkontroll där
 de kan ändras med en ny operation; det tidigare beslutet raderas inte.
+
+Registreringsparentesen bevaras både som råtext och strukturerade perioder.
+Ett intervall som `1974-84` blir 1974–1984; `-1995` och `1997-` behåller
+vilken ände som är öppen. Flera uttryck, som `-1997, 1997-`, blir två perioder
+och får inte reduceras till två lösa årtal.
 
 ## Matchnings- och granskningsflöde
 
@@ -194,6 +215,8 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 |---|---|
 | 14 årsvisa matriklar: 1980–1998, 2010 samt 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
+| Schema v2: 1 606 källayoutrader och explicita medlems-/båtankare | Byggt |
+| 1 539 personförekomster ur 1 533 medlemsrader; flerspersonrader separerade | Byggt |
 | 14 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
 | 2010: 77 källrader på två fotograferade sidor, utan fartygskolumn | Byggt |
 | Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
@@ -220,8 +243,11 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 3. Skapa eller återanvänd rätt `matrikel-release` och koppla det enda aktiva
    `source-document` som utgåvan ska använda.
 4. Importera varje synlig källrad, även tomnoter, dubbletter och svårtolkade
-   värden som annars skulle kunna falla bort.
-5. Skapa förekomster utan att ändra källtexten.
+   värden som annars skulle kunna falla bort. Lägg varje rubrik, not,
+   medlemsrad och båtrad i sidans explicita `layout_rows`.
+5. Skapa en personkomponent per verklig person i en flerspersonrad; låt rena
+   gruppetiketter stanna som källtext. Skapa förekomster utan att ändra
+   källtexten.
 6. Matcha bara entydiga fall automatiskt; lägg resten i granskningskö.
 7. Kör `node verktyg/validera-matrikel-json.mjs` och jämför radantal,
    kontrollpunkter, källhashar och operationshash i test.

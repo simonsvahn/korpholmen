@@ -16,23 +16,26 @@ Alla privata matrikelkällor har dessutom samma validerade JSON-format
 `matrikel-source.schema.json`. En JSON-fil heter `matrikel-ÅÅÅÅ.json`,
 motsvarar den valda återgivningen för året och innehåller alltid samma
 topplager: `document`, `release`, `columns`, `sections`, `member_rows`,
-`boat_rows` och `document_notes`.
+`boat_rows`, `layout_rows` och `document_notes`.
 
-`person-occurrence` är en ordagrann rad i medlemskolumnen. Den bär bland annat
+`person-occurrence` är en person som uttryckligen kan utläsas ur en ordagrann
+rad i medlemskolumnen. Den bär bland annat
 utgåva, ordning, råtext, medlemskategori, rått invalår, det personnamn som kan
 utläsas och en separat identitetsmatchning mot Matrikelns `person_id`.
 
 `boat-occurrence` är en namngiven båt i fartygskolumnen. Den bär råtext,
-prefix, eventuellt registreringsår och en separat matchning mot Båtregistrets
+prefix, registreringsår eller strukturerade öppna/slutna årsperioder och en
+separat matchning mot Båtregistrets
 `boat_id`. Förekomsten innebär att båten står i utgåvan, inte automatiskt vem
 som ägde den.
 
 I vyn **Som källan skrevs** återbyggs de historiska trycksidorna av
-`source_page`, källordning och de bevarade tomraderna. Medlemskolumnen och
-fartygskolumnen visas därför sida vid sida precis som i matrikeln, och en rad
-med flera båtnamn förblir en enda ordagrann källcell. Den visuella placeringen
-är källayout, inte en datamodellrelation: inget `person_id`, `boat_id` eller
-ägarpåstående skapas genom att två celler råkar stå på samma höjd.
+`source-layout-row`. Varje layoutrad pekar på noll eller en medlemskällrad och
+noll eller flera båtkällrader samt kan i stället vara en rubrik, not eller
+fristående avregistreringsrad. Medlemskolumnen och fartygskolumnen visas därför
+sida vid sida precis som i matrikeln. Den visuella placeringen är källayout,
+inte en ägarrelation: inget `person_id`, `boat_id` eller ägarpåstående skapas
+genom att två celler står på samma höjd.
 
 `person-ref` och `boat-ref` är privata läskopior för sökning och länkning.
 Deras `external_id` är fortsatt auktoritativt i Matrikel respektive
@@ -64,6 +67,16 @@ födelsedatum, ö eller relationskolumn. Saknade värden är tom sträng eller
 `components`-lista där exempelvis `M/S Filifjonkan, M/S Lilla My` blir två
 båtförekomster utan att originalraden ändras. En tom layoutbärande rad har
 `category: blank` och inga komponenter.
+
+`entity_kind` skiljer `person`, `multiple_people`, `group` och `blank`.
+`person_components` anger vilka personförekomster raden faktiskt skapar.
+Det gör att en rad med två namngivna makar blir två observationer, medan en
+etikett som »Familjen Wagstaff« inte blir en fingerad personidentitet.
+
+Varje båtrad kan bära `associated_member_row_id`, som endast anger vilken
+tryckt medlemsrad båttexten står bredvid. `registry_periods` bevarar dessutom
+slutna intervall och öppna ändar; råformen ligger alltid kvar i
+`registry_year_raw`.
 
 De stora PDF-filerna 2023–2025 innehåller även äldre sorteringsbilagor. Dessa
 ligger kvar bytebevarade i den privata källkopian men räknas inte en gång till

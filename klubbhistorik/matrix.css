@@ -16,6 +16,9 @@
 .kallmatrikel td{height:2.8rem;padding:.55rem 1rem;border-right:1px solid #e0ddd3;background:#fffdf8;vertical-align:top}
 .kallmatrikel td:last-child{border-right:0}
 .kallmatrikel tbody tr:hover td{background:#f8f5ed}
+.kallmatrikel .kallrubrik th{padding-top:1.05rem;border-top:1px solid #c9c5b9;background:#f0ede4;text-align:left;letter-spacing:.045em}
+.kallmatrikel .kallnotrad td{height:auto;background:#f8f5ed;color:#586568;font-style:italic}
+.kallmatrikel .kallfristående td{height:auto;background:#fffaf0}
 .kallkod{display:block;min-height:1.35rem;white-space:pre-wrap;font:600 .84rem/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#30454a}
 .kalltom{color:transparent}
 .kallnot{display:block;margin-top:.25rem;color:#8a6530;font-size:.68rem;line-height:1.4}

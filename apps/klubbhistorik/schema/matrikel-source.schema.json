@@ -12,10 +12,11 @@
     "sections",
     "member_rows",
     "boat_rows",
+    "layout_rows",
     "document_notes"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "document": {
       "type": "object",
       "additionalProperties": true,
@@ -38,7 +39,7 @@
           "induction_year_raw", "induction_year", "first_name_raw", "last_name_raw",
           "person_name_raw", "club_name_core_raw", "age_raw", "birth_year_raw",
           "birth_year", "birth_date_raw", "birth_date", "island_raw",
-          "club_name_raw", "relation_raw"
+          "club_name_raw", "relation_raw", "entity_kind", "person_components"
         ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
@@ -60,7 +61,20 @@
           "birth_date": { "type": ["string", "null"] },
           "island_raw": { "type": "string" },
           "club_name_raw": { "type": "string" },
-          "relation_raw": { "type": "string" }
+          "relation_raw": { "type": "string" },
+          "entity_kind": { "enum": ["person", "multiple_people", "group", "blank"] },
+          "person_components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["order", "person_name_raw"],
+              "properties": {
+                "order": { "type": "integer", "minimum": 1 },
+                "person_name_raw": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
         }
       }
     },
@@ -69,7 +83,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "order", "page", "category", "raw_text", "source_annotation", "components"],
+        "required": ["id", "order", "page", "category", "raw_text", "source_annotation", "components", "associated_member_row_id"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "order": { "type": "integer", "minimum": 1 },
@@ -84,7 +98,7 @@
               "additionalProperties": false,
               "required": [
                 "order", "raw_text", "prefix", "boat_name_raw",
-                "registry_year_raw", "registry_year", "registry_years"
+                "registry_year_raw", "registry_year", "registry_years", "registry_periods"
               ],
               "properties": {
                 "order": { "type": "integer", "minimum": 1 },
@@ -93,10 +107,45 @@
                 "boat_name_raw": { "type": "string" },
                 "registry_year_raw": { "type": "string" },
                 "registry_year": { "type": ["integer", "null"] },
-                "registry_years": { "type": "array", "items": { "type": "integer" } }
+                "registry_years": { "type": "array", "items": { "type": "integer" } },
+                "registry_periods": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["raw", "kind", "from", "to", "from_open", "to_open"],
+                    "properties": {
+                      "raw": { "type": "string" },
+                      "kind": { "enum": ["year", "range", "text"] },
+                      "from": { "type": ["integer", "null"] },
+                      "to": { "type": ["integer", "null"] },
+                      "from_open": { "type": "boolean" },
+                      "to_open": { "type": "boolean" }
+                    }
+                  }
+                }
               }
             }
-          }
+          },
+          "associated_member_row_id": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "layout_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "order", "page", "kind", "section", "member_row_id", "boat_row_ids", "text_raw"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 },
+          "page": { "type": "integer", "minimum": 1 },
+          "kind": { "enum": ["member", "heading", "note", "boat"] },
+          "section": { "type": "string" },
+          "member_row_id": { "type": ["string", "null"] },
+          "boat_row_ids": { "type": "array", "items": { "type": "string" } },
+          "text_raw": { "type": "string" }
         }
       }
     },

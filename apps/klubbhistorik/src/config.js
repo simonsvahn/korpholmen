@@ -15,4 +15,5 @@ export const LOCAL_BOOTSTRAP_URLS = [
   './privat/korrigeringar/2026-08-03-en-matrikel-per-ar.json',
   './privat/korrigeringar/2026-08-03-matrikel-2010.json',
   './privat/korrigeringar/2026-08-03-en-matrikel-per-ar-v2.json',
+  './privat/korrigeringar/2026-08-03-kalltrogen-layout-v3.json',
 ];

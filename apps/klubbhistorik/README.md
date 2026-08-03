@@ -11,7 +11,8 @@ stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
 Mastern omfattar 14 årsvisa matriklar från juli 1980 till augusti 2025,
 inklusive den tvåsidiga medlemsmatrikeln 2010. I de
-historiska matriklarna bevaras medlems- och fartygskolumnen var för sig,
+historiska matriklarna bevaras medlems- och fartygskolumnen var för sig och
+sammanförs för källvisning med ett separat, källkontrollerat layoutlager,
 inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
 fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källan;
 appen påstår därför inte att en båt på en viss rad ägdes av personen på
@@ -61,8 +62,9 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad,
   beslutet om en sorteringsvariant och den senare preciseringen till exakt en
   aktiv matrikel per kalenderår. 2010 ligger i en ny append-only-batch, följd
-  av en ny årsvalsbatch; de tidigare Dropbox-distribuerade batcherna skrivs
-  inte över.
+  av en ny årsvalsbatch och `2026-08-03-kalltrogen-layout-v3.json` med 1 606
+  layoutrader, separerade flerspersonrader och strukturerade båtårsperioder.
+  De tidigare Dropbox-distribuerade batcherna skrivs inte över.
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.

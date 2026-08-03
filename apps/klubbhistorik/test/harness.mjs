@@ -21,7 +21,7 @@ const MATRIKEL_2010_CORRECTION=resolve(CORRECTIONS,'2026-08-03-matrikel-2010.jso
 const MATRIKEL_2010_REPORT=resolve(MIGRATION,'kontrollrapport-matrikel-2010.json');
 const TED_CORRECTION=resolve(CORRECTIONS,'2026-08-03-ted-thunborg-dublett.json');
 const VARIANT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-en-sorteringsvariant-per-matrikel.json');
-const ANNUAL_CORRECTION=resolve(CORRECTIONS,'2026-08-03-en-matrikel-per-ar-v2.json');
+const ANNUAL_CORRECTION=resolve(CORRECTIONS,'2026-08-03-kalltrogen-layout-v3.json');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -32,10 +32,6 @@ async function test(name,action){
 
 function buildMigration(){
   const commands=[
-    ['verktyg/bygg-startmaster.mjs'],
-    ['verktyg/bygg-tillaggs-matriklar.mjs'],
-    ['verktyg/bygg-korrigering-ted-thunborg.mjs'],
-    ['verktyg/bygg-synkade-matriklar.mjs','--only-year','2010','--out-file','2026-08-03-matrikel-2010.json'],
     ['verktyg/bygg-en-matrikel-per-ar.mjs'],
   ];
   for(const command of commands){
@@ -146,12 +142,14 @@ await test('alla matrikel-JSON följer samma schema och källhashar',()=>{
   const result=spawnSync(process.execPath,['verktyg/validera-matrikel-json.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(result.status,0,result.stderr||result.stdout);
   const validation=JSON.parse(result.stdout);
-  assert.equal(validation.schema_version,1);
+  assert.equal(validation.schema_version,2);
   assert.equal(validation.documents,14);
   assert.equal(validation.releases,14);
   assert.deepEqual(validation.years,[1980,1982,1986,1987,1988,1991,1998,2010,2020,2021,2022,2023,2024,2025]);
   assert.equal(validation.source_files,79);
   assert.equal(validation.member_rows_in_primary_documents,1533);
+  assert.equal(validation.person_occurrences_in_primary_documents,1539);
+  assert.equal(validation.layout_rows_in_primary_documents,1606);
   assert.equal(validation.boat_occurrences_in_primary_documents,559);
   assert.equal(validation.source_duplicate_groups.length,0);
   for(const year of validation.years)assert.ok(validation.release_counts[`matrikel-${year}`],year);
@@ -166,16 +164,18 @@ await test('varje kalenderår har en aktiv JSON utan att äldre operationer rade
   assert.ok(releases.every(release=>release.source_document_ids.length===1));
   assert.equal(annualDocument.counts.active_releases,14);
   assert.equal(annualDocument.counts.retired_releases,15);
-  assert.equal(annualDocument.counts.active_person_occurrences,1533);
+  assert.equal(annualDocument.counts.active_person_occurrences,1539);
   assert.equal(annualDocument.counts.active_boat_occurrences,559);
+  assert.equal(annualDocument.counts.active_source_layout_rows,1606);
   assert.equal(annualDocument.selection['matrikel-2020'].selected_source_release_id,'matrikel-2020-08-05');
   assert.equal(annualDocument.selection['matrikel-2010'].selected_source_release_id,'matrikel-2010');
   assert.equal(annualDocument.selection['matrikel-2025'].selected_source_release_id,'matrikel-2025-08-01');
-  assert.equal(people.length,1533);
-  assert.ok(annualDocument.operations.filter(operation=>operation.entity_type==='person-occurrence').every(operation=>!['person_id','confirmed','candidate_ids','match_status','match_method'].includes(operation.field)));
+  assert.equal(people.length,1539);
+  const splitIds=new Set(people.filter(item=>item.source_entity_kind==='multiple_people').map(item=>item.id));
+  assert.ok(annualDocument.operations.filter(operation=>operation.entity_type==='person-occurrence'&&['person_id','confirmed','candidate_ids','match_status','match_method'].includes(operation.field)).every(operation=>splitIds.has(operation.entity_id)));
 });
 
-await test('14 årsutgåvor och 1 533 aktiva medlemsförekomster finns',()=>{
+await test('14 årsutgåvor och 1 539 personförekomster finns',()=>{
   assert.equal(releases.length,14);
   assert.deepEqual(releases.map(release=>release.id).sort(),Object.keys(annualDocument.selection).sort());
   assert.deepEqual(report.release_counts['matrikel-1980'],{person_rows:41,boat_source_rows:32,boat_occurrences:46,connected_person_rows:40,unresolved_person_rows:1});
@@ -185,15 +185,16 @@ await test('14 årsutgåvor och 1 533 aktiva medlemsförekomster finns',()=>{
   assert.deepEqual(supplementReport.release_counts['matrikel-1998'].person_categories,{active:63,passive:2,junior:42,corresponding:4});
   assert.equal(supplementReport.release_counts['matrikel-1991'].person_rows,96);
   assert.equal(supplementReport.release_counts['matrikel-1998'].person_rows,111);
-  assert.equal(people.length,1533);
+  assert.equal(people.length,1539);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='active').length,35);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='passive').length,6);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='junior').length,30);
-  assert.equal(people.filter(item=>item.release_id==='matrikel-1982').length,77);
-  assert.equal(people.filter(item=>item.release_id==='matrikel-1987').length,85);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1982').length,78);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1987').length,86);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1988').length,89);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1991'&&item.membership_status==='junior').length,26);
-  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.membership_status==='corresponding').length,4);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998').length,113);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.membership_status==='corresponding').length,6);
   assert.equal(people.filter(item=>item.release_id==='matrikel-2010').length,77);
   assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='active').length,64);
   assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='passive').length,8);
@@ -206,6 +207,7 @@ await test('alla aktiva källrader och båtförekomster redovisas utan tyst bort
   assert.equal(activeSourceRows.length,1906);
   assert.equal(activeSourceRows.filter(row=>row.id.startsWith('source-row:canonical:')).length,1906);
   assert.equal(boats.length,559);
+  assert.equal(rows('source-layout-row').filter(row=>row.retained!==false).length,1606);
   assert.equal(new Set(sourceRows.map(row=>row.id)).size,sourceRows.length);
   assert.ok(sourceRows.every(row=>typeof row.raw_text==='string'&&(row.raw_text.length>0||row.category==='blank')));
   assert.ok(people.every(item=>typeof item.raw_text==='string'&&item.raw_text.length>0));
@@ -220,6 +222,26 @@ await test('alla aktiva källrader och båtförekomster redovisas utan tyst bort
   assert.equal(boats.find(item=>item.release_id==='matrikel-1991'&&item.boat_name_raw==='Lasse-Maja (1985').source_annotation,'slutparentes saknas i källan');
 });
 
+await test('den tryckta radlayouten är explicit och 1998 återges utan indexparning',()=>{
+  const layouts=rows('source-layout-row').filter(item=>item.retained!==false&&item.release_id==='matrikel-1998');
+  const firstMember='source-row:canonical:source-document:matrikel-1998:foto:member:001';
+  const first=layouts.find(item=>item.member_source_row_id===firstMember);
+  assert.deepEqual(first.boat_source_row_ids,[
+    'source-row:canonical:source-document:matrikel-1998:foto:boat:001',
+    'source-row:canonical:source-document:matrikel-1998:foto:boat:002',
+  ]);
+  const nanna='source-row:canonical:source-document:matrikel-1998:foto:member:088';
+  const yngve='source-row:canonical:source-document:matrikel-1998:foto:member:089';
+  assert.equal(layouts.filter(item=>item.member_source_row_id===nanna).length,2);
+  assert.equal(layouts.filter(item=>item.member_source_row_id===yngve).length,2);
+  assert.ok(layouts.some(item=>item.kind==='heading'&&item.text_raw==='KORRESPONDERANDE MEDLEMMAR'));
+  assert.ok(layouts.some(item=>item.kind==='note'&&item.text_raw.includes('5 års tystnad')));
+  assert.ok(layouts.some(item=>item.kind==='heading'&&item.text_raw==='AVREGISTRERADE OCH/ELLER NAMNÄNDRADE FARTYG'));
+  const historicBoats=activeSourceRows.filter(row=>row.kind==='boat'&&Number(row.release_id.slice(-4))<=1998&&row.category!=='blank');
+  assert.ok(historicBoats.filter(row=>row.category!=='deregistered-or-renamed').every(row=>row.associated_member_source_row_id));
+  assert.ok(historicBoats.filter(row=>row.category==='deregistered-or-renamed').every(row=>!row.associated_member_source_row_id));
+});
+
 await test('person- och båtkopplingar pekar bara på respektive master',()=>{
   const personIds=new Set(personRefs.map(ref=>ref.external_id));
   const boatIds=new Set(boatRefs.map(ref=>ref.external_id));
@@ -231,7 +253,7 @@ await test('person- och båtkopplingar pekar bara på respektive master',()=>{
 
 await test('osäkra identiteter ligger öppet i granskningskön',()=>{
   const unresolved=people.filter(item=>!item.person_id||!item.confirmed);
-  assert.equal(unresolved.length,191);
+  assert.equal(unresolved.length,197);
   const originalUnresolved=unresolved.filter(item=>['matrikel-1980','matrikel-1986'].includes(item.release_id)&&!item.id.includes(':canonical:'));
   assert.deepEqual(originalUnresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
   assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
@@ -268,6 +290,13 @@ await test('alla redan gjorda manuella båtkopplingar är eftergranskade och kor
     assert.equal(occurrence.audit_status,'eftergranskad');
     assert.match(occurrence.decision_note,/Eftergranskad 2026-08-03/);
   }
+  const externallyDecidedIds=new Set([
+    'boat-occurrence:matrikel-1980:018:1','boat-occurrence:matrikel-1980:019:1','boat-occurrence:matrikel-1980:021:1',
+    'boat-occurrence:matrikel-1986:022:1','boat-occurrence:matrikel-1986:033:1','person-occurrence:matrikel-1980:023',
+    'person-occurrence:matrikel-1986:033','person-occurrence:matrikel-1986:034','person-occurrence:matrikel-1986:047',
+  ]);
+  const decisionFields=new Set(['person_id','boat_id','confirmed','candidate_ids','match_status','match_method','decision_note']);
+  assert.equal(annualDocument.operations.filter(operation=>externallyDecidedIds.has(operation.entity_id)&&decisionFields.has(operation.field)).length,0);
 });
 
 await test('Majsol 1986 avgörs av typ och år utan att källraden ändras',()=>{
@@ -307,6 +336,28 @@ await test('1991 och 1998 bevarar medlems- och fartygskategorierna',()=>{
   assert.equal(retired.registry_year_raw,'1991-96');
   assert.equal(commaName.registry_year,1994);
   assert.equal(commaName.raw_text,'S/S Smör, Ost och Sill(1994)');
+  const babb=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Babb');
+  assert.equal(babb.raw_text,'M/S Babb (1960-84)');
+  assert.deepEqual(babb.registry_periods,[{raw:'1960-84',kind:'range',from:1960,to:1984,from_open:false,to_open:false}]);
+  const hostsol=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Höstsol');
+  assert.deepEqual(hostsol.registry_periods,[
+    {raw:'-1997',kind:'range',from:null,to:1997,from_open:true,to_open:false},
+    {raw:'1997-',kind:'range',from:1997,to:null,from_open:false,to_open:true},
+  ]);
+});
+
+await test('flerspersonrader blir personer men gruppetiketter blir inte personer',()=>{
+  const ulla=people.filter(item=>item.person_name_raw==='Ulla Freyschuss');
+  const stig=people.filter(item=>item.person_name_raw==='Stig Freyschuss');
+  assert.equal(ulla.length,7);
+  assert.equal(stig.length,7);
+  assert.ok(ulla.every(item=>item.source_person_name_raw==='Ulla och Stig Freyschuss'&&!item.confirmed));
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Ditte Thufvesson').length,1);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Holger Thufvesson').length,1);
+  assert.equal(people.filter(item=>item.person_name_raw==='Familjen Wagstaff').length,0);
+  const wagstaffRows=activeSourceRows.filter(row=>row.raw_text.includes('Familjen Wagstaff'));
+  assert.equal(wagstaffRows.length,2);
+  assert.ok(wagstaffRows.every(row=>row.source_entity_kind==='group'&&row.occurrence_ids.length===0));
 });
 
 await test('källdubbletter bevaras medan Ted Thunborg bara räknas en gång',()=>{
@@ -351,6 +402,9 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes('item.retained!==false'));
   assert.ok(app.includes('selectedDocumentId'));
   assert.ok(app.includes('renderPagedSourceEdition'));
+  assert.ok(app.includes('renderLayoutSourceEdition'));
+  assert.ok(app.includes('canonicalSourceLayoutRows'));
+  assert.ok(app.includes('Flera båtrader kan höra till samma tryckta rad'));
   assert.ok(app.includes('INV. ÅR'));
   assert.ok(app.includes('Placeringen visar källans layout, inte vem som ägde båten'));
   assert.ok(app.includes("ui.layer==='normalized'?kindSwitch(release):''"));
@@ -366,6 +420,7 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(matrixCss.includes('position:sticky'));
   assert.ok(matrixCss.includes('.matriscell.status-junior'));
   assert.ok(matrixCss.includes('.kallmatrikel'));
+  assert.ok(matrixCss.includes('.kallrubrik'));
   assert.ok(matrixCss.includes('min-width:760px'));
   assert.ok(serviceWorker.includes("url.pathname.endsWith('/index.html')"));
   assert.ok(serviceWorker.includes("isAppNavigation?'./index.html':request"));
@@ -416,6 +471,7 @@ await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
   assert.ok(config.includes('2026-08-03-en-matrikel-per-ar.json'));
   assert.ok(config.includes('2026-08-03-matrikel-2010.json'));
   assert.ok(config.includes('2026-08-03-en-matrikel-per-ar-v2.json'));
+  assert.ok(config.includes('2026-08-03-kalltrogen-layout-v3.json'));
   assert.ok(app.includes('Full källsäker master inläst lokalt'));
 });
 

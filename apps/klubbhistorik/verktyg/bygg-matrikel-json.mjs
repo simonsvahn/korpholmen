@@ -4,6 +4,7 @@ import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'nod
 import { basename, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { BOAT_MEMBER_ANCHORS, CORRESPONDING_NOTE, buildLayoutRows, exactLegacySections, personStructure } from './matrikel-kallayout.mjs';
 
 const execFileAsync=promisify(execFile);
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -19,9 +20,10 @@ const ORIGINALS=resolve(OUTPUT,'original');
 const HISTORICAL_INPUT=valueAfter('--historical');
 const PDFTOTEXT=valueAfter('--pdftotext')||'/opt/homebrew/bin/pdftotext';
 const ISLANDS=new Set(['Korpholmen','Sviholmen','Ängsholmen','Blidö','Svanö']);
-const MEMBER_KEYS=['id','order','page','category','raw_text','source_annotation','induction_year_raw','induction_year','first_name_raw','last_name_raw','person_name_raw','club_name_core_raw','age_raw','birth_year_raw','birth_year','birth_date_raw','birth_date','island_raw','club_name_raw','relation_raw'];
-const BOAT_KEYS=['id','order','page','category','raw_text','source_annotation','components'];
-const COMPONENT_KEYS=['order','raw_text','prefix','boat_name_raw','registry_year_raw','registry_year','registry_years'];
+const MEMBER_KEYS=['id','order','page','category','raw_text','source_annotation','induction_year_raw','induction_year','first_name_raw','last_name_raw','person_name_raw','club_name_core_raw','age_raw','birth_year_raw','birth_year','birth_date_raw','birth_date','island_raw','club_name_raw','relation_raw','entity_kind','person_components'];
+const BOAT_KEYS=['id','order','page','category','raw_text','source_annotation','components','associated_member_row_id'];
+const COMPONENT_KEYS=['order','raw_text','prefix','boat_name_raw','registry_year_raw','registry_year','registry_years','registry_periods'];
+const LAYOUT_KEYS=['id','order','page','kind','section','member_row_id','boat_row_ids','text_raw'];
 
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
@@ -48,7 +50,8 @@ function historicName(raw){
 function blankMember({id,order,page,category,rawText='',annotation='',inductionYearRaw='',firstName='',lastName='',personName='',clubCore='',ageRaw='',birthYearRaw='',birthDateRaw='',island='',clubName='',relation=''}){
   const inductionYear=/^\d{4}$/.test(inductionYearRaw)?Number(inductionYearRaw):null;
   const birthYear=/^\d{4}$/.test(birthYearRaw)?Number(birthYearRaw):null;
-  return {id,order,page,category,raw_text:rawText,source_annotation:annotation,induction_year_raw:inductionYearRaw,induction_year:inductionYear,first_name_raw:firstName,last_name_raw:lastName,person_name_raw:personName,club_name_core_raw:clubCore,age_raw:ageRaw,birth_year_raw:birthYearRaw,birth_year:birthYear,birth_date_raw:birthDateRaw,birth_date:validBirthDate(birthDateRaw,birthYear),island_raw:island,club_name_raw:clubName,relation_raw:relation};
+  const structure=personStructure(personName,category);
+  return {id,order,page,category,raw_text:rawText,source_annotation:annotation,induction_year_raw:inductionYearRaw,induction_year:inductionYear,first_name_raw:firstName,last_name_raw:lastName,person_name_raw:personName,club_name_core_raw:clubCore,age_raw:ageRaw,birth_year_raw:birthYearRaw,birth_year:birthYear,birth_date_raw:birthDateRaw,birth_date:validBirthDate(birthDateRaw,birthYear),island_raw:island,club_name_raw:clubName,relation_raw:relation,entity_kind:structure.entity_kind,person_components:structure.person_components};
 }
 
 function splitOutsideParentheses(value){
@@ -62,6 +65,20 @@ function splitOutsideParentheses(value){
   return parts.map(part=>part.replace(/[.;]+$/,'').trim()).filter(Boolean);
 }
 
+function inferShortYear(from,shortYear){
+  const century=Math.floor(from/100)*100;let value=century+Number(shortYear);if(value<from)value+=100;return value;
+}
+
+function parseRegistryPeriods(raw){
+  return String(raw||'').split(',').map(part=>part.trim()).filter(Boolean).map(part=>{
+    const exact=part.match(/^(\d{4})$/);if(exact)return {raw:part,kind:'year',from:Number(exact[1]),to:Number(exact[1]),from_open:false,to_open:false};
+    const closed=part.match(/^(\d{4})\s*[-–—]\s*(\d{2}|\d{4})$/);if(closed){const from=Number(closed[1]);const to=closed[2].length===2?inferShortYear(from,closed[2]):Number(closed[2]);return {raw:part,kind:'range',from,to,from_open:false,to_open:false}}
+    const openStart=part.match(/^[-–—]\s*(\d{4})$/);if(openStart)return {raw:part,kind:'range',from:null,to:Number(openStart[1]),from_open:true,to_open:false};
+    const openEnd=part.match(/^(\d{4})\s*[-–—]$/);if(openEnd)return {raw:part,kind:'range',from:Number(openEnd[1]),to:null,from_open:false,to_open:true};
+    return {raw:part,kind:'text',from:null,to:null,from_open:false,to_open:false};
+  });
+}
+
 function parseBoatComponent(raw,order){
   const text=String(raw||'').replace(/\s+/g,' ').replace(/[.;,]+$/,'').trim();
   const prefix=text.match(/^(M\/S|S\/S|R\/S|P\/S)\s*/i)?.[1]?.toUpperCase()||'';
@@ -69,14 +86,15 @@ function parseBoatComponent(raw,order){
   const yearMatch=name.match(/\s*\(([^()]*(?:\d{2,4})[^()]*)\)\s*$/);
   const registryYearRaw=yearMatch?.[1]?.trim()||'';
   if(yearMatch)name=name.slice(0,yearMatch.index).trim();
-  const registryYears=(registryYearRaw.match(/\d{4}/g)||[]).map(Number);
-  return {order,raw_text:text,prefix,boat_name_raw:name,registry_year_raw:registryYearRaw,registry_year:/^\d{4}$/.test(registryYearRaw)?Number(registryYearRaw):null,registry_years:registryYears};
+  const registryPeriods=parseRegistryPeriods(registryYearRaw);
+  const registryYears=[...new Set(registryPeriods.flatMap(period=>[period.from,period.to]).filter(Number.isInteger))];
+  return {order,raw_text:text,prefix,boat_name_raw:name,registry_year_raw:registryYearRaw,registry_year:/^\d{4}$/.test(registryYearRaw)?Number(registryYearRaw):null,registry_years:registryYears,registry_periods:registryPeriods};
 }
 
 function validate(document){
-  const topKeys=['schema_version','document','release','columns','sections','member_rows','boat_rows','document_notes'];
+  const topKeys=['schema_version','document','release','columns','sections','member_rows','boat_rows','layout_rows','document_notes'];
   if(JSON.stringify(Object.keys(document))!==JSON.stringify(topKeys))throw new Error(`Fel toppnivåformat: ${document.document?.id||'okänt dokument'}`);
-  if(document.schema_version!==1)throw new Error(`Fel schemaversion: ${document.document.id}`);
+  if(document.schema_version!==2)throw new Error(`Fel schemaversion: ${document.document.id}`);
   for(const key of ['id','label','source_type','is_primary_for_release','original_files'])if(!(key in document.document))throw new Error(`Dokumentfält saknas (${key}): ${document.document.id}`);
   for(const key of ['id','year','as_of','title','release_type','sort_order'])if(!(key in document.release))throw new Error(`Utgåvefält saknas (${key}): ${document.document.id}`);
   const ids=new Set();
@@ -89,6 +107,7 @@ function validate(document){
     if(ids.has(row.id))throw new Error(`Dubbelrad: ${row.id}`);ids.add(row.id);
     for(const component of row.components)if(JSON.stringify(Object.keys(component))!==JSON.stringify(COMPONENT_KEYS))throw new Error(`Båtkomponent har osynkat format: ${row.id}`);
   }
+  for(const row of document.layout_rows)if(JSON.stringify(Object.keys(row))!==JSON.stringify(LAYOUT_KEYS))throw new Error(`Layoutrad har osynkat format: ${row.id}`);
   return document;
 }
 
@@ -426,6 +445,39 @@ async function hydrateHistorical(document){
   return document;
 }
 
+function enrichMemberRow(row){
+  const structure=personStructure(row.person_name_raw,row.category);
+  return {
+    id:row.id,order:row.order,page:row.page??null,category:row.category,raw_text:row.raw_text||'',source_annotation:row.source_annotation||'',
+    induction_year_raw:row.induction_year_raw||'',induction_year:row.induction_year??null,first_name_raw:row.first_name_raw||'',last_name_raw:row.last_name_raw||'',
+    person_name_raw:row.person_name_raw||'',club_name_core_raw:row.club_name_core_raw||'',age_raw:row.age_raw||'',birth_year_raw:row.birth_year_raw||'',
+    birth_year:row.birth_year??null,birth_date_raw:row.birth_date_raw||'',birth_date:row.birth_date??null,island_raw:row.island_raw||'',
+    club_name_raw:row.club_name_raw||'',relation_raw:row.relation_raw||'',entity_kind:structure.entity_kind,person_components:structure.person_components,
+  };
+}
+
+function enrichDocument(source){
+  const memberRows=source.member_rows.map(enrichMemberRow);
+  const anchors=BOAT_MEMBER_ANCHORS[source.release.year]||{};
+  const boatRows=source.boat_rows.map(row=>{
+    const correct1998Babb=value=>source.release.year===1998&&row.order===62?String(value||'').replace('M/S Babbb','M/S Babb'):String(value||'');
+    return {
+      id:row.id,order:row.order,page:row.page??null,category:row.category,raw_text:correct1998Babb(row.raw_text),source_annotation:row.source_annotation||'',
+      components:(row.components||[]).map(component=>parseBoatComponent(correct1998Babb(component.raw_text),component.order)),
+      associated_member_row_id:anchors[row.order]?memberRows.find(member=>member.order===anchors[row.order])?.id||null:null,
+    };
+  });
+  const exactSections=exactLegacySections(source.document.id,source.release.year,memberRows);
+  const sections=(exactSections||source.sections).map(section=>({...section,note_raw:section.note_raw??(section.kind==='member'&&section.category==='corresponding'?CORRESPONDING_NOTE:'')}));
+  const note='Källans radlayout lagras separat: båtrader är förankrade vid den tryckta medlemsrad de står bredvid. Förankringen är inte ett ägarpåstående.';
+  const document={
+    schema_version:2,document:source.document,release:source.release,columns:source.columns,sections,member_rows:memberRows,boat_rows:boatRows,layout_rows:[],
+    document_notes:[...source.document_notes,...(source.release.year<=1998&&!source.document_notes.includes(note)?[note]:[])],
+  };
+  document.layout_rows=buildLayoutRows(document);
+  return document;
+}
+
 await mkdir(OUTPUT,{recursive:true});await mkdir(ORIGINALS,{recursive:true});
 const documents=[];
 if(HISTORICAL_INPUT){const input=JSON.parse(await readFile(resolve(HISTORICAL_INPUT),'utf8'));if(!Array.isArray(input))throw new Error('--historical måste peka på en JSON-array.');for(const document of input)documents.push(await hydrateHistorical(document))}
@@ -437,6 +489,8 @@ else{
 documents.push(...await build1991And1998());
 documents.push(await build2010());
 documents.push(...await buildModernDocuments());
+
+for(let index=0;index<documents.length;index+=1)documents[index]=enrichDocument(documents[index]);
 
 const names=new Set();const primaryByRelease=new Map();
 for(const document of documents){
