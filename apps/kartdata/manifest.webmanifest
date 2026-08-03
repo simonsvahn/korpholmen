@@ -1,0 +1,11 @@
+{
+  "name": "Korpholmens kartdata",
+  "short_name": "Kartdata",
+  "lang": "sv",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef2ec",
+  "theme_color": "#123f3a",
+  "icons": [{"src":"./icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

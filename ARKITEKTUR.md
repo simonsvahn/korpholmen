@@ -7,9 +7,9 @@ andra master för samma sorts sakuppgift.
 
 ## Grundidé
 
-Appfamiljen består av sex avgränsade sakmastrar, en gemensam datafri motor och
-en framtida sammanhållen läsvy. Original, tolkning och presentation är skilda
-lager.
+Appfamiljen består av sju avgränsade ägar- och granskningsappar, en gemensam
+datafri motor och en framtida sammanhållen läsvy. Original, tolkning och
+presentation är skilda lager.
 
 ```mermaid
 flowchart LR
@@ -40,6 +40,7 @@ Fyra regler håller modellen samman:
 | **Dokumentarkiv** | Dokumentidentitet, ordagrann avskrift och dokumentets granskade registerkopplingar | Alla relevanta entitets-ID:n | Person-, båt- eller fastighetssanning som bara råkar nämnas i texten |
 | **Korpholmen runt** | Tävlingsutgåvor, resultat, tider, klasser och källrader | Person- och båt-ID:n | Personer och båtar som egna masterobjekt |
 | **Klubbhistorik** | Daterade matrikelutgåvor, medlemsobservationer, historiska klubbnamnsformer, roller när de är källbelagda, båtförekomster och belagda ägarobservationer | Person-, båt- och senare fastighets-ID:n | Stabil person-/båtidentitet eller ägande härlett ur kolumnplacering |
+| **Kartdata** | Kartutgåvor, ordagranna kartposter, stabila plats- och byggnadsobjekt, namnformer, `del_av`-relationer och granskade geografiska fastighetskopplingar | Fastighets-ID:n | Ägarhistorik, person–fastighetsrelationer eller masterobjekt skapade automatiskt från ogranskade arbetsförslag |
 
 `packages/core/` äger ingen sakdata. Paketet tillhandahåller operationer,
 materialisering, IndexedDB, synk, OAuth och konfliktregler.
@@ -59,6 +60,7 @@ flowchart TB
     AR["Dokumentarkiv: dokument och avskrifter"]
     KR["Korpholmen runt: tävlingsresultat"]
     KH["Klubbhistorik: daterade klubbobservationer"]
+    KD["Kartdata: kartposter, platser, byggnader och namn"]
     EX["Korpholmen Explorer: härledd, skrivskyddad totalbild"]
 
     MA -->|"stabila person- och grupp-ID:n"| BA
@@ -67,18 +69,35 @@ flowchart TB
     MA -->|"stabila person-ID:n"| KH
     BA -->|"stabila båt-ID:n"| KR
     BA -->|"stabila båt-ID:n"| KH
+    FA -->|"stabila fastighets-ID:n"| KD
     MA -.-> EX
     BA -.-> EX
     FA -.-> EX
     AR -.-> EX
     KR -.-> EX
     KH -.-> EX
+    KD -.-> EX
 ```
 
-Explorer ska alltså vara en materialiserad läsmodell, inte en sjunde
+Explorer ska alltså vara en materialiserad läsmodell, inte ytterligare en
 sakmaster. Den ska kunna visa en person, familj, båt, fastighet, handling eller
 händelse och följa länkarna mellan dem. Ett tidsfilter väljer observationer
 och giltighetsintervall från rätt master.
+
+Kartdata skiljer uttryckligen mellan en kartpost och det verkliga objekt som
+kartposten kan avse. `map-entry` bevarar källformen. `place` och `building`
+är stabila masterobjekt. En granskningsbar `map-entry-link` binder ihop dem.
+Plats- och byggnadsnamn ligger som separata `name-record`, så att föredraget,
+officiellt, historiskt och alternativt namn kan samexistera utan att objektets
+ID byts. En geografisk `object-property-link` betyder att objektet ligger på
+en fastighet; den är aldrig i sig ett påstående om ägande.
+
+Historiska namn som ännu inte säkert kan knytas till ett nutida objekt får
+inte gissas in som alias. Kartdata skapar i stället ett osäkert platsobjekt
+eller omfattningsobjekt (exempelvis en äldre holm med okänt läge eller hela den
+sammanvuxna ögruppen). Ett senare granskningsbeslut kan länka om eller avföra
+posten utan att källformen och den tidigare bedömningen försvinner ur
+operationshistoriken.
 
 ## Tre lager av namn
 
@@ -208,6 +227,7 @@ namnrymd:
 /dokumentarkiv/ops
 /korpholmenrunt/ops
 /klubbhistorik/ops
+/kartdata/ops
 ```
 
 Publiceringsbyggen använder tillåtelselistor och ska stoppa om privat data
