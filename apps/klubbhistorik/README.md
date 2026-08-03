@@ -9,8 +9,11 @@ bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
-Mastern omfattar 14 årsvisa matriklar från juli 1980 till augusti 2025,
-inklusive den tvåsidiga medlemsmatrikeln 2010. I de
+Mastern omfattar 14 årsvisa originalmatriklar från juli 1980 till augusti
+2025, inklusive den tvåsidiga medlemsmatrikeln 2010. Före dessa ligger en
+separat, uttryckligen märkt **grundarmatrikel (rekonstruktion)** för cirka
+1945. Den bygger på fem redovisade källor och är inte ett påstående om att ett
+sådant originaldokument har bevarats. I de
 historiska matriklarna bevaras medlems- och fartygskolumnen var för sig och
 sammanförs för källvisning med ett separat, källkontrollerat layoutlager,
 inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
@@ -30,6 +33,7 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
 - privata källkopior hashas före import;
 - varje källrad får ett stabilt förekomst-ID;
 - normalisering skriver aldrig över källtexten;
+- rekonstruktioner har egna evidensfält och får aldrig visas som original;
 - endast entydiga eller tidigare godkända identiteter kopplas automatiskt;
 - osäkra träffar ligger kvar i granskningskön;
 - ändringar sparas som nya operationer och synkas till `/klubbhistorik/ops`;
@@ -65,6 +69,9 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   av en ny årsvalsbatch och `2026-08-03-kalltrogen-layout-v3.json` med 1 606
   layoutrader, separerade flerspersonrader och strukturerade båtårsperioder.
   De tidigare Dropbox-distribuerade batcherna skrivs inte över.
+  `2026-08-04-grundarmatrikel-1940-tal.json` lägger ovanpå samma master en
+  källkorsläst arbetsrekonstruktion av tio grundare. Exakt år, bostadsö,
+  platsdetalj och säkerhet lagras var för sig;
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.

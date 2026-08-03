@@ -23,6 +23,7 @@ const TED_CORRECTION=resolve(CORRECTIONS,'2026-08-03-ted-thunborg-dublett.json')
 const VARIANT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-en-sorteringsvariant-per-matrikel.json');
 const ANNUAL_CORRECTION=resolve(CORRECTIONS,'2026-08-03-kalltrogen-layout-v3.json');
 const PETER_CORRECTION=resolve(CORRECTIONS,'2026-08-03-peter-identitetsdelning.json');
+const FOUNDER_CORRECTION=resolve(CORRECTIONS,'2026-08-04-grundarmatrikel-1940-tal.json');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -35,6 +36,7 @@ function buildMigration(){
   const commands=[
     ['verktyg/bygg-en-matrikel-per-ar.mjs'],
     ['verktyg/bygg-peter-identitetsdelning.mjs'],
+    ['verktyg/bygg-grundarmatrikel.mjs'],
   ];
   for(const command of commands){
     const result=spawnSync(process.execPath,command,{cwd:ROOT,encoding:'utf8'});
@@ -55,6 +57,7 @@ const firstTedBytes=await readFile(TED_CORRECTION);
 const firstVariantBytes=await readFile(VARIANT_CORRECTION);
 const firstAnnualBytes=await readFile(ANNUAL_CORRECTION);
 const firstPeterBytes=await readFile(PETER_CORRECTION);
+const firstFounderBytes=await readFile(FOUNDER_CORRECTION);
 buildMigration();
 const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
@@ -68,6 +71,7 @@ const secondTedBytes=await readFile(TED_CORRECTION);
 const secondVariantBytes=await readFile(VARIANT_CORRECTION);
 const secondAnnualBytes=await readFile(ANNUAL_CORRECTION);
 const secondPeterBytes=await readFile(PETER_CORRECTION);
+const secondFounderBytes=await readFile(FOUNDER_CORRECTION);
 const document=JSON.parse(secondBytes);
 const report=JSON.parse(secondReportBytes);
 const supplementDocument=JSON.parse(secondSupplementBytes);
@@ -80,6 +84,7 @@ const tedDocument=JSON.parse(secondTedBytes);
 const variantDocument=JSON.parse(secondVariantBytes);
 const annualDocument=JSON.parse(secondAnnualBytes);
 const peterDocument=JSON.parse(secondPeterBytes);
+const founderDocument=JSON.parse(secondFounderBytes);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
@@ -109,6 +114,7 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(sha256(firstVariantBytes),sha256(secondVariantBytes));
   assert.equal(sha256(firstAnnualBytes),sha256(secondAnnualBytes));
   assert.equal(sha256(firstPeterBytes),sha256(secondPeterBytes));
+  assert.equal(sha256(firstFounderBytes),sha256(secondFounderBytes));
   assert.equal(document.operations_sha256,sha256(Buffer.from(JSON.stringify(document.operations))));
   assert.equal(supplementDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(supplementDocument.operations))));
   assert.equal(syncDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(syncDocument.operations))));
@@ -117,6 +123,7 @@ await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(variantDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(variantDocument.operations))));
   assert.equal(annualDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(annualDocument.operations))));
   assert.equal(peterDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(peterDocument.operations))));
+  assert.equal(founderDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(founderDocument.operations))));
 });
 
 await test('alla operationer är giltiga och unika',()=>{
@@ -166,9 +173,12 @@ await test('alla matrikel-JSON följer samma schema och källhashar',()=>{
 });
 
 await test('varje kalenderår har en aktiv JSON utan att äldre operationer raderas',()=>{
+  const originalReleases=releases.filter(release=>!release.is_reconstruction);
   assert.equal(sourceDocuments.length,14);
   assert.ok(allSourceDocuments.length>sourceDocuments.length);
-  assert.ok(releases.every(release=>release.source_document_ids.length===1));
+  assert.equal(originalReleases.length,14);
+  assert.ok(originalReleases.every(release=>release.source_document_ids.length===1));
+  assert.deepEqual(releases.find(release=>release.id==='matrikel-grundare-1940-tal').source_document_ids,[]);
   assert.equal(annualDocument.counts.active_releases,14);
   assert.equal(annualDocument.counts.retired_releases,15);
   assert.equal(annualDocument.counts.active_person_occurrences,1539);
@@ -177,14 +187,14 @@ await test('varje kalenderår har en aktiv JSON utan att äldre operationer rade
   assert.equal(annualDocument.selection['matrikel-2020'].selected_source_release_id,'matrikel-2020-08-05');
   assert.equal(annualDocument.selection['matrikel-2010'].selected_source_release_id,'matrikel-2010');
   assert.equal(annualDocument.selection['matrikel-2025'].selected_source_release_id,'matrikel-2025-08-01');
-  assert.equal(people.length,1539);
+  assert.equal(people.length,1549);
   const splitIds=new Set(people.filter(item=>item.source_entity_kind==='multiple_people').map(item=>item.id));
   assert.ok(annualDocument.operations.filter(operation=>operation.entity_type==='person-occurrence'&&['person_id','confirmed','candidate_ids','match_status','match_method'].includes(operation.field)).every(operation=>splitIds.has(operation.entity_id)));
 });
 
-await test('14 årsutgåvor och 1 539 personförekomster finns',()=>{
-  assert.equal(releases.length,14);
-  assert.deepEqual(releases.map(release=>release.id).sort(),Object.keys(annualDocument.selection).sort());
+await test('14 originalutgåvor, en grundarrekonstruktion och 1 549 personförekomster finns',()=>{
+  assert.equal(releases.length,15);
+  assert.deepEqual(releases.filter(release=>!release.is_reconstruction).map(release=>release.id).sort(),Object.keys(annualDocument.selection).sort());
   assert.deepEqual(report.release_counts['matrikel-1980'],{person_rows:41,boat_source_rows:32,boat_occurrences:46,connected_person_rows:40,unresolved_person_rows:1});
   assert.deepEqual(report.release_counts['matrikel-1986'],{person_rows:47,boat_source_rows:35,boat_occurrences:51,connected_person_rows:44,unresolved_person_rows:3});
   assert.deepEqual(report.release_counts['matrikel-2025'],{person_rows:156,boat_source_rows:0,boat_occurrences:0,connected_person_rows:156,unresolved_person_rows:0});
@@ -192,7 +202,7 @@ await test('14 årsutgåvor och 1 539 personförekomster finns',()=>{
   assert.deepEqual(supplementReport.release_counts['matrikel-1998'].person_categories,{active:63,passive:2,junior:42,corresponding:4});
   assert.equal(supplementReport.release_counts['matrikel-1991'].person_rows,96);
   assert.equal(supplementReport.release_counts['matrikel-1998'].person_rows,111);
-  assert.equal(people.length,1539);
+  assert.equal(people.length,1549);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='active').length,35);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='passive').length,6);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='junior').length,30);
@@ -208,6 +218,32 @@ await test('14 årsutgåvor och 1 539 personförekomster finns',()=>{
   assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='listed').length,3);
   assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='corresponding').length,2);
   assert.equal(matrikel2010Report.counts.unresolved_new_people,39);
+});
+
+await test('grundarmatrikeln är en källredovisad rekonstruktion och inte ett fingerat original',()=>{
+  const release=releases.find(item=>item.id==='matrikel-grundare-1940-tal');
+  const founders=people.filter(item=>item.release_id===release.id);
+  assert.equal(release.is_reconstruction,true);
+  assert.equal(release.release_class,'reconstruction');
+  assert.equal(release.year,1945);
+  assert.equal(release.date_from,1943);
+  assert.equal(release.date_to,1945);
+  assert.equal(release.date_confidence,'medel');
+  assert.equal(release.source_document_id,null);
+  assert.deepEqual(release.source_document_ids,[]);
+  assert.deepEqual(release.evidence_source_ids,['TRY-HEDSTROM','TRY-MAMMA','TRY-SLAKTEN','ARK-1954','MATR-1986']);
+  assert.equal(founders.length,10);
+  assert.equal(new Set(founders.map(item=>item.person_id)).size,10);
+  assert.ok(founders.every(item=>item.membership_status==='founder'&&item.induction_year===null&&item.induction_year_estimate===1945));
+  assert.ok(founders.every(item=>item.confirmed&&item.match_method==='källkorsläst rekonstruktion'));
+  assert.ok(!founders.some(item=>['perolofbethge','ingerbethge'].includes(item.person_id)));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('hedström')).map(item=>item.island_raw)),new Set(['Korpholmen']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('nordlander')).map(item=>item.island_raw)),new Set(['Yxlan']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('weslien')).map(item=>`${item.island_raw}:${item.place_detail_raw}`)),new Set(['Yxlan:Alsvassen']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.endsWith('une')).map(item=>item.island_raw)),new Set(['Stugholmen']));
+  assert.ok(founders.every(item=>item.place_confidence==='hög'&&item.place_evidence));
+  assert.equal(sourceRows.filter(item=>item.release_id===release.id).length,0);
+  assert.equal(sourceDocuments.some(item=>item.id.includes('grundare')),false);
 });
 
 await test('alla aktiva källrader och båtförekomster redovisas utan tyst bortfall',()=>{
@@ -429,7 +465,8 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes("ui.layer==='normalized'?kindSwitch(release):''"));
   assert.ok(app.includes('renderMatrix'));
   assert.ok(app.includes('Tom ruta betyder endast'));
-  assert.ok(app.includes('Invalsår visas bara när det uttryckligen står i en källa'));
+  assert.ok(app.includes('Exakt invalsår visas bara när det uttryckligen står i en källa'));
+  assert.ok(app.includes('Grundarnas ”ca 1945” är en märkt uppskattning'));
   assert.ok(app.includes("value!==null&&value!==undefined&&value!==''"));
   assert.ok(app.includes("opsRoot:'/klubbhistorik/ops'"));
   assert.ok(app.includes("name:'kbk-klubbhistorik'"));
@@ -467,6 +504,8 @@ await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
   assert.ok(localArchitecture.includes('aldrig genom radparning'));
   assert.ok(localArchitecture.includes('typografisk rekonstruktion'));
   assert.ok(localArchitecture.includes('14 valda JSON-källdokument'));
+  assert.ok(localArchitecture.includes('Grundarmatrikel cirka 1945'));
+  assert.ok(localArchitecture.includes('får inte öka antalet'));
   assert.ok(rootReadme.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
   assert.ok(localModel.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
   assert.ok(appReadmes.every(readme=>readme.includes('ARKITEKTUR.md')));
@@ -491,6 +530,9 @@ await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
   assert.ok(config.includes('2026-08-03-matrikel-2010.json'));
   assert.ok(config.includes('2026-08-03-en-matrikel-per-ar-v2.json'));
   assert.ok(config.includes('2026-08-03-kalltrogen-layout-v3.json'));
+  assert.ok(config.includes('2026-08-04-grundarmatrikel-1940-tal.json'));
+  assert.ok(app.includes("release?.is_reconstruction?'Källunderlag':'Som källan skrevs'"));
+  assert.ok(app.includes('Detta är inte en bevarad matrikel.'));
   assert.ok(app.includes('Full källsäker master inläst lokalt'));
 });
 
