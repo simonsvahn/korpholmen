@@ -51,3 +51,50 @@
   letter-spacing: .04em;
   text-transform: uppercase;
 }
+
+.badge.utkast {
+  background: color-mix(in srgb, #b7791f 18%, transparent);
+  border-color: color-mix(in srgb, #b7791f 48%, var(--linje));
+  color: #8a5310;
+}
+
+.preliminar-rad {
+  background: color-mix(in srgb, #f2c879 12%, transparent);
+}
+
+.preliminar-rad:hover {
+  background: color-mix(in srgb, #f2c879 22%, transparent);
+}
+
+.granskningskort {
+  border-color: color-mix(in srgb, #b7791f 45%, var(--linje));
+}
+
+.granskningspunkter {
+  color: var(--text);
+  margin: 10px 0 14px;
+  padding-left: 20px;
+}
+
+.granskningspunkter li + li {
+  margin-top: 6px;
+}
+
+.inga-punkter {
+  color: var(--mjuk);
+  font-style: italic;
+  margin: 10px 0 14px;
+}
+
+.granskningskort .statusrad {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.granskningskort .statusrad .sekundar {
+  background: transparent;
+  border: 1px solid var(--linje);
+  color: var(--text);
+}

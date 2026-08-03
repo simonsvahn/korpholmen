@@ -13,6 +13,12 @@ Appen länkar båtar till Båtregistrets stabila ID och deltagare till Matrikeln
 person-ID. Endast entydiga träffar kopplas automatiskt. Möjliga och olösta
 träffar visas i appens granskningskö och kan avgöras manuellt.
 
+Ofullständigt granskade analoga år kan publiceras som preliminära rader. De
+visas tydligt i resultatlistan och under **Granska & matcha**, där varje rad kan
+öppnas, rättas och godkännas. Preliminära eller tidsosäkra rader räknas inte i
+placeringar, topptider eller rekord förrän de har godkänts. Källans råvärden och
+granskningsfrågor bevaras även när den normaliserade posten ändras.
+
 ## Privat master
 
 - `privat/kallkopior/Korpholmen runt konv.mdb` — bytebevarad källkopia.

@@ -9,8 +9,8 @@
   <meta property="og:description" content="Hela loppets moderna resultathistoria i en levande, korslänkad app.">
   <meta property="og:image" content="./og.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-02-1">
-  <link rel="stylesheet" href="./matchning.css?v=2026-08-02-1">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-03-2">
+  <link rel="stylesheet" href="./matchning.css?v=2026-08-03-2">
   <title>Korpholmen runt – resultat & rekord</title>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <button data-view="rekord">Topptider</button>
     <button data-view="profiler">Människor & båtar</button>
     <button data-view="duell">Öduellen</button>
-    <button data-view="matchning">Matcha registren <b id="review-count">0</b></button>
+    <button data-view="matchning">Granska &amp; matcha <b id="review-count">0</b></button>
   </nav>
 
   <section class="verktygsrad">
@@ -45,20 +45,22 @@
       <input id="result-id" type="hidden">
       <div class="faltgrid">
         <label>År<input id="edit-year" inputmode="numeric" required pattern="[0-9]{4}"></label>
-        <label>Bana<select id="edit-course"><option value="S">S</option><option value="L">L</option></select></label>
-        <label>Tid<input id="edit-time" placeholder="19,01" required></label>
-        <label>Klass<input id="edit-class" placeholder="Kajak 1" required></label>
-        <label class="bred">Båtens namn i källan<input id="edit-boat-raw" required></label>
+        <label>Bana<select id="edit-course"><option value="">Okänd</option><option value="S">S</option><option value="L">L</option></select></label>
+        <label>Tid<input id="edit-time" placeholder="19,01"></label>
+        <label>Klass<input id="edit-class" placeholder="Kajak 1"></label>
+        <label>Granskningsläge<select id="edit-review-status"><option value="granskning krävs">Granskning krävs</option><option value="granskad">Granskad</option></select></label>
+        <label class="bred">Båtens namn i källan<input id="edit-boat-raw"></label>
         <label class="bred">Kopplad båt<select id="edit-boat-id"><option value="">Inte kopplad</option></select></label>
         <label>Kapten<input id="edit-captain"></label>
         <label>Besättning 1<input id="edit-crew-1"></label>
         <label>Besättning 2<input id="edit-crew-2"></label>
+        <label class="bred">Oklara uppgifter, en per rad<textarea id="edit-review-issues" rows="3"></textarea></label>
         <label class="bred">Anteckning<textarea id="edit-notes" rows="3"></textarea></label>
       </div>
       <div class="dialogfot"><span>Ändringen sparas lokalt direkt och synkas som en ny operation.</span><button type="button" id="save-result" class="primar">Spara i mastern</button></div>
     </form>
   </dialog>
 
-  <script type="module" src="./src/app.js?v=2026-08-02-1"></script>
+  <script type="module" src="./src/app.js?v=2026-08-03-2"></script>
 </body>
 </html>
