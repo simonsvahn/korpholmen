@@ -1,6 +1,29 @@
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .originalrad small{grid-column:2}
 .normaliseringsnot{color:#8a6530!important}
+.kallvarning{margin-bottom:1.1rem}
+.kallsidor{display:grid;gap:1.25rem}
+.kallsida{overflow:hidden;border:1px solid var(--line);border-radius:1.1rem;background:var(--paper);box-shadow:var(--shadow)}
+.kallsidhuvud{padding:1rem 1.15rem;border-bottom:1px solid var(--line);background:#f5f1e8}
+.kallsidhuvud h3{margin:.15rem 0 0;font:500 1.45rem Georgia,serif}
+.kalltabellskal{overflow:auto;overscroll-behavior:contain}
+.kalltabellskal:focus{outline:3px solid rgba(47,111,120,.3);outline-offset:-3px}
+.kallmatrikel{min-width:760px;table-layout:fixed;font-variant-numeric:tabular-nums}
+.kallmatrikel col.kall-inval{width:6.4rem}
+.kallmatrikel col.kall-medlem{width:43%}
+.kallmatrikel col.kall-bat{width:auto}
+.kallmatrikel th{position:static;padding:.72rem 1rem;background:#e7e4da;color:#394e52;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em}
+.kallmatrikel td{height:2.8rem;padding:.55rem 1rem;border-right:1px solid #e0ddd3;background:#fffdf8;vertical-align:top}
+.kallmatrikel td:last-child{border-right:0}
+.kallmatrikel tbody tr:hover td{background:#f8f5ed}
+.kallkod{display:block;min-height:1.35rem;white-space:pre-wrap;font:600 .84rem/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#30454a}
+.kalltom{color:transparent}
+.kallnot{display:block;margin-top:.25rem;color:#8a6530;font-size:.68rem;line-height:1.4}
+.kallrad,.kallhelrad{transition:opacity .15s ease}
+.kallrad-dim{opacity:.22}
+.kallrader{overflow:auto}
+.kallhelrad{min-width:760px;padding:.62rem 1rem;border-bottom:1px solid #ece9e0;background:#fffdf8}
+.kallhelrad:last-child{border-bottom:0}
 .matrissidtitel{align-items:start}
 .matrisinfo{display:grid;grid-template-columns:minmax(260px,1fr) minmax(0,2fr);gap:1rem;align-items:center;margin-bottom:1rem;padding:1rem 1.15rem;border:1px solid var(--line);border-radius:1rem;background:rgba(255,253,248,.9)}
 .matrisinfo p{margin:0;color:var(--muted);line-height:1.5}
@@ -34,4 +57,4 @@
 .matriscell.status-listed span,.matrislegend .status-listed{background:#dfe3e1;color:#47595c}
 .matriscell.status-multiple span,.matrislegend .status-multiple{background:repeating-linear-gradient(135deg,#1f626a 0,#1f626a 6px,#d7ae58 6px,#d7ae58 12px);color:white}
 @media(max-width:900px){.matrisinfo{grid-template-columns:1fr}.matrislegend{justify-content:flex-start}.medlemsmatris .matris-klubbnamn,.medlemsmatris .matris-fodd{position:static}.medlemsmatris .matris-fodd{box-shadow:none}}
-@media(max-width:650px){.medlemsmatris .matris-inval{width:4.3rem;min-width:4.3rem}.medlemsmatris .matris-person{left:4.3rem;width:12rem;min-width:12rem}.matrisskal{max-height:68vh}.matrisinfo{padding:.85rem}.matrislegend span{font-size:.66rem}}
+@media(max-width:650px){.medlemsmatris .matris-inval{width:4.3rem;min-width:4.3rem}.medlemsmatris .matris-person{left:4.3rem;width:12rem;min-width:12rem}.matrisskal{max-height:68vh}.matrisinfo{padding:.85rem}.matrislegend span{font-size:.66rem}.kallmatrikel{min-width:680px}.kallmatrikel col.kall-inval{width:5.4rem}.kallmatrikel th,.kallmatrikel td{padding-left:.7rem;padding-right:.7rem}.kallsidhuvud{padding:.85rem 1rem}}

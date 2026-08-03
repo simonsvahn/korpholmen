@@ -284,6 +284,10 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes('source_page'));
   assert.ok(app.includes('releaseMoment'));
   assert.ok(app.includes('canonicalSourceRows'));
+  assert.ok(app.includes('renderPagedSourceEdition'));
+  assert.ok(app.includes('INV. ÅR'));
+  assert.ok(app.includes('Placeringen visar källans layout, inte vem som ägde båten'));
+  assert.ok(app.includes("ui.layer==='normalized'?kindSwitch(release):''"));
   assert.ok(app.includes('renderMatrix'));
   assert.ok(app.includes('Tom ruta betyder endast'));
   assert.ok(app.includes('Invalsår visas bara när det uttryckligen står i en källa'));
@@ -295,6 +299,8 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(html.includes('matrix.css'));
   assert.ok(matrixCss.includes('position:sticky'));
   assert.ok(matrixCss.includes('.matriscell.status-junior'));
+  assert.ok(matrixCss.includes('.kallmatrikel'));
+  assert.ok(matrixCss.includes('min-width:760px'));
   assert.ok(model.includes('HLC på en'));
   assert.ok(model.includes('operation är transaktionstid'));
   assert.ok(model.includes('inte automatiskt vem'));
@@ -317,6 +323,7 @@ await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
   assert.ok((localArchitecture.match(/```mermaid/g)||[]).length>=6);
   assert.ok(localArchitecture.includes('ownership-observation'));
   assert.ok(localArchitecture.includes('aldrig genom radparning'));
+  assert.ok(localArchitecture.includes('typografisk rekonstruktion'));
   assert.ok(rootReadme.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
   assert.ok(localModel.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
   assert.ok(appReadmes.every(readme=>readme.includes('ARKITEKTUR.md')));

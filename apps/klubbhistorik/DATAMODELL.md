@@ -26,6 +26,13 @@ prefix, eventuellt registreringsår och en separat matchning mot Båtregistrets
 `boat_id`. Förekomsten innebär att båten står i utgåvan, inte automatiskt vem
 som ägde den.
 
+I vyn **Som källan skrevs** återbyggs de historiska trycksidorna av
+`source_page`, källordning och de bevarade tomraderna. Medlemskolumnen och
+fartygskolumnen visas därför sida vid sida precis som i matrikeln, och en rad
+med flera båtnamn förblir en enda ordagrann källcell. Den visuella placeringen
+är källayout, inte en datamodellrelation: inget `person_id`, `boat_id` eller
+ägarpåstående skapas genom att två celler råkar stå på samma höjd.
+
 `person-ref` och `boat-ref` är privata läskopior för sökning och länkning.
 Deras `external_id` är fortsatt auktoritativt i Matrikel respektive
 Båtregister. De är inte nya identitetsmastrar.

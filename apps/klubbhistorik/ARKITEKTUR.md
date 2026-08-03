@@ -118,6 +118,12 @@ flowchart LR
 I 1980 och 1986 års blad är medlems- och fartygskolumnerna inte tillräckligt
 radparade för att bära ägande. Därför gäller:
 
+Källvyn ska ändå återge den faktiska trycksidan: `INV. ÅR`, `MEDLEMMAR` och
+`INREG. FARTYG` visas sida vid sida, sida för sida, med källordning och tomma
+layoutbärande rader bevarade. Detta är en typografisk rekonstruktion av
+källdokumentet. Celler på samma höjd får inte materialiseras som en relation
+mellan person och båt.
+
 ```mermaid
 flowchart LR
     B["Båt står i fartygskolumnen"] --> O["boat-occurrence"]
