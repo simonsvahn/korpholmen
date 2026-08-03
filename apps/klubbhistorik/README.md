@@ -9,10 +9,13 @@ bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 
-Pilotmastern omfattar matrikelutgåvorna 1980, 1986 och 2025. I 1980 och 1986
-bevaras både medlems- och fartygskolumnen. Kolumnerna är självständiga i
-källan; appen påstår därför inte att en båt på en viss rad ägdes av personen
-på motsvarande rad.
+Mastern omfattar matrikelutgåvorna 1980, 1986, 1991, 1998 och 2025. I de fyra
+historiska matriklarna bevaras medlems- och fartygskolumnen var för sig.
+Utgåvorna 1991 och 1998 bevarar dessutom ordinarie aktiva, ordinarie passiva,
+juniorer och korresponderande medlemmar samt källans särskilda avsnitt för
+avregistrerade eller namnändrade fartyg. Kolumnerna är självständiga i källan;
+appen påstår därför inte att en båt på en viss rad ägdes av personen på
+motsvarande rad.
 
 ## Säkerhetskontrakt
 
@@ -27,11 +30,16 @@ på motsvarande rad.
 ## Privat master
 
 - `privat/kallkopior/` — bytebevarade källkopior och godkända matchningsbeslut;
+- `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
+  radspårbar avskrift med kontrollsummor för de sex HEIC-originalen;
 - `privat/migrering-2026-08-02/initial-ops.json` — reproducerbar startmaster;
 - `privat/migrering-2026-08-02/kontrollrapport.json` — radtäckning,
   kontrollsummor, dubbletter och olösta identiteter;
+- `privat/migrering-2026-08-02/kontrollrapport-1991-1998.json` — motsvarande
+  för tilläggsutgåvorna;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
-  operationer ovanpå den låsta startmastern;
+  operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
+  1998. Den gamla startmastern byggs aldrig om i Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
 
 Båtreferenserna är privata snapshots av all strukturerad metadata i

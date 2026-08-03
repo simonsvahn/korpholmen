@@ -81,7 +81,7 @@ flowchart LR
     T -. "ska inte ersättas av" .-> X
 ```
 
-Pilotens `as_of` är 1980, 1986 och 2025. En identitetskoppling som görs 2026
+Masterns `as_of` är 1980, 1986, 1991, 1998 och 2025. En identitetskoppling som görs 2026
 ändrar inte när källobservationen gällde. På motsvarande sätt är en matrikel
 inte bevis för exakt inträdes- eller utträdesdag om den bara visar ett
 ögonblick.
@@ -175,7 +175,9 @@ läggs till som nya operationer och synkas i den egna namnrymden.
 
 | Område | Status |
 |---|---|
-| Utgåvorna 1980, 1986 och 2025 | Byggt |
+| Utgåvorna 1980, 1986, 1991, 1998 och 2025 | Byggt |
+| Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
+| Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
 | Ordagranna person- och båtrader | Byggt |
 | Person- och båtreferenser med granskningskö | Byggt |
 | Källvy, normaliserad vy, tidsjämförelse och personhistorik | Byggt |

@@ -13,6 +13,8 @@ const PRIVATE=resolve(ROOT,'privat');
 const MIGRATION=resolve(PRIVATE,'migrering-2026-08-02');
 const SOURCES=resolve(PRIVATE,'kallkopior');
 const CORRECTIONS=resolve(PRIVATE,'korrigeringar');
+const SUPPLEMENT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-matriklar-1991-1998.json');
+const SUPPLEMENT_REPORT=resolve(MIGRATION,'kontrollrapport-1991-1998.json');
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 let passed=0;
 
@@ -22,18 +24,26 @@ async function test(name,action){
 }
 
 function buildMigration(){
-  const result=spawnSync(process.execPath,['verktyg/bygg-startmaster.mjs'],{cwd:ROOT,encoding:'utf8'});
-  assert.equal(result.status,0,result.stderr||result.stdout);
+  for(const script of ['verktyg/bygg-startmaster.mjs','verktyg/bygg-tillaggs-matriklar.mjs']){
+    const result=spawnSync(process.execPath,[script],{cwd:ROOT,encoding:'utf8'});
+    assert.equal(result.status,0,result.stderr||result.stdout);
+  }
 }
 
 buildMigration();
 const firstBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const firstReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
+const firstSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
+const firstSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
 buildMigration();
 const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
 const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
+const secondSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
+const secondSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
 const document=JSON.parse(secondBytes);
 const report=JSON.parse(secondReportBytes);
+const supplementDocument=JSON.parse(secondSupplementBytes);
+const supplementReport=JSON.parse(secondSupplementReportBytes);
 const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
@@ -49,7 +59,10 @@ const boatRefs=rows('boat-ref');
 await test('startmastern byggs deterministiskt byte för byte',()=>{
   assert.equal(sha256(firstBytes),sha256(secondBytes));
   assert.equal(sha256(firstReportBytes),sha256(secondReportBytes));
+  assert.equal(sha256(firstSupplementBytes),sha256(secondSupplementBytes));
+  assert.equal(sha256(firstSupplementReportBytes),sha256(secondSupplementReportBytes));
   assert.equal(document.operations_sha256,sha256(Buffer.from(JSON.stringify(document.operations))));
+  assert.equal(supplementDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(supplementDocument.operations))));
 });
 
 await test('alla operationer är giltiga och unika',()=>{
@@ -59,31 +72,48 @@ await test('alla operationer är giltiga och unika',()=>{
   assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
   assert.equal(document.counts.operations,document.operations.length);
   assert.equal(document.counts.operations,10138);
+  assert.equal(supplementDocument.counts.operations,supplementDocument.operations.length);
+  assert.equal(supplementDocument.counts.operations,10970);
 });
 
 await test('källkopiorna är kryptografiskt låsta',async()=>{
   const paths={historic:'matriklar-1980-1986.md',current:'vem-ar-vem-2025.txt',people:'matrikel-initial-archive.json',boats:'batregister-initial-ops.json',decisions:'godkanda-personmatchningar.json'};
   for(const [key,file] of Object.entries(paths))assert.equal(sha256(await readFile(resolve(SOURCES,file))),document.source_hashes[key],key);
+  assert.equal(sha256(await readFile(resolve(SOURCES,'matriklar-1991-1998.json'))),supplementDocument.source_sha256);
+  assert.equal(Object.keys(supplementReport.source_file_hashes).length,6);
+  assert.ok(Object.values(supplementReport.source_file_hashes).every(value=>/^[a-f0-9]{64}$/.test(value)));
 });
 
-await test('tre utgåvor och alla 244 medlemsrader finns kvar',()=>{
-  assert.deepEqual(releases.map(release=>release.year).sort((a,b)=>a-b),[1980,1986,2025]);
+await test('fem utgåvor och alla 451 medlemsrader finns kvar',()=>{
+  assert.deepEqual(releases.map(release=>release.year).sort((a,b)=>a-b),[1980,1986,1991,1998,2025]);
   assert.deepEqual(report.release_counts['matrikel-1980'],{person_rows:41,boat_source_rows:32,boat_occurrences:46,connected_person_rows:40,unresolved_person_rows:1});
   assert.deepEqual(report.release_counts['matrikel-1986'],{person_rows:47,boat_source_rows:35,boat_occurrences:51,connected_person_rows:44,unresolved_person_rows:3});
   assert.deepEqual(report.release_counts['matrikel-2025'],{person_rows:156,boat_source_rows:0,boat_occurrences:0,connected_person_rows:156,unresolved_person_rows:0});
-  assert.equal(people.length,244);
+  assert.deepEqual(supplementReport.release_counts['matrikel-1991'].person_categories,{active:58,passive:10,junior:26,corresponding:2});
+  assert.deepEqual(supplementReport.release_counts['matrikel-1998'].person_categories,{active:63,passive:2,junior:42,corresponding:4});
+  assert.equal(supplementReport.release_counts['matrikel-1991'].person_rows,96);
+  assert.equal(supplementReport.release_counts['matrikel-1998'].person_rows,111);
+  assert.equal(people.length,451);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='active').length,35);
   assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='passive').length,6);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1991'&&item.membership_status==='junior').length,26);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.membership_status==='corresponding').length,4);
 });
 
 await test('alla källrader och båtförekomster redovisas utan tyst bortfall',()=>{
-  assert.equal(sourceRows.length,311);
-  assert.equal(boats.length,97);
+  assert.equal(sourceRows.length,656);
+  assert.equal(boats.length,309);
   assert.equal(new Set(sourceRows.map(row=>row.id)).size,sourceRows.length);
   assert.ok(sourceRows.every(row=>typeof row.raw_text==='string'&&row.raw_text.length>0));
   assert.ok(people.every(item=>typeof item.raw_text==='string'&&item.raw_text.length>0));
   assert.ok(boats.every(item=>typeof item.raw_text==='string'&&item.raw_text.length>0));
   for(const row of sourceRows)for(const id of row.occurrence_ids||[])assert.ok(people.some(item=>item.id===id)||boats.some(item=>item.id===id),id);
+  assert.equal(sourceRows.filter(row=>row.release_id==='matrikel-1991'&&row.kind==='boat').length,71);
+  assert.equal(sourceRows.filter(row=>row.release_id==='matrikel-1998'&&row.kind==='boat').length,67);
+  assert.equal(boats.filter(item=>item.release_id==='matrikel-1991').length,93);
+  assert.equal(boats.filter(item=>item.release_id==='matrikel-1998').length,119);
+  assert.equal(people.find(item=>item.release_id==='matrikel-1991'&&item.person_name_raw==='Per-Olof Bethge').source_annotation,'orange överstrykning i källfotot');
+  assert.equal(boats.find(item=>item.release_id==='matrikel-1991'&&item.boat_name_raw==='Lasse-Maja (1985').source_annotation,'slutparentes saknas i källan');
 });
 
 await test('person- och båtkopplingar pekar bara på respektive master',()=>{
@@ -97,11 +127,14 @@ await test('person- och båtkopplingar pekar bara på respektive master',()=>{
 
 await test('osäkra identiteter ligger öppet i granskningskön',()=>{
   const unresolved=people.filter(item=>!item.person_id||!item.confirmed);
-  assert.equal(unresolved.length,4);
-  assert.deepEqual(unresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
+  assert.equal(unresolved.length,47);
+  const originalUnresolved=unresolved.filter(item=>['matrikel-1980','matrikel-1986'].includes(item.release_id));
+  assert.deepEqual(originalUnresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
   assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
+  assert.equal(supplementReport.unresolved_people.length,43);
   assert.equal(report.counts.unresolved_boats,14);
-  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,8);
+  assert.equal(supplementReport.unresolved_boats.length,31);
+  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,39);
 });
 
 await test('alla båtreferenser bär full strukturerad metadata och får entydiga etiketter',()=>{
@@ -140,6 +173,9 @@ await test('Majsol 1986 avgörs av typ och år utan att källraden ändras',()=>
   assert.equal(occurrence.match_status,'godkand');
   assert.equal(occurrence.confirmed,true);
   assert.deepEqual(occurrence.candidate_ids,['majsol_neretnieks']);
+  const laterMajsols=boats.filter(item=>['matrikel-1991','matrikel-1998'].includes(item.release_id)&&item.boat_name_raw==='Majsol');
+  assert.equal(laterMajsols.length,2);
+  assert.ok(laterMajsols.every(item=>item.raw_text.includes('S/S Majsol')&&item.boat_id==='majsol_neretnieks'&&item.confirmed===true));
 });
 
 await test('Filifjonkan-raderna behåller källformen men länkas till den första båten',()=>{
@@ -149,9 +185,24 @@ await test('Filifjonkan-raderna behåller källformen men länkas till den förs
   assert.deepEqual(firstRef.aliases,['Filifjonkan']);
   assert.equal(secondRef.name,'Filifjonkan II');
   const occurrences=boats.filter(item=>item.boat_name_raw==='Filifjonkan');
-  assert.deepEqual(occurrences.map(item=>item.release_id).sort(),['matrikel-1980','matrikel-1986']);
+  assert.deepEqual(occurrences.map(item=>item.release_id).sort(),['matrikel-1980','matrikel-1986','matrikel-1991','matrikel-1998']);
   assert.ok(occurrences.every(item=>item.raw_text.includes('Filifjonkan')&&item.boat_id==='filifjonkaniii'&&item.confirmed===true));
   assert.ok(occurrences.every(item=>item.match_status==='godkand'&&item.match_method==='källbelagd identitetsrättning'));
+});
+
+await test('1991 och 1998 bevarar medlems- och fartygskategorierna',()=>{
+  const junior=people.find(item=>item.release_id==='matrikel-1991'&&item.person_name_raw==='Elin Dalaryd');
+  const corresponding=people.find(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Else Wallén');
+  const retired=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Annikahn');
+  const commaName=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Smör, Ost och Sill');
+  assert.equal(junior.membership_status,'junior');
+  assert.equal(junior.source_page,3);
+  assert.equal(corresponding.membership_status,'corresponding');
+  assert.equal(corresponding.source_page,3);
+  assert.equal(retired.source_category,'deregistered-or-renamed');
+  assert.equal(retired.registry_year_raw,'1991-96');
+  assert.equal(commaName.registry_year,1994);
+  assert.equal(commaName.raw_text,'S/S Smör, Ost och Sill(1994)');
 });
 
 await test('dubbletter och ogiltiga källvärden rättas inte bort',()=>{
@@ -182,6 +233,10 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(app.includes('Frånvaro är inte ett utträde'));
   assert.ok(app.includes('all strukturerad metadata från Båtregistret utom bilder'));
   assert.ok(app.includes('Spara ändring'));
+  assert.ok(app.includes("junior:'Junior'"));
+  assert.ok(app.includes("corresponding:'Korresponderande'"));
+  assert.ok(app.includes('Avregistrerat eller namnändrat'));
+  assert.ok(app.includes('source_page'));
   assert.ok(app.includes("opsRoot:'/klubbhistorik/ops'"));
   assert.ok(app.includes("name:'kbk-klubbhistorik'"));
   assert.ok(html.includes('matriklar över tid'));
