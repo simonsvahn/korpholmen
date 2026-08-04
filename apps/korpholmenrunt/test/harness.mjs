@@ -42,6 +42,8 @@ await test('samtliga 363 källrader är bevarade som resultat eller källnoterin
   assert.ok(results.every(item=>item.raw_row&&item.year&&item.class_name&&item.course_code&&item.time_raw));
   assert.ok(results.every(item=>item.class_id&&item.class_match_status==='manuell'&&item.class_match_method===KLASSSTANDARD_METHOD));
   const dagen=results.find(item=>item.class_raw==='Dagen');assert.ok(dagen);assert.equal(dagen.class_name,'Rodd');assert.equal(dagen.class_id,'rodd');
+  const paddel=results.find(item=>item.class_raw==='Paddel');assert.ok(paddel);assert.equal(paddel.boat_name_raw,'Anita');assert.equal(paddel.class_id,'kajak-2');
+  const jolle=results.find(item=>item.class_raw==='jolle*');assert.ok(jolle);assert.equal(jolle.boat_name_raw,'Näcken');assert.equal(jolle.class_id,'segel');
   const digest=createHash('sha256').update(await readFile(SOURCE)).digest('hex');
   assert.equal(digest,document.source_sha256);
 });
@@ -51,11 +53,13 @@ await test('klassstandarden samlar beslutade varianter och bevarar separata gren
     ['Canadian','Kanadensare'],['Canadian*','Kanadensare'],['kanad','Kanadensare'],['Can','Kanadensare'],
     ['Kajak 1','Kajak 1'],['K1','Kajak 1'],['Kajak 2?','Kajak 2'],['K2','Kajak 2'],
     ['rodd?*','Rodd'],['Dagen','Rodd'],['Segel?','Segel'],['S','Segel'],
-    ['optimist*','Optimist'],['Gummijolle','Gummi'],['','Okänd'],['?','Okänd'],['rodel','Okänd'],
-    ['Örnjolle','Örnjolle'],['jolle*','Jolle'],['Paddel','Paddel'],['rodd+segel','Rodd + segel'],
+    ['optimist*','Optimist'],['Gummijolle','Gummi'],['','Okänd'],['?','Okänd'],['Övrigt','Övrigt'],
+    ['rodel','Rodd'],['jolle*','Segel'],['Paddel','Kajak 2'],
+    ['Örnjolle','Örnjolle'],['rodd+segel','Rodd + segel'],
   ]);
   for(const [raw,name] of expected){assert.equal(klassnamn(raw),name,raw);assert.ok(standardklass(raw)?.id,raw)}
   assert.equal(new Set(KLASSER.map(item=>item.id)).size,KLASSER.length);
+  assert.ok(KLASSER.some(item=>item.id==='ovrigt'&&item.name==='Övrigt'));
 });
 
 await test('namnkopplingar använder stabila ID:n från Matrikeln och Båtregistret',()=>{

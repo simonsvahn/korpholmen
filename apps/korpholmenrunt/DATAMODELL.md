@@ -19,10 +19,12 @@ tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
 
 Klassen lagras i fyra separata fält: oförändrat `class_raw`, stabilt
 `class_id`, visningsnamnet `class_name` samt beslutets
-`class_match_status`/`class_match_method`. Klassstandarden har tolv grenar:
-Kanadensare, Kajak 1, Kajak 2, Rodd, Segel, Optimist, Gummi, Okänd,
-Örnjolle, Jolle, Paddel och Rodd + segel. Källvärdena `Dagen` och `rodel`
-normaliseras till Rodd respektive Okänd utan att råvärdet ändras.
+`class_match_status`/`class_match_method`. Klassstandarden har elva grenar:
+Kanadensare, Kajak 1, Kajak 2, Rodd, Segel, Optimist, Gummi, Övrigt,
+Okänd, Örnjolle och Rodd + segel. `Övrigt` används för en känd typ som inte
+hör till en ordinarie gren; `Okänd` betyder att klassen saknas eller inte går
+att avgöra. Källvärdena `Paddel`, `rodel`, `Dagen` och `jolle` normaliseras
+till Kajak 2, Rodd, Rodd respektive Segel utan att råvärdet ändras.
 
 ## Registerkopplingar
 

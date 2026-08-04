@@ -4,15 +4,14 @@ export const KLASSSTANDARD_METHOD=`klassstandard beslutad av Simon ${KLASSSTANDA
 export const KLASSER=Object.freeze([
   {id:'kanadensare',name:'Kanadensare',aliases:['Canadian','Canadian*','kanad','Can']},
   {id:'kajak-1',name:'Kajak 1',aliases:['Kajak 1','K1']},
-  {id:'kajak-2',name:'Kajak 2',aliases:['Kajak 2','Kajak 2?','K2']},
-  {id:'rodd',name:'Rodd',aliases:['Rodd','rodd*','rodd?','rodd?*','Dagen']},
-  {id:'segel',name:'Segel',aliases:['Segel','Segel?','S']},
+  {id:'kajak-2',name:'Kajak 2',aliases:['Kajak 2','Kajak 2?','K2','Paddel']},
+  {id:'rodd',name:'Rodd',aliases:['Rodd','rodd*','rodd?','rodd?*','Dagen','rodel']},
+  {id:'segel',name:'Segel',aliases:['Segel','Segel?','S','Jolle','jolle*']},
   {id:'optimist',name:'Optimist',aliases:['Optimist','optimist*']},
   {id:'gummi',name:'Gummi',aliases:['Gummi','Gummijolle']},
-  {id:'okand',name:'Okänd',aliases:['','?','rodel']},
+  {id:'ovrigt',name:'Övrigt',aliases:[]},
+  {id:'okand',name:'Okänd',aliases:['','?']},
   {id:'ornjolle',name:'Örnjolle',aliases:['Örnjolle']},
-  {id:'jolle',name:'Jolle',aliases:['Jolle','jolle*']},
-  {id:'paddel',name:'Paddel',aliases:['Paddel']},
   {id:'rodd-segel',name:'Rodd + segel',aliases:['Rodd + segel','rodd+segel']},
 ]);
 
