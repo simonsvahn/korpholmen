@@ -1,48 +1,32 @@
-# Kartdata — källgranskning och platsregister
+# Kartdata — strukturerad kartmaster
 
-Kartdata visar de 161 raderna i arbetsboken *Kartans namn per fastighet
-(radgranskning 2026-07-22)* som källuppgifter, inte som redan godkänd
-masterdata. Appen grupperar visuellt efter ö/område och föreslagen
-fastighetskoppling, har en prioriterad granskningskö och en särskild
-Östruktur-vy för stabila plats- och byggnadsobjekt.
+Kartdata v2 visar den aktiva kartdatan utan den äldre arbetsbokens
+källpaneler, anteckningar eller AI-förslag. Appen har fyra vyer: översikt,
+östruktur, granskningskö och en kompakt tabell.
 
-Tabellvyn är en filtrerbar datagrid med fasta namnkolumner, typ- och
-statusmarkörer, expanderbara detaljrader och redigering per rad. Samtliga elva
-källfält och hela granskningslagret är åtkomliga utan att presenteras som ett
-brett kalkylblad.
-
-## Säkerhetsprincip
-
-- Arbetsboken ändras aldrig.
-- Alla elva källkolumner bevaras i `source_*`/`prior_*`.
-- Bekräftelser och rättelser sparas i `review_*` som återställningsbara
-  operationer.
-- Ogranskade kartposter får inte automatiskt bli plats-, byggnads- eller fastighetsmaster.
-- Plats- och byggnadsobjekt har stabila ID:n; namn och relationer är separata, källspårbara poster.
-- Borttagning tombstonar masterobjektet och dess kopplingar i operationshistoriken; kartans källrader raderas aldrig.
-- Dropbox-namnrymden är `/kartdata/ops`, separat från
-  Fastighetshistorikens `/fastigheter/ops`.
-- Det publika paketet är datafritt; bara appskalet publiceras.
+Varje datapost innehåller namn, objektstyp, valfri undertyp och
+granskningsstatus. Ö och fastighet är strukturerade länkar. Dagens ägare
+visas från Fastighetshistorikens senaste daterade registerobservation och
+länkas antingen till Matrikeln eller till en extern ägarpart.
 
 Den konkreta modellen finns i [`DATAMODELL.md`](DATAMODELL.md). Appfamiljens
 ansvarsgränser finns i [`../../ARKITEKTUR.md`](../../ARKITEKTUR.md).
 
-## Lokal start och bygg
-
-Källkopian ligger lokalt under `privat/kallkopior/` och byggs till en
-oföränderlig startoperationsfil:
+## Bygg och kontrollera
 
 ```sh
-npm run build:migration
+npm run build:clean-v2
 npm test
 npm run build:publish
-npm run seed:dropbox -- "/Users/simon/Dropbox/Appar/Korpholmen"
 ```
 
-När källappen öppnas från `/apps/kartdata/` läses startkopian automatiskt om
-det lokala lagret är tomt. En granskning kan också exporteras som JSON.
+Den rena migrationen läser de tre levande Dropbox-mastrarna men skriver bara
+privata förhandsfiler. Den publiceras inte till Dropbox förrän följande
+kommando körs uttryckligen:
 
-Historiska och alternativa platsnamn byggs som en separat, additiv migration.
-Den kan därför läggas till i en redan använd databas utan att äldre
-operations-ID:n eller manuella rättelser skrivs över. Dropbox-skriptet skriver
-endast nya immutabla batchfiler och avbryter om en befintlig fil skiljer sig.
+```sh
+npm run seed:clean-v2
+```
+
+Dropbox-namnrymden är fortsatt `/kartdata/ops`. Det publika paketet i
+`kartdata/` är datafritt.

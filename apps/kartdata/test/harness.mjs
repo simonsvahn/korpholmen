@@ -4,205 +4,142 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
-import { effectiveEntry, masterDeletionRefs, objectTypeLabel, proposedReview, propertyIdsFromText, splitList, stableEntityId } from '../src/model.js';
+import { OBJECT_CLASSES, islandDeletionRefs, objectTypeLabel, stableEntityId } from '../src/model.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
-const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-03');
-const SOURCE_PATH = resolve(ROOT, 'privat/kallkopior/kartdata-source.json');
+const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2');
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
 let passed = 0;
 async function test(name, action) { try { await action(); passed += 1; console.log(`✓ ${name}`); } catch (error) { console.error(`✗ ${name}`); throw error; } }
 
-await test('byggaren skapar startmastern reproducerbart', () => {
-  const result = spawnSync(process.execPath, ['verktyg/bygg-startmaster.mjs'], { cwd: ROOT, encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /161 ogranskade källrader/);
-});
-
-const source = await readJson(SOURCE_PATH);
-const document = await readJson(resolve(PRIVATE, 'initial-ops.json'));
-const structureDocument = await readJson(resolve(PRIVATE, 'structure-ops.json'));
-const placeNameDocument = await readJson(resolve(PRIVATE, 'place-names-ops.json'));
+const document = await readJson(resolve(PRIVATE, 'clean-v2-ops.json'));
+const preview = await readJson(resolve(PRIVATE, 'preview.json'));
+const manifest = await readJson(resolve(PRIVATE, 'manifest.json'));
 const state = materialize(document.operations);
-const combinedState = materialize([...document.operations, ...placeNameDocument.operations]);
-const entries = new Map(state.listEntities('map-entry').map(entity => [entity.entity_id, { id: entity.entity_id, ...entity.fields }]));
-const places = new Map(combinedState.listEntities('place').map(entity => [entity.entity_id, { id: entity.entity_id, ...entity.fields }]));
+const rows = type => state.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 
 await test('alla JavaScript-filer har giltig syntax', () => {
-  for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-startmaster.mjs', 'verktyg/bygg-publicering.mjs', 'verktyg/skriv-dropbox-startmaster.mjs']) {
+  for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-publicering.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr}`);
   }
 });
 
-await test('källkopian har exakt 161 unika rader och rätt arbetsbokshash', () => {
-  assert.equal(source.rows.length, 161);
-  assert.equal(new Set(source.rows.map(row => row.id)).size, 161);
-  assert.equal(source.source.source_sha256, '499330cbfcfca55eaa65d32c169a6c4b262f71cd5e4d6f9b04ff153ca0ea459b');
-  assert.deepEqual(source.source.columns, ['Nr', 'Ö', 'Fastighet', 'Kartetikett', 'Dagens ägare', 'Namn', 'Namntyp (kartan)', 'Källa', 'Anteckning', 'Typ (ditt beslut)', 'Kommentar/rättelse']);
-});
-
-await test('samtliga startoperationer är giltiga och materialiserar 161 ogranskade poster', () => {
+await test('v2-migrationen är giltig och har låst identitet', () => {
+  assert.equal(document.migration_id, '2026-08-04-kartdata-clean-v2');
   document.operations.forEach(validateOperation);
-  structureDocument.operations.forEach(validateOperation);
-  placeNameDocument.operations.forEach(validateOperation);
-  assert.equal(entries.size, 161);
-  assert.ok([...entries.values()].every(entry => entry.review_status === 'ogranskad'));
-  assert.equal(state.listEntities('source').length, 1);
+  assert.equal(new Set(document.operations.map(operation => operation.op_id)).size, document.operations.length);
+  assert.deepEqual(document.counts, manifest.counts);
 });
 
-await test('östrukturen har stabila plats-, namn- och relationsobjekt utan att förgranska kartposter', () => {
-  assert.equal(places.size, 19);
-  assert.equal(combinedState.listEntities('name-record').length, 57);
-  assert.equal(combinedState.listEntities('place-relation').length, 2);
-  assert.equal(places.get('korpholmen').preferred_name, 'Korpholmen');
-  assert.equal(places.get('sviholmen').preferred_name, 'Sviholmen');
-  assert.equal(places.get('sahlskar').subtype, 'halvö/tomt');
-  assert.equal(combinedState.getEntity('place-relation', 'part-of:place:sahlskar:korpholmen').fields.parent_place_id, 'korpholmen');
-  assert.equal(combinedState.getEntity('place-relation', 'seed-part-of:place:lill-yxlan:svano').fields.parent_place_id, 'svano');
-  assert.equal(Math.min(...structureDocument.operations.map(operation => operation.seq)), document.operations.length - structureDocument.operations.length + 1);
+await test('den aktiva datan har 158 poster och inga förbjudna objekttyper', () => {
+  const entries = rows('data-entry');
+  assert.equal(entries.length, 158);
+  assert.ok(entries.every(entry => OBJECT_CLASSES.includes(entry.object_type)));
+  assert.deepEqual(OBJECT_CLASSES, ['byggnad', 'plats', 'namnform', 'ägaretikett']);
+  for (const removedId of ['K105', 'K161', 'K32']) assert.ok(!entries.some(entry => entry.id === removedId), removedId);
 });
 
-await test('historiska namn är en separat additiv och källspårbar migration', () => {
-  assert.equal(placeNameDocument.device_id, 'migration-kartdata-place-names-2026-08-03');
-  assert.ok(placeNameDocument.operations.every(operation => operation.device_id !== document.device_id));
-  assert.equal(placeNameDocument.counts.new_place, 8);
-  assert.equal(placeNameDocument.counts.new_name_record, 44);
-  const names = combinedState.listEntities('name-record').map(entity => ({ id: entity.entity_id, ...entity.fields }));
-  const find = (targetId, name) => names.find(item => item.target_id === targetId && item.name === name);
-  assert.deepEqual(find('korpholmen', 'Kårpholm').source_ids, ['KARTA-1639']);
-  assert.equal(find('svano', 'Starrholmen').name_type, 'officiellt');
-  assert.equal(find('lilla-sviholmen', 'Lillswedholmen').review_status, 'osäker');
-  assert.equal(find('lovskar', 'Barnholmen').valid_to, '1916');
-  assert.equal(places.get('korpholmens-ogrupp').review_status, 'osäker');
-  assert.equal(places.get('bockholmen').review_status, 'osäker');
+await test('previewfilen saknar källfält, arbetsförslag och anteckningar', () => {
+  const forbidden = new Set(['source', 'source_ids', 'source_id', 'source_row', 'source_name', 'source_note', 'note', 'prior_type_decision', 'prior_correction', 'review_note', 'review_basis']);
+  const visit = value => {
+    if (Array.isArray(value)) return value.forEach(visit);
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) { assert.ok(!forbidden.has(key), `förbjudet fält: ${key}`); visit(child); }
+  };
+  visit(preview);
 });
 
-await test('alla elva arbetsbokskolumner bevaras cell för cell', () => {
-  for (const row of source.rows) {
-    const entry = entries.get(row.id); assert.ok(entry, row.id);
-    assert.equal(entry.source_row, row.source_row, row.id);
-    assert.equal(entry.source_document_id, 'BESLUT-KARTNAMN', row.id);
-    for (const [field, value] of Object.entries(row.raw)) assert.deepEqual(entry[field], value, `${row.id}.${field}`);
+await test('de tio manuellt kvarvarande öarna är v2-mastern', () => {
+  assert.equal(preview.islands.length, 10);
+  assert.deepEqual(preview.islands.map(island => island.name).sort((a, b) => a.localeCompare(b, 'sv')), ['Blidö', 'Korpholmen', 'Lilla Korpholmen', 'Lilla Sviholmen', 'Lövskär', 'Stugholmen', 'Svanö', 'Sviholmen', 'Yxlan', 'Ängsholmen']);
+  assert.equal(rows('place').length, 10);
+});
+
+await test('139 poster har säker strukturerad ökoppling och 19 lämnas okopplade', () => {
+  const links = rows('data-entry-island-link'); const islandIds = new Set(preview.islands.map(island => island.id)); const entryIds = new Set(preview.entries.map(entry => entry.id));
+  assert.equal(links.length, 139);
+  assert.equal(preview.entries.filter(entry => !entry.island_id).length, 19);
+  assert.ok(links.every(link => islandIds.has(link.island_id) && entryIds.has(link.entry_id)));
+});
+
+await test('fastighetskopplingarna pekar bara på de 31 validerade referenserna', () => {
+  const links = rows('data-entry-property-link'); const refs = new Set(rows('property-ref').map(ref => ref.external_id)); const entries = new Set(rows('data-entry').map(entry => entry.id));
+  assert.equal(links.length, 106); assert.equal(refs.size, 31);
+  assert.ok(links.every(link => entries.has(link.entry_id) && refs.has(link.property_id)));
+});
+
+await test('ägare skiljer säkra Matrikel-personer från externa parter utan namnmatchningsgissning', () => {
+  assert.equal(rows('property-owner-link').length, 50);
+  assert.equal(rows('person-ref').length, 21);
+  assert.equal(rows('external-party').length, 28);
+  assert.ok(rows('external-party').some(ref => ref.external_id === 'party-kaj-gunder-boving'));
+  assert.ok(!rows('person-ref').some(ref => ref.external_id === 'kajböving'));
+});
+
+await test('varje ägarlänk är daterad och pekar på en existerande referens', () => {
+  const properties = new Set(rows('property-ref').map(ref => ref.external_id));
+  const people = new Set(rows('person-ref').map(ref => ref.external_id));
+  const parties = new Set(rows('external-party').map(ref => ref.external_id));
+  for (const link of rows('property-owner-link')) {
+    assert.ok(properties.has(link.property_id)); assert.match(link.observed_on, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(link.owner_type === 'person-ref' ? people.has(link.owner_id) : parties.has(link.owner_id));
   }
 });
 
-await test('tidigare beslut ligger bara som förslag och ändrar inte granskningsstatus', () => {
-  const sahlskar = entries.get('K25');
-  const proposal = proposedReview(sahlskar);
-  assert.equal(sahlskar.review_status, 'ogranskad');
-  assert.equal(proposal.review_object_class, 'plats');
-  assert.equal(proposal.review_island, 'Korpholmen');
-  assert.deepEqual(proposal.review_property_ids, ['Alsvik 3:377', 'Alsvik 3:27']);
-  assert.equal(effectiveEntry(sahlskar).effective_status, 'ogranskad');
+await test('den redan manuellt rättade Lilla Kryllbo-posten följer med utan gammal undertyp', () => {
+  const entry = preview.entries.find(item => item.id === 'K96');
+  assert.deepEqual(entry, { id: 'K96', name: 'Lilla Kryllbo', object_type: 'byggnad', subtype: null, review_status: 'rättad', island_id: 'sviholmen', property_ids: ['Alsvik 3:367'] });
 });
 
-await test('rättelsekolumnens fastighet och rena namnförslag kan läsas utan att källan skrivs över', () => {
-  assert.deepEqual(proposedReview(entries.get('K101')).review_property_ids, ['Alsvik 3:180']);
-  assert.equal(proposedReview(entries.get('K16')).review_name, 'Miniori');
-  assert.equal(entries.get('K16').source_name, 'Mini-ori');
-  assert.deepEqual(propertyIdsFromText('Alsvik 3:377 och 3:27'), ['Alsvik 3:377', 'Alsvik 3:27']);
-});
-
-await test('plats och delområde är en gemensam objektklass medan byggnad hålls separat', async () => {
-  const model = await readFile(resolve(ROOT, 'DATAMODELL.md'), 'utf8');
-  assert.match(model, /`plats` och `delområde` är samma objektklass/);
-  assert.match(model, /`byggnad` förblir en egen fysisk objektklass/);
-  assert.equal(proposedReview(entries.get('K100')).review_object_class, 'plats');
-  assert.equal(proposedReview(entries.get('K101')).review_object_class, 'byggnad');
-});
-
-await test('översiktskortens typetikett visar meningsfull undertyp', () => {
+await test('modellens typetiketter är rena och ö-ID:n stabila', () => {
   assert.equal(objectTypeLabel('byggnad', 'Gäststuga'), 'Byggnad: Gäststuga');
-  assert.equal(objectTypeLabel('plats', 'udde'), 'Plats: udde');
-  assert.equal(objectTypeLabel('plats', 'Plats/ej byggnad'), 'Plats');
-  assert.equal(objectTypeLabel('ägaretikett', 'Utgått/fel'), 'Ägaretikett');
+  assert.equal(objectTypeLabel('plats', null), 'Plats');
   assert.equal(stableEntityId('Stora Sviholmen'), 'stora-sviholmen');
-  assert.deepEqual(splitList('KARTA-2025, BIO-SIMON\nKARTA-2025'), ['KARTA-2025', 'BIO-SIMON']);
 });
 
-await test('borttagning omfattar masterobjektets följdposter men aldrig kartans källrad', () => {
-  const refs = masterDeletionRefs({
-    type: 'place', id: 'korpholmen',
-    names: [
-      { id: 'name-1', target_type: 'place', target_id: 'korpholmen' },
-      { id: 'name-other', target_type: 'place', target_id: 'sviholmen' },
-    ],
-    relations: [
-      { id: 'relation-parent', child_type: 'place', child_id: 'sahlskar', parent_place_id: 'korpholmen' },
-      { id: 'relation-child', child_type: 'place', child_id: 'korpholmen', parent_place_id: 'annat' },
-      { id: 'relation-other', child_type: 'place', child_id: 'sviholmen', parent_place_id: 'annat' },
-    ],
-    propertyLinks: [
-      { id: 'property-1', target_type: 'place', target_id: 'korpholmen' },
-      { id: 'property-other', target_type: 'place', target_id: 'sviholmen' },
-    ],
-    mapEntryLinks: [
-      { id: 'entry-link-1', map_entry_id: 'K1', target_type: 'place', target_id: 'korpholmen' },
-      { id: 'entry-link-other', map_entry_id: 'K2', target_type: 'place', target_id: 'sviholmen' },
-    ],
-  });
-  assert.deepEqual(refs, [
-    { entityType: 'place', entityId: 'korpholmen' },
-    { entityType: 'name-record', entityId: 'name-1' },
-    { entityType: 'place-relation', entityId: 'relation-parent' },
-    { entityType: 'place-relation', entityId: 'relation-child' },
-    { entityType: 'object-property-link', entityId: 'property-1' },
-    { entityType: 'map-entry-link', entityId: 'entry-link-1' },
-  ]);
-  assert.ok(!refs.some(ref => ref.entityType === 'map-entry'));
+await test('borttagning av en ö tar även bort dess ökopplingar men inte dataposterna', () => {
+  const refs = islandDeletionRefs({ id: 'korpholmen', names: [{ id: 'n1', target_type: 'place', target_id: 'korpholmen' }], islandLinks: [{ id: 'l1', entry_id: 'K1', island_id: 'korpholmen' }], relations: [], propertyLinks: [] });
+  assert.deepEqual(refs, [{ entityType: 'place', entityId: 'korpholmen' }, { entityType: 'name-record', entityId: 'n1' }, { entityType: 'data-entry-island-link', entityId: 'l1' }]);
+  assert.ok(!refs.some(ref => ref.entityType === 'data-entry'));
 });
 
-await test('appen skiljer källgranskning från platsmaster och har fyra arbetsvyer', async () => {
+await test('appen visar bara Data och de strukturerade sakfälten', async () => {
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
+  for (const forbidden of ['Ordagrann källuppgift', 'Tidigare arbetsförslag', 'Godkänt visningsnamn', 'Granskningsnot', 'Käll-ID:n']) assert.ok(!app.includes(forbidden), forbidden);
+  for (const required of ["recordList('data-entry')", "recordList('data-entry-island-link')", "recordList('data-entry-property-link')", "recordList('property-owner-link')", '<h3>Data</h3>', '>Namn<input', '>Ö<select']) assert.ok(app.includes(required), required);
+  assert.ok(!html.includes('value="kartsymbol"')); assert.ok(!html.includes('value="annat"')); assert.ok(html.includes('Exportera data'));
+});
+
+await test('fastigheter väljs en i taget utan en lång krysslista', async () => {
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const css = await readFile(resolve(ROOT, 'styles.css'), 'utf8');
+  assert.ok(app.includes('data-property-picker'));
+  assert.ok(app.includes('data-action="add-property"'));
+  assert.ok(app.includes('data-action="remove-property"'));
+  assert.ok(app.includes('type="hidden" name="property_ids"'));
+  assert.ok(!app.includes('propertyChecklist'));
+  assert.ok(!css.includes('.property-checklist'));
+});
+
+await test('exportkoden använder v2-format och utesluter arkivposterna', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
-  assert.ok(!app.includes('data-source-field'));
-  assert.ok(app.includes("entityType: 'map-entry'"));
-  assert.ok(app.includes("'name-record'"));
-  assert.ok(app.includes("'object-property-link'"));
-  assert.ok(app.includes("'map-entry-link'"));
-  assert.ok(app.includes("opsRoot: '/kartdata/ops'"));
-  assert.ok(app.includes('PLACE_NAMES_META'));
-  assert.ok(app.includes('Källspårbara namnposter'));
-  assert.ok(app.includes('data-action="delete-master"'));
-  assert.ok(app.includes('Kartans ursprungliga källrader ligger alltid kvar oförändrade'));
-  assert.ok(html.includes('data-view="atlas"'));
-  assert.ok(html.includes('data-view="structure"'));
-  assert.ok(html.includes('data-view="queue"'));
-  assert.ok(html.includes('data-view="table"'));
-  assert.ok(html.includes('Exportera granskning'));
+  assert.ok(app.includes("format: 'korpholmen-kartdata-v2'"));
+  assert.ok(!app.includes("recordList('map-entry')"));
+  assert.ok(!app.includes('source_current_owner'));
+  assert.ok(!app.includes('prior_correction'));
 });
 
-await test('tabellvyn är filtrerbar, expanderbar och redigerbar utan att dölja källfälten', async () => {
-  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
-  for (const id of ['search', 'island-filter', 'class-filter', 'subtype-filter', 'property-filter', 'status-filter', 'sort-order']) assert.ok(html.includes(`id="${id}"`), id);
-  assert.ok(app.includes('data-table-toggle'));
-  assert.ok(app.includes('Ordagrann källa'));
-  assert.ok(app.includes('Tidigare kommentar/rättelse'));
-  assert.ok(app.includes('Justera raden'));
-});
-
-await test('publiceringsbygget är datafritt och har egen offlinebar kärna', async () => {
+await test('publiceringsbygget är datafritt och har den rena appkoden', async () => {
   const result = spawnSync(process.execPath, ['verktyg/bygg-publicering.mjs'], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  const publishedApp = await readFile(resolve(REPO, 'kartdata/src/app.js'), 'utf8');
-  const publishedCore = await readFile(resolve(REPO, 'kartdata/core/data-layer.js'), 'utf8');
-  const publishedHtml = await readFile(resolve(REPO, 'kartdata/index.html'), 'utf8');
-  assert.ok(publishedApp.includes("../core/data-layer.js"));
-  assert.ok(publishedCore.includes("./storage/indexeddb.js"));
-  assert.ok(!publishedHtml.includes('Sahlskär'));
-  assert.ok(!publishedApp.includes('Hjärterum'));
-  assert.ok(!publishedApp.includes('Kårpholm'));
+  const publishedApp = await readFile(resolve(REPO, 'kartdata/src/app.js'), 'utf8'); const publishedHtml = await readFile(resolve(REPO, 'kartdata/index.html'), 'utf8');
+  assert.ok(publishedApp.includes("../core/data-layer.js")); assert.ok(publishedApp.includes("recordList('data-entry')")); assert.ok(!publishedHtml.includes('Lilla Kryllbo')); assert.ok(!publishedApp.includes('Korpholmens Tomtägareförening'));
 });
 
-await test('appnavet och den gemensamma byggkedjan känner till Kartdata', async () => {
-  const hub = await readFile(resolve(REPO, 'index.html'), 'utf8');
-  const rootPackage = JSON.parse(await readFile(resolve(REPO, 'package.json'), 'utf8'));
-  assert.ok(hub.includes('./kartdata/'));
-  assert.match(rootPackage.scripts.test, /apps\/kartdata/);
-  assert.match(rootPackage.scripts.build, /apps\/kartdata/);
+await test('arkitekturen dokumenterar v2-gränsen och externa ägarparter', async () => {
+  const model = await readFile(resolve(ROOT, 'DATAMODELL.md'), 'utf8'); const architecture = await readFile(resolve(REPO, 'ARKITEKTUR.md'), 'utf8');
+  assert.match(model, /äldre importen.*v1-arkiv/s); assert.match(model, /external-party/); assert.match(model, /senaste daterade/); assert.match(architecture, /Kartdata v2 använder `data-entry`/);
 });
 
-console.log(`\n${passed} Kartdata-kontrakt godkända.`);
+console.log(`\n${passed} Kartdata-v2-kontrakt godkända.`);
