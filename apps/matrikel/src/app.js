@@ -46,7 +46,7 @@ import {
   nextReferenceCode,
   relativeGenerationLabel,
 } from '../../../packages/core/family-context.js';
-import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-01-10';
+import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
 
 const $ = (selector) => document.querySelector(selector);
@@ -1287,6 +1287,12 @@ async function bootstrapLocal() {
       const approved = await approvedResponse.json();
       approved.operations.forEach(validateOperation);
       await repository.applyRemoteOps(approved.operations);
+    }
+    const externalOwnersResponse = await fetch(LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, { cache: 'no-store' });
+    if (externalOwnersResponse.ok) {
+      const externalOwners = await externalOwnersResponse.json();
+      externalOwners.operations.forEach(validateOperation);
+      await repository.applyRemoteOps(externalOwners.operations);
     }
   } catch (error) {
     console.warn('Kompletterande godkända data kunde inte läsas lokalt', error);

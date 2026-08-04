@@ -5,4 +5,3 @@ export const DROPBOX_SCOPES = [
   'files.content.write'
 ];
 export const CLEAN_V2_BOOTSTRAP_URL = './privat/migrering-2026-08-04-lokal-bootstrap/clean-v2-base-ops.json';
-export const CURRENT_OWNER_BOOTSTRAP_URL = './privat/migrering-2026-08-04-aktuella-agare/current-owner-ops.json';

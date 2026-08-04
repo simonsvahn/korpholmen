@@ -1,1 +1,1 @@
-{"name":"@korpholmen/core","private":true,"type":"module"}
+{"name":"@korpholmen/core","private":true,"type":"module","scripts":{"test":"node test/harness.mjs"}}

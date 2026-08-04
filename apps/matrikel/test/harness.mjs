@@ -65,6 +65,7 @@ const peterCorrectionDirectory = resolve(ROOT, 'privat/korrigeringar/utdata-pete
 const peterCorrectionFiles = (await readdir(peterCorrectionDirectory)).filter(file => file.endsWith('.json')).sort();
 const peterCorrectionDocuments = await Promise.all(peterCorrectionFiles.map(file => readFile(resolve(peterCorrectionDirectory, file), 'utf8').then(JSON.parse)));
 const peterCorrectionOperations = peterCorrectionDocuments.flatMap(document => document.ops || document.operations || []);
+const externalOwnerDocument = JSON.parse(await readFile(resolve(ROOT, 'privat/korrigeringar/2026-08-04-externa-fastighetsagare.json'), 'utf8'));
 
 await test('startmastern är kryptografiskt låst', async () => {
   assert.equal(typeof manifest.source.sha256, 'string');
@@ -173,6 +174,25 @@ await test('Peter-identiteterna och Annas namnbyte är rättade additivt', () =>
   assert.equal(state.getEntity('relation', 'relation:foralder-barn:ivarsneretnieks:peterneretnieks').fields.user_confirmed, true);
   assert.equal(state.getEntity('relation', 'relation:foralder-barn:margaretaneretnieks:annaholm').fields.user_confirmed, true);
   assert.equal(state.getEntity('relation', 'relation:partner:annaholm:peterholm').fields.form, 'gift');
+});
+
+await test('externa nuvarande fastighetsägare har separata person-ID:n utan namnmatchning', () => {
+  assert.equal(externalOwnerDocument.parties.length, 24);
+  assert.match(externalOwnerDocument.identity_rule, /Ingen namnmatchning/);
+  externalOwnerDocument.operations.forEach(operation => assert.equal(operation.entity_type, 'person'));
+  const state = materialize([
+    ...operationsDocument.operations,
+    ...metadataDocument.operations,
+    ...approvedDocument.operations,
+    ...familyBatch.ops,
+    ...peterCorrectionOperations,
+    ...externalOwnerDocument.operations,
+  ]);
+  const external = state.listEntities('person').filter(person => person.fields.person_scope === 'extern');
+  assert.equal(external.length, 24);
+  assert.equal(new Set(external.map(person => person.entity_id)).size, 24);
+  assert.equal(new Set(external.map(person => person.fields.display_name)).size, 24);
+  assert.ok(external.every(person => person.fields.source_master === 'fastigheter' && person.fields.source_external_id.startsWith('party-')));
 });
 
 await test('livs- och fastighetsfilter samt härledd ö fungerar tillsammans', () => {

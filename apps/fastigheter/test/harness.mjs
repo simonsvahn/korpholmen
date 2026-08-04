@@ -13,7 +13,7 @@ let passed = 0;
 async function test(name, action) { try { await action(); passed += 1; console.log(`✓ ${name}`); } catch (error) { console.error(`✗ ${name}`); throw error; } }
 
 await test('webbappens JavaScript har giltig syntax', () => {
-  for (const file of ['src/app.js', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs']) {
+  for (const file of ['src/app.js', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-personmasterkopplingar.mjs', 'verktyg/skriv-dropbox-personmasterkopplingar.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr || result.stdout}`);
   }
@@ -75,6 +75,11 @@ await test('nulägesbedömningen rättar ägare utan att skriva över historiken
   assert.equal(parties.get('party-eva-viveka-larsson').person_id, 'vivekaunelarsson');
   assert.equal(parties.get('party-jonas-petter-gustav-akerman').person_id, 'jonasåkerman');
   assert.equal(parties.get('party-martin-par-olof-liljeros').person_id, 'martinliljeros');
+  const currentPartyIds = new Set([...assessments.values()].flatMap(item => item.owner_party_ids || []));
+  const currentHumanParties = [...currentPartyIds].map(id => parties.get(id)).filter(party => party.party_type !== 'organisation');
+  assert.ok(currentHumanParties.every(party => party.person_id));
+  assert.equal(currentHumanParties.filter(party => party.person_id.startsWith('extern-fastighet-')).length, 24);
+  assert.equal(parties.get('party-korpholmens-tomtagareforening').person_id, null);
   assert.deepEqual(state.listEntities('observation').find(item => item.fields.property_id === 'Alsvik 3:343').fields.owner_party_ids, ['party-kaj-gunder-boving']);
 });
 await test('kända transaktionsdatum hålls isär efter datumroll', () => {
@@ -124,6 +129,9 @@ await test('webbappen kan söka, visa källkontroll och skapa händelser/innehav
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
   assert.ok(app.includes("opsRoot: '/fastigheter/ops'"));
   assert.ok(app.includes("opsRoot: '/matrikel/ops'"));
+  assert.ok(app.includes("opsRoot: '/matrikel/ops', readOnly: true"));
+  assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'matrikel' })"));
+  assert.ok(app.includes('resolvePartyName(parties.get(id), matrikelMaster)'));
   assert.ok(app.includes("recordList('current-owner-assessment')"));
   assert.ok(app.includes('Bäst kända nuvarande ägare'));
   assert.ok(app.includes("entityType: 'event'"));

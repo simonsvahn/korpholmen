@@ -14,6 +14,10 @@ startas, läsas och redigeras offline. Nya bilder lagras först lokalt och ligge
 i en beständig uppladdningskö tills Dropbox kan nås igen. Service workern
 cachar bara det datafria appskalet; privat data blandas aldrig in i webb-cachen.
 
+Personnamn är inte kanonisk båtdata. Båtlänken lagrar personens stabila ID och
+appen läser Matrikel skrivskyddat för aktuellt `display_name`. Äldre
+`person_display_name` ligger kvar endast som offline-/migrationsfallback.
+
 Den låsta startkopian byggs av arbetskopiorna i `privat/kallkopior/`:
 
 ```sh
@@ -26,6 +30,20 @@ Spårbara rättelser efter grundimporten ligger som privata operationsdokument i
 `privat/korrigeringar/`. Seed-kommandot läser dem efter startmastern och skriver
 varje korrigeringsenhet som en ny oföränderlig Dropbox-batch; tidigare batcher
 skrivs aldrig över.
+
+## Källkritik för årtal
+
+Registerblad och protokoll väger tungt för båtarnas fakta, namn och noterade
+transaktioner. Dokumentets årtal är däremot i första hand ett registrerings-
+eller observationsår. Det får inte automatiskt göras till inköpsdatum,
+ägarbytesdatum, namnbytesdatum eller dopdatum.
+
+När själva händelsen inte uttryckligen dateras ska registret därför:
+
+- ange händelsens tidpunkt som okänd eller osäker;
+- bevara året som registreringsår tillsammans med dess källtyp;
+- skilja den källbelagda transaktionen från en senare tolkning av när den skedde;
+- aldrig låta ett exakt strukturerat årtal ge högre säkerhet än originalkällan.
 
 En korrigering av personidentitet får bara byta länken, aldrig båtens råa
 ägartext. Rättelsen 2026-08-03 tombstonar därför de tidigare länkarna

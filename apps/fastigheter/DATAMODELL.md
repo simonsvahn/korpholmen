@@ -35,3 +35,11 @@ Roll är ett eget forskningsfält. `hyresgäst`, `boende/brukare`,
 `pensionatsinnehavare/verksamhetsutövare`, `dödsbo` och `lagfaren ägare` får
 inte reduceras till samma ägarstatus. Ett källbelägg kan dessutom stödja bara
 en viss roll eller ett visst datumfält; det behöver inte bevisa hela posten.
+
+## Personnamn
+
+En fysisk person får ett stabilt `person_id` till Matrikel. Fastigheter lagrar
+partens käll-/registerform men visar Matrikelns aktuella `display_name` när
+länken finns. Ett namnbyte görs därför i Matrikel och slår igenom här vid nästa
+skrivskyddade lässynk. Organisationer, dödsbon och oupplösta namngrupper saknar
+`person_id` och fortsätter vara parter i denna master.

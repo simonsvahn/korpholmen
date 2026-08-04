@@ -1,7 +1,7 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  MemoryStore,
+  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
@@ -59,13 +59,12 @@ const isSourceTree = location.pathname.includes('/apps/batregister/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:batregister-2026-08-01';
 const IMAGE_BOOTSTRAP_META = 'bootstrap:batregister-images-2026-08-01';
-const MATRIKEL_PEOPLE_META = 'cache:matrikel-people';
-const MATRIKEL_CONTEXT_META = 'cache:matrikel-family-context';
 const imageUrls = new Map();
 const imageLoads = new Map();
 
 let store;
 let repository;
+let matrikelMaster;
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
@@ -140,6 +139,8 @@ async function registerServiceWorker() {
 function boatRecords() { return repository.listEntities('boat').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.namn).localeCompare(String(b.namn),'sv')); }
 function linkRecords() { return repository.listEntities('boat-person-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
 function linksForBoat(id) { return linkRecords().filter(link => link.boat_id === id); }
+function personForId(id) { return matrikelPeople.find(person => person.id === id) || null; }
+function personNameForLink(link) { return personForId(link.person_id)?.display_name || link.person_display_name || link.person_id; }
 function familyRecords() { return repository.listEntities('family').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'sv')); }
 function familyLinkRecords() { return repository.listEntities('boat-family-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
 function familyLinksForBoat(id) { return familyLinkRecords().filter(link => link.boat_id === id); }
@@ -300,7 +301,7 @@ function familyMembers(family) {
 function linkedFamilyNames(boatId) { return familyLinksForBoat(boatId).map(link => link.family_name).filter(Boolean); }
 function linkedGroupNames(boatId) { return groupLinksForBoat(boatId).map(link => link.target_name).filter(Boolean); }
 function linkedNames(boatId) {
-  return [...linksForBoat(boatId).map(link => link.person_display_name), ...linkedFamilyNames(boatId), ...linkedGroupNames(boatId)].filter(Boolean);
+  return [...linksForBoat(boatId).map(personNameForLink), ...linkedFamilyNames(boatId), ...linkedGroupNames(boatId)].filter(Boolean);
 }
 
 function boatMatchesConnectionTarget(boat, value = ui.connection) {
@@ -555,7 +556,7 @@ function renderDrawer(id) {
     </div>
     <section class="drawer-section"><h3>Kopplingar till Matrikeln</h3><p class="section-help">Koppla till person när en bestämd ägare eller brukare är känd. FAMILJ och SLÄKT används när båten hör till en större gemenskap. Ärftlig synlighet visas som »via« och är inte personligt ägande.</p>
       <div class="link-list">
-        ${links.map(link=>`<div class="link-row"><span><a href="../matrikel/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(link.person_display_name || link.person_id)}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
+        ${links.map(link=>`<div class="link-row"><span><a href="../matrikel/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(personNameForLink(link))}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
         ${groupLinks.map(link=>{const members=targetMemberDetails({type:link.target_type,id:link.target_id},context);const inherited=members.filter(member=>member.generation>1).length;return `<div class="link-row family-row"><span><a href="../matrikel/?group=${encodeURIComponent(link.target_id)}"><b>${escapeHtml(link.target_code || '')} · ${escapeHtml(link.target_name || link.target_id)}</b></a><br><small>${escapeHtml(targetTypeLabel(link.target_type))} · ${escapeHtml(link.role || '')} · ${members.length} personer${inherited?` · ${inherited} visas via gruppen`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-group-link">Ta bort</button></div>`}).join('')}
         ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familjegren · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
         ${links.length || familyLinks.length || groupLinks.length ? '' : '<p>Ingen person, familj eller släkt är kopplad ännu.</p>'}
@@ -617,7 +618,6 @@ async function addRelationLink() {
     await syncEdit(()=>repository.setFields([
       {entityType:'boat-person-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
       {entityType:'boat-person-link',entityId:linkId,field:'person_id',value:person.id},
-      {entityType:'boat-person-link',entityId:linkId,field:'person_display_name',value:person.display_name},
       {entityType:'boat-person-link',entityId:linkId,field:'role',value:role},
       {entityType:'boat-person-link',entityId:linkId,field:'confidence',value:'godkänd i appen'},
     ]));
@@ -700,16 +700,18 @@ async function uploadBootstrapImages(transport) {
 
 async function loadMatrikelPeople(token) {
   if(!token)return [];
-  const repo=await new Repository({store:new MemoryStore(),deviceId:'bat-matrikel-read'}).init();
-  const transport=new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/matrikel/ops'});
-  await new SyncEngine({repository:repo,transport}).downloadRemote();
-  matrikelPeople=repo.listEntities('person').map(entity=>({id:entity.entity_id,...entity.fields})).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
-  matrikelRelations=repo.listEntities('relation').map(entity=>({id:entity.entity_id,...entity.fields}));
-  matrikelFamilyUnits=repo.listEntities(FAMILY_UNIT_TYPE).map(entity=>({id:entity.entity_id,...entity.fields}));
-  matrikelKinGroups=repo.listEntities(KIN_GROUP_TYPE).map(entity=>({id:entity.entity_id,...entity.fields}));
-  await store.putMeta(MATRIKEL_PEOPLE_META,matrikelPeople);
-  await store.putMeta(MATRIKEL_CONTEXT_META,{relations:matrikelRelations,family_units:matrikelFamilyUnits,kin_groups:matrikelKinGroups});
+  const transport=new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/matrikel/ops',readOnly:true});
+  await matrikelMaster.sync(transport);
+  applyMatrikelMaster();
   render(); return matrikelPeople;
+}
+
+function applyMatrikelMaster() {
+  const list=type=>matrikelMaster.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
+  matrikelPeople=list('person').sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
+  matrikelRelations=list('relation');
+  matrikelFamilyUnits=list(FAMILY_UNIT_TYPE);
+  matrikelKinGroups=list(KIN_GROUP_TYPE);
 }
 
 async function syncNow() {
@@ -803,5 +805,5 @@ $('#clear-all-filters').addEventListener('click',()=>{clearFilter('all');closeOp
 $('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeDrawer();closeConnectionSearch();closeOptionsPanels()}});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelPeople=await store.getMeta(MATRIKEL_PEOPLE_META)||[];const cachedContext=await store.getMeta(MATRIKEL_CONTEXT_META)||{};matrikelRelations=cachedContext.relations||[];matrikelFamilyUnits=cachedContext.family_units||[];matrikelKinGroups=cachedContext.kin_groups||[];bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

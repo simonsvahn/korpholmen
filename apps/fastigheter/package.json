@@ -6,6 +6,8 @@
     "build:migration": "node verktyg/bygg-startmaster.mjs && python3 verktyg/bygg-sqlite.py",
     "build:current-owners": "node verktyg/bygg-aktuella-agare.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "seed:current-owners": "node verktyg/skriv-dropbox-aktuella-agare.mjs /Users/simon/Dropbox/Appar/Korpholmen",
+    "build:person-master": "node verktyg/bygg-personmasterkopplingar.mjs /Users/simon/Dropbox/Appar/Korpholmen",
+    "seed:person-master": "node verktyg/skriv-dropbox-personmasterkopplingar.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "test": "node test/harness.mjs"
   }
