@@ -156,6 +156,9 @@ await test('publiceringspaketet är datafritt och länkat från appnavet',async(
     readFile(resolve(REPO,'index.html'),'utf8'),
   ]);
   assert.ok(publishedApp.includes("../core/data-layer.js"));
+  assert.ok(publishedApp.includes("../core/master-data.js"));
+  assert.ok(publishedApp.includes("../core/read-only-master.js"));
+  assert.equal(publishedApp.includes('../../../packages/core/'),false);
   assert.ok(publishedApp.includes("./klassstandard.js"));
   assert.ok(publishedClasses.includes('Kanadensare'));
   assert.ok(publishedCore.includes('./storage/indexeddb.js'));

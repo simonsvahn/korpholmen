@@ -11,8 +11,8 @@ import {
   registerKorpholmenServiceWorker,
   validateOperation,
 } from '../core/data-layer.js';
-import { mergePersonReferences } from '../../../packages/core/master-data.js';
-import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { mergePersonReferences } from '../core/master-data.js';
+import { ReadOnlyMaster } from '../core/read-only-master.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
 import { KLASSER, KLASSSTANDARD_METHOD, klassnamn, standardklass, standardklassFranNamn } from './klassstandard.js';
 
