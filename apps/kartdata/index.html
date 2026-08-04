@@ -8,9 +8,22 @@
   <title>Kartdata · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-04-3">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
 </head>
-<body>
+<body class="app-kartdata">
+  <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
+  <nav class="app-switcher" aria-label="Byt app">
+    <a class="app-switch" href="../">Korpholmen</a>
+    <a class="app-switch" href="../matrikel/">01 Matrikel</a>
+    <a class="app-switch" href="../batregister/">02 Båtregister</a>
+    <a class="app-switch" href="../fastigheter/">03 Fastigheter</a>
+    <a class="app-switch" href="../dokumentarkiv/">04 Dokumentarkiv</a>
+    <a class="app-switch" href="../korpholmenrunt/">05 Korpholmen runt</a>
+    <a class="app-switch" href="../klubbhistorik/">06 Klubbhistorik</a>
+    <a class="app-switch" href="./" aria-current="page">07 Kartdata</a>
+  </nav>
+  <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
   <header class="site-header">
     <div>
       <p class="eyebrow">Korpholmen · strukturerad data</p>
@@ -50,6 +63,6 @@
   <datalist id="master-subtype-options">
     <option value="ö"><option value="ögrupp"><option value="halvö"><option value="tomt"><option value="halvö/tomt"><option value="udde"><option value="äng"><option value="park"><option value="strand"><option value="berg"><option value="vattenområde"><option value="bostadshus"><option value="gäststuga"><option value="bod"><option value="sjöbod"><option value="bastu"><option value="dass"><option value="annan byggnad">
   </datalist>
-  <script type="module" src="./src/app.js?v=2026-08-04-3"></script>
+  <script type="module" src="./src/app.js?v=2026-08-04-current-owners-1"></script>
 </body>
 </html>

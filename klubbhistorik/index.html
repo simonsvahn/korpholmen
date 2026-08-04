@@ -6,14 +6,26 @@
   <meta name="theme-color" content="#132e36">
   <meta name="description" content="Källspårbar medlems- och båthistorik för Korpholmens Båtklubb">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-04-1">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
   <link rel="stylesheet" href="./boat-reference.css?v=2026-08-04-1">
   <link rel="stylesheet" href="./matrix.css?v=2026-08-04-1">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
   <title>KBK Klubbhistorik – matriklar över tid</title>
 </head>
-<body>
+<body class="app-klubbhistorik">
+  <a class="skip-to-content" href="#app">Hoppa till innehåll</a>
+  <nav class="app-switcher" aria-label="Byt app">
+    <a class="app-switch" href="../">Korpholmen</a>
+    <a class="app-switch" href="../matrikel/">01 Matrikel</a>
+    <a class="app-switch" href="../batregister/">02 Båtregister</a>
+    <a class="app-switch" href="../fastigheter/">03 Fastigheter</a>
+    <a class="app-switch" href="../dokumentarkiv/">04 Dokumentarkiv</a>
+    <a class="app-switch" href="../korpholmenrunt/">05 Korpholmen runt</a>
+    <a class="app-switch" href="./" aria-current="page">06 Klubbhistorik</a>
+    <a class="app-switch" href="../kartdata/">07 Kartdata</a>
+  </nav>
+  <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
   <header class="masthead">
-    <a class="marke" href="../" aria-label="Korpholmens appar"><span>KH</span><small>KÄLLSPÅRBAR TID</small></a>
     <div class="titel"><p>Korpholmens Båtklubb</p><h1>Klubbhistorik</h1><span>Matriklar · människor · båtar · förändringar</span></div>
     <div class="live"><span id="sync-status">Startar den lokala mastern…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>

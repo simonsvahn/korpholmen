@@ -9,7 +9,7 @@ import {
   openSlaktlandskapDB,
   validateOperation,
 } from '../core/data-layer.js';
-import { CLEAN_V2_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
+import { CLEAN_V2_BOOTSTRAP_URL, CURRENT_OWNER_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
 import {
   OBJECT_CLASSES,
   REVIEW_STATUSES,
@@ -34,6 +34,7 @@ const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/kartdata/');
 const TOKEN_META = 'dropbox:refresh-token';
 const CLEAN_V2_META = 'bootstrap:kartdata-clean-v2-2026-08-04';
+const CURRENT_OWNER_META = 'bootstrap:kartdata-current-owners-2026-08-04';
 
 let store;
 let repository;
@@ -56,7 +57,7 @@ const nameRecords = () => recordList('name-record');
 const islandLinks = () => recordList('data-entry-island-link');
 const entryPropertyLinks = () => recordList('data-entry-property-link');
 const propertyRefs = () => recordList('property-ref').sort((a, b) => String(a.external_id || '').localeCompare(String(b.external_id || ''), 'sv', { numeric: true }));
-const ownerLinks = () => recordList('property-owner-link');
+const ownerLinks = () => recordList('property-owner-link').filter(link => link.basis === 'best-known-current');
 const personRefs = () => recordList('person-ref');
 const externalParties = () => recordList('external-party');
 const placeRelations = () => recordList('place-relation');
@@ -129,9 +130,9 @@ function renderSummary() {
 
 function ownerChipsForProperties(propertyIds) {
   const owners = propertyIds.flatMap(propertyId => ownersForProperty(propertyId).map(owner => ({ ...owner, property_id: propertyId })));
-  if (!owners.length) return '<span class="muted">Ingen daterad ägarobservation</span>';
+  if (!owners.length) return '<span class="muted">Ingen tillräckligt säker ägaruppgift</span>';
   const seen = new Set();
-  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}:${owner.observed_on}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.ref.url || '#')}" title="${escapeAttribute(`${owner.property_id} · observerad ${owner.observed_on || 'okänt datum'}`)}"><strong>${escapeHtml(owner.ref.display_name)}</strong><small>${owner.owner_type === 'external-party' ? 'extern part' : 'Matrikeln'} · ${escapeHtml(owner.observed_on || 'odaterad')}</small></a>`).join('');
+  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.ref.url || '#')}" title="${escapeAttribute(`${owner.property_id} · bäst kända nuvarande ägare`)}"><strong>${escapeHtml(owner.ref.display_name)}</strong><small>${owner.owner_type === 'external-party' ? 'extern part' : 'Matrikeln'}</small></a>`).join('');
 }
 function ownerChips(entryId) { return ownerChipsForProperties(propertyIdsForEntry(entryId)); }
 function entryCard(entry) {
@@ -171,7 +172,7 @@ function renderQueue() {
 }
 function renderTable() {
   const entries = filteredEntries(); $('#filter-count').textContent = `${entries.length} av ${entryRecords().length} poster`;
-  return `<section class="table-view"><header class="table-intro"><div><p class="eyebrow dark">All aktiv information</p><h2>Tabell</h2><p>Öar, fastigheter och ägare är strukturerade länkar. Ägare visas med observationsdatum.</p></div></header><div class="table-scroll polished-table"><table><thead><tr><th class="pin-id">ID</th><th class="pin-name">Namn</th><th>Objektstyp</th><th>Ö</th><th>Fastighet</th><th>Dagens ägare</th><th>Granskningsstatus</th><th>Åtgärd</th></tr></thead><tbody>${entries.map(entry => { const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id); return `<tr class="data-row status-${escapeAttribute(entry.review_status)}"><td class="pin-id"><span class="row-id">${escapeHtml(entry.id)}</span></td><td class="pin-name"><strong>${escapeHtml(entry.name)}</strong></td><td><span class="type-pill class-${escapeAttribute(cssToken(entry.object_type))}">${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></td><td><strong>${escapeHtml(island?.preferred_name || '—')}</strong></td><td>${properties.map(id => { const ref = propertyRefById(id); return `<a href="${escapeAttribute(ref?.url || '#')}">${escapeHtml(id)}</a>`; }).join('<br>') || '—'}</td><td><div class="owner-list">${ownerChips(entry.id)}</div></td><td><span class="table-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></td><td><button type="button" class="row-edit" data-entry-id="${escapeAttribute(entry.id)}">Redigera</button></td></tr>`; }).join('')}</tbody></table></div></section>`;
+  return `<section class="table-view"><header class="table-intro"><div><p class="eyebrow dark">All aktiv information</p><h2>Tabell</h2><p>Öar, fastigheter och bäst kända nuvarande ägare är strukturerade länkar.</p></div></header><div class="table-scroll polished-table"><table><thead><tr><th class="pin-id">ID</th><th class="pin-name">Namn</th><th>Objektstyp</th><th>Ö</th><th>Fastighet</th><th>Nuvarande ägare</th><th>Granskningsstatus</th><th>Åtgärd</th></tr></thead><tbody>${entries.map(entry => { const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id); return `<tr class="data-row status-${escapeAttribute(entry.review_status)}"><td class="pin-id"><span class="row-id">${escapeHtml(entry.id)}</span></td><td class="pin-name"><strong>${escapeHtml(entry.name)}</strong></td><td><span class="type-pill class-${escapeAttribute(cssToken(entry.object_type))}">${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></td><td><strong>${escapeHtml(island?.preferred_name || '—')}</strong></td><td>${properties.map(id => { const ref = propertyRefById(id); return `<a href="${escapeAttribute(ref?.url || '#')}">${escapeHtml(id)}</a>`; }).join('<br>') || '—'}</td><td><div class="owner-list">${ownerChips(entry.id)}</div></td><td><span class="table-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></td><td><button type="button" class="row-edit" data-entry-id="${escapeAttribute(entry.id)}">Redigera</button></td></tr>`; }).join('')}</tbody></table></div></section>`;
 }
 function populateFilters() {
   const setOptions = (selector, placeholder, values, selected, label = value => value) => { const node = $(selector); node.innerHTML = `<option value="">${placeholder}</option>${values.map(value => option(value, selected, label(value))).join('')}`; };
@@ -211,7 +212,7 @@ function updatePropertyPicker(form, propertyIds) {
 function renderEntryDrawer() {
   const entry = entryRecords().find(item => item.id === selectedEntryId); if (!entry) return closeDrawer();
   const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id);
-  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.name)}</h2><span class="large-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></header><section class="drawer-section data-panel"><h3>Data</h3><form id="data-form" class="review-form"><label>Granskningsstatus<select name="review_status">${REVIEW_STATUSES.map(value => option(value, entry.review_status, reviewStatusLabel(value))).join('')}</select></label><label>Objektstyp<select name="object_type">${OBJECT_CLASSES.map(value => option(value, entry.object_type, classLabel(value))).join('')}</select></label><label class="span-2">Namn<input name="name" value="${escapeAttribute(entry.name)}" required></label><label>Undertyp<input name="subtype" value="${escapeAttribute(entry.subtype || '')}" list="subtype-options" placeholder="exempelvis gäststuga eller udde"></label><label>Ö<select name="island_id"><option value="">Ingen ö kopplad</option>${islandRecords().map(item => option(item.id, island?.id || '', item.preferred_name)).join('')}</select></label><fieldset class="span-2"><legend>Fastighet</legend>${propertyPicker(properties)}</fieldset><section class="span-2 owner-preview"><h3>Dagens ägare</h3><p>Hämtas skrivskyddat från Fastighetshistorikens senaste daterade registerobservation.</p><div class="owner-list" data-owner-preview-list>${ownerChips(entry.id)}</div></section><div class="form-actions span-2"><button type="submit" class="primary">Spara data</button></div></form><div class="danger-zone"><div><strong>Ta bort dataposten</strong><small>Posten tas bort ur den aktiva v2-datan. Det äldre v1-arkivet används inte av appen.</small></div><button type="button" class="delete-button" data-action="delete-entry">Ta bort</button></div></section>`;
+  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.name)}</h2><span class="large-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></header><section class="drawer-section data-panel"><h3>Data</h3><form id="data-form" class="review-form"><label>Granskningsstatus<select name="review_status">${REVIEW_STATUSES.map(value => option(value, entry.review_status, reviewStatusLabel(value))).join('')}</select></label><label>Objektstyp<select name="object_type">${OBJECT_CLASSES.map(value => option(value, entry.object_type, classLabel(value))).join('')}</select></label><label class="span-2">Namn<input name="name" value="${escapeAttribute(entry.name)}" required></label><label>Undertyp<input name="subtype" value="${escapeAttribute(entry.subtype || '')}" list="subtype-options" placeholder="exempelvis gäststuga eller udde"></label><label>Ö<select name="island_id"><option value="">Ingen ö kopplad</option>${islandRecords().map(item => option(item.id, island?.id || '', item.preferred_name)).join('')}</select></label><fieldset class="span-2"><legend>Fastighet</legend>${propertyPicker(properties)}</fieldset><section class="span-2 owner-preview"><h3>Nuvarande ägare</h3><p>Hämtas skrivskyddat från Fastighetshistorikens granskade nulägesbedömning.</p><div class="owner-list" data-owner-preview-list>${ownerChips(entry.id)}</div></section><div class="form-actions span-2"><button type="submit" class="primary">Spara data</button></div></form><div class="danger-zone"><div><strong>Ta bort dataposten</strong><small>Posten tas bort ur den aktiva v2-datan. Det äldre v1-arkivet används inte av appen.</small></div><button type="button" class="delete-button" data-action="delete-entry">Ta bort</button></div></section>`;
 }
 function renderIslandDrawer() {
   const island = selectedIslandId ? islandRecords().find(item => item.id === selectedIslandId) : null;
@@ -290,7 +291,7 @@ function exportData() {
   const payload = {
     format: 'korpholmen-kartdata-v2', exported_at: new Date().toISOString(),
     islands: islandRecords().map(island => ({ id: island.id, name: island.preferred_name, review_status: island.review_status, valid_from: island.valid_from || null, valid_to: island.valid_to || null, names: namesForIsland(island.id).filter(name => name.name_type !== 'föredraget').map(name => ({ name: name.name, name_type: name.name_type, review_status: name.review_status, valid_from: name.valid_from || null, valid_to: name.valid_to || null })) })),
-    entries: entryRecords().map(entry => ({ id: entry.id, name: entry.name, object_type: entry.object_type, subtype: entry.subtype || null, review_status: entry.review_status, island_id: islandForEntry(entry.id)?.id || null, property_ids: propertyIdsForEntry(entry.id), owners: ownersForEntry(entry.id).map(owner => ({ property_id: owner.property_id, owner_type: owner.owner_type, owner_id: owner.owner_id, display_name: owner.ref.display_name, observed_on: owner.observed_on || null })) })),
+    entries: entryRecords().map(entry => ({ id: entry.id, name: entry.name, object_type: entry.object_type, subtype: entry.subtype || null, review_status: entry.review_status, island_id: islandForEntry(entry.id)?.id || null, property_ids: propertyIdsForEntry(entry.id), owners: ownersForEntry(entry.id).map(owner => ({ property_id: owner.property_id, owner_type: owner.owner_type, owner_id: owner.owner_id, display_name: owner.ref.display_name, basis: owner.basis, reviewed_on: owner.reviewed_on || null })) })),
     property_refs: propertyRefs().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, source_master: ref.source_master })),
     person_refs: personRefs().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, source_master: ref.source_master })),
     external_parties: externalParties().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, party_type: ref.party_type, source_master: ref.source_master })),
@@ -312,6 +313,13 @@ async function bootstrapCleanV2({ force = false } = {}) {
   const response = await fetch(CLEAN_V2_BOOTSTRAP_URL, { cache: 'no-store' }); if (!response.ok) throw new Error(`Den rena v2-kopian kunde inte läsas (${response.status})`);
   const document = await response.json(); if (document.operations_version !== 1 || !Array.isArray(document.operations)) throw new Error('V2-kopian har fel format');
   document.operations.forEach(validateOperation); await repository.applyRemoteOps(document.operations); await store.putMeta(CLEAN_V2_META, { applied: true, preview_only: true, migration_id: document.migration_id, operations: document.operations.length }); render(); setStatus(`${entryRecords().length} rena dataposter inlästa lokalt`, 'ok'); return true;
+}
+async function bootstrapCurrentOwners({ force = false } = {}) {
+  if (!isSourceTree) return false;
+  if (!force && (await store.getMeta(CURRENT_OWNER_META))?.applied) return false;
+  const response = await fetch(CURRENT_OWNER_BOOTSTRAP_URL, { cache: 'no-store' }); if (!response.ok) throw new Error(`Nulägesägarna kunde inte läsas (${response.status})`);
+  const document = await response.json(); if (document.migration_id !== '2026-08-04-kartdata-current-owners' || !Array.isArray(document.operations)) throw new Error('Nulägesägarnas kopia har fel format');
+  document.operations.forEach(validateOperation); await repository.applyRemoteOps(document.operations); await store.putMeta(CURRENT_OWNER_META, { applied: true, preview_only: true, migration_id: document.migration_id, operations: document.operations.length }); render(); return true;
 }
 
 content.addEventListener('click', event => { const island = event.target.closest('[data-island-id]'); if (island) { openIslandDrawer(island.dataset.islandId); return; } if (event.target.closest('[data-action="new-island"]')) { openIslandDrawer(null); return; } const entry = event.target.closest('[data-entry-id]'); if (entry) openDrawer(entry.dataset.entryId); });
@@ -344,12 +352,12 @@ $('#status-filter').addEventListener('change', event => { ui.status = event.targ
 $('#sort-order').addEventListener('change', event => { ui.sort = event.target.value; render(); });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { ui.view = button.dataset.view; render(); }));
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
-bootstrapButton.addEventListener('click', () => bootstrapCleanV2({ force: true }).catch(error => setStatus(error.message, 'error')));
+bootstrapButton.addEventListener('click', () => (async () => { await bootstrapCleanV2({ force: true }); await bootstrapCurrentOwners({ force: true }); setStatus(`${entryRecords().length} rena dataposter och nulägesägare inlästa lokalt`, 'ok'); })().catch(error => setStatus(error.message, 'error')));
 $('#export-json').addEventListener('click', exportData);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: deviceId() }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: deviceId() }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); if (isSourceTree) await bootstrapCurrentOwners(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });

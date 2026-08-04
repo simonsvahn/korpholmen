@@ -13,8 +13,10 @@ let passed = 0;
 async function test(name, action) { try { await action(); passed += 1; console.log(`✓ ${name}`); } catch (error) { console.error(`✗ ${name}`); throw error; } }
 
 await test('webbappens JavaScript har giltig syntax', () => {
-  const result = spawnSync(process.execPath, ['--check', 'src/app.js'], { cwd: ROOT, encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
+  for (const file of ['src/app.js', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs']) {
+    const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
+    assert.equal(result.status, 0, `${file}: ${result.stderr || result.stdout}`);
+  }
 });
 await test('den privata startmastern kan byggas deterministiskt och källreferenser valideras', () => {
   const result = spawnSync(process.execPath, ['verktyg/bygg-startmaster.mjs'], { cwd: ROOT, encoding: 'utf8' });
@@ -34,6 +36,7 @@ await test('operationerna är giltiga och mastern har alla fastigheter', () => {
   assert.equal(state.listEntities('property').length, 34);
   assert.equal(state.listEntities('audit-finding').length, 32);
   assert.equal(state.listEntities('community-link').length, 137);
+  assert.equal(state.listEntities('current-owner-assessment').length, 31);
   assert.ok(state.listEntities('event').length >= 10);
   assert.ok(state.listEntities('holding').length >= 70);
   assert.equal(state.listEntities('manual-claim').length, 130);
@@ -63,6 +66,16 @@ await test('registerobservationer är inte förvärvsdatum', () => {
   const observationHoldings = state.listEntities('holding').filter(item => item.fields.basis === 'registerobservation');
   assert.ok(observationHoldings.every(item => item.fields.observed_on && !item.fields.start_date));
   assert.ok(observationHoldings.every(item => item.fields.notes.includes('fastställer inte förvärvsdatum')));
+});
+await test('nulägesbedömningen rättar ägare utan att skriva över historiken', () => {
+  const assessments = new Map(state.listEntities('current-owner-assessment').map(item => [item.fields.property_id, item.fields]));
+  const parties = new Map(state.listEntities('party').map(item => [item.entity_id, item.fields]));
+  assert.deepEqual(assessments.get('Alsvik 3:343').owner_party_ids.map(id => parties.get(id).person_id), ['olaböving', 'månsböving']);
+  assert.deepEqual(assessments.get('Alsvik 3:86').owner_party_ids.map(id => parties.get(id).name), ['Ingrid Gunilla Pettersson']);
+  assert.equal(parties.get('party-eva-viveka-larsson').person_id, 'vivekaunelarsson');
+  assert.equal(parties.get('party-jonas-petter-gustav-akerman').person_id, 'jonasåkerman');
+  assert.equal(parties.get('party-martin-par-olof-liljeros').person_id, 'martinliljeros');
+  assert.deepEqual(state.listEntities('observation').find(item => item.fields.property_id === 'Alsvik 3:343').fields.owner_party_ids, ['party-kaj-gunder-boving']);
 });
 await test('kända transaktionsdatum hålls isär efter datumroll', () => {
   const events = new Map(state.listEntities('event').map(item => [item.entity_id, item.fields]));
@@ -110,7 +123,9 @@ await test('SQLite-exporten har relationstabeller, index och samma kärnräknare
 await test('webbappen kan söka, visa källkontroll och skapa händelser/innehav', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
   assert.ok(app.includes("opsRoot: '/fastigheter/ops'"));
-  assert.ok(app.includes("opsRoot: '/ops'"));
+  assert.ok(app.includes("opsRoot: '/matrikel/ops'"));
+  assert.ok(app.includes("recordList('current-owner-assessment')"));
+  assert.ok(app.includes('Bäst kända nuvarande ägare'));
   assert.ok(app.includes("entityType: 'event'"));
   assert.ok(app.includes("entityType: 'holding'"));
   assert.ok(app.includes('contract_date'));

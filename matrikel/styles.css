@@ -291,14 +291,6 @@ body.show-gaps .person-card.has-gap .gap-mark { display: block; }
   .view-switcher button { flex: 1; }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root { color-scheme: dark; --navy: #142b45; --navy-2: #83acd1; --paper: #181713; --surface: #24211c; --surface-2: #2d2923; --line: #443e34; --line-strong: #766d5d; --text: #eee8db; --muted: #afa490; --green: #83b379; --amber: #e09059; --purple: #c09ae3; --cyan: #79c2ca; --danger: #ff8b83; }
-  .site-header { color: #f7f2e8; }
-  .summary strong, .family-stem h3, .property-header h2, .property-family h3, #person-drawer h2, #person-drawer .close-family-grid h4, .belonging-card strong, .relation-row .relation-person, .cross-app-link { color: var(--navy-2); }
-  .cross-app-link { border-color: var(--navy-2); }
-  .danger-button { background: #3a2220; }
-}
-
 @media print {
   .toolbar, .sync-panel, #person-drawer { display: none; }
   .site-header { padding: .4rem 0; background: none; color: var(--text); }

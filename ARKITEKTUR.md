@@ -96,8 +96,8 @@ sakpost kopplas bara till en ö när länken är entydig. Borttagna öar och
 områdeskategorier får ingen gissad ersättningsö.
 
 Kartdata kopierar inte det äldre fritextfältet för dagens ägare. För varje
-länkad fastighet läser en reproducerbar referensmigration den senaste daterade
-ägarobservationen från Fastighetshistorik. En redan säker `person_id` blir
+länkad fastighet läser en reproducerbar referensmigration det granskade
+`current-owner-assessment`-lagret från Fastighetshistorik. En redan säker `person_id` blir
 `person-ref` till Matrikeln; övriga personer, organisationer och namngrupper
 blir `external-party`. Namnlikhet används aldrig för identitetsmatchning.
 

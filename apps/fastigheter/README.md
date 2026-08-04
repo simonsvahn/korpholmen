@@ -20,6 +20,11 @@ och datafria publiceringsmodell som Matrikeln och Båtregistret.
   fastställelse och observation;
 - parter, källor, evidens och källgranskningsfynd.
 
+`current-owner-assessment` är det separata, granskade nulägeslagret. Det anger
+vilka vi för närvarande tror är rätt ägare och används av Kartdata. Äldre
+registerobservationer och ägarkedjor ligger kvar som historik och skrivs aldrig
+över av nulägesbedömningen.
+
 Alla 130 poster i den äldre råkedjan finns kvar ordagrant men är också
 normaliserade. Person-/rollposter ligger som `holding-claim`; förrättningar,
 priser och antydda byten ligger som `event-claim`. De är därmed sökbara och
@@ -52,6 +57,7 @@ Bygg om och verifiera med:
 
 ```sh
 npm run build:migration
+npm run build:current-owners
 npm test
 ```
 
@@ -61,3 +67,7 @@ Appens operationsnamnrymd är `/fastigheter/ops`. Dropbox App Folder och OAuth
 delas med de andra apparna, men operationerna ligger åtskilda. Det publika
 paketet byggs till `fastigheter/` och innehåller bara appskal och gemensam
 kärna — aldrig startmaster, ägarnamn eller forskningsdata.
+
+En granskad nulägesändring förs till den levande mastern append-only med
+`npm run seed:current-owners`. Kommandot skriver bara den särskilda
+nulägesmigrationen och rör inte historiska observationer.

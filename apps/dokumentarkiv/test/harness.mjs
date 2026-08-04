@@ -70,8 +70,11 @@ await test('registerkopplingar skiljer exakt träff, granskning och saknad entit
   assert.equal(byId.get('person:nilshenrikhedström').url,'../matrikel/?person=nilshenrikhedstr%C3%B6m');
   assert.equal(byId.get('boat:atlanta').external_id,'atlanta');
   assert.equal(byId.get('boat:galejan').external_id,'galejan');
-  assert.equal(byId.get('boat:pumsbullan').match_status,'granska');
-  assert.equal(byId.get('person:thomashedström').match_status,'granska');
+  assert.equal(byId.get('boat:pumsbullan').name,'Pumsbullan');
+  assert.equal(byId.get('boat:pumsbullan').match_status,'kopplad');
+  assert.equal(byId.get('person:thomashedström').name,'Thomas Hedström');
+  assert.equal(byId.get('person:thomashedström').match_status,'kopplad');
+  assert.equal(byId.get('place:brockholmen').name,'Brokholmen');
   assert.equal(byId.get('person:rolf-une-olöst').match_status,'saknas');
   assert.equal(byId.get('person:bibbihedström').external_id,'bibbihedström');
   assert.equal(byId.get('person:mats-sam-une-olöst').match_status,'granska');

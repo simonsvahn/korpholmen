@@ -8,9 +8,22 @@
   <title>Båtregister · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-02-6">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
 </head>
-<body>
+<body class="app-batregister">
+  <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
+  <nav class="app-switcher" aria-label="Byt app">
+    <a class="app-switch" href="../">Korpholmen</a>
+    <a class="app-switch" href="../matrikel/">01 Matrikel</a>
+    <a class="app-switch" href="./" aria-current="page">02 Båtregister</a>
+    <a class="app-switch" href="../fastigheter/">03 Fastigheter</a>
+    <a class="app-switch" href="../dokumentarkiv/">04 Dokumentarkiv</a>
+    <a class="app-switch" href="../korpholmenrunt/">05 Korpholmen runt</a>
+    <a class="app-switch" href="../klubbhistorik/">06 Klubbhistorik</a>
+    <a class="app-switch" href="../kartdata/">07 Kartdata</a>
+  </nav>
+  <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
   <header class="site-header">
     <div>
       <p class="eyebrow">Korpholmen</p>

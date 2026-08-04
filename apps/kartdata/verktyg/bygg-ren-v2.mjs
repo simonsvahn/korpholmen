@@ -81,21 +81,16 @@ const dataEntries = rows(kartdata.state, 'map-entry').map(entry => {
 if (dataEntries.some(entry => !entry.name || !['byggnad', 'plats', 'namnform', 'ägaretikett'].includes(entry.object_type))) throw new Error('En aktiv v2-post saknar namn eller har otillåten objekttyp');
 if (new Set(dataEntries.map(entry => entry.id)).size !== dataEntries.length) throw new Error('V2-posterna har dubbla ID:n');
 
-const observations = rows(fastigheter.state, 'observation');
-const latestObservationByProperty = new Map();
-for (const observation of observations) {
-  const previous = latestObservationByProperty.get(observation.property_id);
-  if (!previous || String(observation.observed_on || '').localeCompare(String(previous.observed_on || '')) > 0) latestObservationByProperty.set(observation.property_id, observation);
-}
+const currentOwnersByProperty = new Map(rows(fastigheter.state, 'current-owner-assessment').map(assessment => [assessment.property_id, assessment]));
 
 const usedPropertyIds = unique(dataEntries.flatMap(entry => entry.property_ids)).sort();
 const ownerLinks = [];
 const personRefs = new Map();
 const externalParties = new Map();
 for (const propertyId of usedPropertyIds) {
-  const observation = latestObservationByProperty.get(propertyId);
-  if (!observation) continue;
-  for (const partyId of observation.owner_party_ids || []) {
+  const assessment = currentOwnersByProperty.get(propertyId);
+  if (!assessment) continue;
+  for (const partyId of assessment.owner_party_ids || []) {
     const party = partiesById.get(partyId);
     if (!party) throw new Error(`Ägarpart saknas i Fastighetshistorik: ${partyId}`);
     const person = party.person_id ? peopleById.get(party.person_id) : null;
@@ -114,7 +109,7 @@ for (const propertyId of usedPropertyIds) {
     });
     ownerLinks.push({
       property_id: propertyId, owner_type: ownerType, owner_id: ownerId,
-      observed_on: observation.observed_on || null,
+      basis: 'best-known-current', reviewed_on: assessment.reviewed_on || null,
     });
   }
 }
@@ -196,7 +191,8 @@ for (const [id, fields] of personRefs) setFields('person-ref', `person-ref:${id}
 for (const [id, fields] of externalParties) setFields('external-party', `external-party:${id}`, fields);
 for (const link of ownerLinks) setFields('property-owner-link', `property:${link.property_id}:owner:${link.owner_type}:${link.owner_id}`, link);
 
-const combined = materialize([...kartdata.operations, ...operations]);
+const previousSameMigrationRemoved = kartdata.operations.filter(operation => operation.device_id !== DEVICE);
+const combined = materialize([...previousSameMigrationRemoved, ...operations]);
 const activeEntries = rows(combined, 'data-entry');
 if (activeEntries.length !== dataEntries.length) throw new Error('Materialiseringen tappade v2-poster');
 if (activeEntries.some(entry => ['kartsymbol', 'annat'].includes(entry.object_type))) throw new Error('En borttagen objekttyp finns kvar i v2');

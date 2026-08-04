@@ -9,13 +9,25 @@
   <meta property="og:description" content="Hela loppets moderna resultathistoria i en levande, korslänkad app.">
   <meta property="og:image" content="./og.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-04-6">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
   <link rel="stylesheet" href="./matchning.css?v=2026-08-04-6">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
   <title>Korpholmen runt – resultat & rekord</title>
 </head>
-<body>
+<body class="app-korpholmenrunt">
+  <a class="skip-to-content" href="#app">Hoppa till innehåll</a>
+  <nav class="app-switcher" aria-label="Byt app">
+    <a class="app-switch" href="../">Korpholmen</a>
+    <a class="app-switch" href="../matrikel/">01 Matrikel</a>
+    <a class="app-switch" href="../batregister/">02 Båtregister</a>
+    <a class="app-switch" href="../fastigheter/">03 Fastigheter</a>
+    <a class="app-switch" href="../dokumentarkiv/">04 Dokumentarkiv</a>
+    <a class="app-switch" href="./" aria-current="page">05 Korpholmen runt</a>
+    <a class="app-switch" href="../klubbhistorik/">06 Klubbhistorik</a>
+    <a class="app-switch" href="../kartdata/">07 Kartdata</a>
+  </nav>
+  <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
   <header class="masthead">
-    <a class="marke" href="../" aria-label="Korpholmens appar"><span>KR</span><small>HISTORISKA RESULTAT</small></a>
     <div class="titel"><p>Korpholmens Båtklubb</p><h1>Korpholmen runt</h1><span>Resultat · rekord · människor · båtar</span></div>
     <div class="live"><span id="sync-status">Startar den lokala mastern…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>

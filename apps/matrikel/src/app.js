@@ -65,6 +65,12 @@ const livingFilter = $('#living-filter');
 const propertyFilter = $('#property-filter');
 const generationButtons = $('#generation-buttons');
 const relationPathNode = $('#relation-path');
+const filterPanel = $('#filter-panel');
+const filterBackdrop = $('#filter-backdrop');
+const filterToggle = $('#filter-panel-toggle');
+const relationToggle = $('#relation-panel-toggle');
+const relationTools = $('#relation-tools');
+const activeFiltersNode = $('#active-filters');
 const isSourceTree = location.pathname.includes('/apps/matrikel/');
 const TOKEN_META = 'dropbox:refresh-token-v1';
 const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
@@ -88,6 +94,7 @@ let familyContext = null;
 let propertyById = new Map();
 let requestedPersonApplied = false;
 let requestedGroupApplied = false;
+let filterReturnFocus = null;
 
 const ui = {
   selectedPersonId: null,
@@ -311,6 +318,7 @@ function refreshControls() {
   if (groups.some((group) => group.name === selectedClan)) clanJump.value = selectedClan;
   clanJump.disabled = ui.view !== 'kinship';
   generationButtons.closest('.generation-filter').hidden = ui.view !== 'kinship';
+  $('.kinship-filter').hidden = ui.view !== 'kinship';
 
   const islands = unique(currentPeople.flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
   islandFilter.innerHTML = '<option value="">Alla öar</option>' + islands
@@ -588,6 +596,7 @@ function renderReview() {
 function render() {
   refreshData();
   refreshControls();
+  renderActiveFilters();
   if (!currentPeople.length) {
     contentNode.innerHTML = '<section class="empty-card"><h2>Ingen privat släktdata på den här enheten ännu</h2><p>Anslut Dropbox för att hämta den privata mastern.</p></section>';
     closeDrawer(false);
@@ -612,6 +621,106 @@ function render() {
   $('#review-button').setAttribute('aria-pressed', String(ui.review));
   if (ui.selectedPersonId) renderDrawer(ui.selectedPersonId);
   else if (ui.selectedGroup) renderGroupDrawer(ui.selectedGroup.entityType, ui.selectedGroup.id);
+}
+
+function filterLabel(key) {
+  if (key === 'living') return ui.living === 'ja' ? 'Levande' : ui.living === 'nej' ? 'Avlidna' : 'Okänd livsstatus';
+  if (key === 'property') return ui.property === '__none__' ? 'Utan fastighet' : ui.property;
+  if (key === 'generations') return 'Presentationsled ' + [...ui.generations].join(', ');
+  if (key === 'year') return 'Levde år ' + ui.year;
+  if (key === 'inlaws') return 'Utan ingifta';
+  if (key === 'unlinked') return 'Utan kända band';
+  return ui.island;
+}
+
+function renderActiveFilters() {
+  const keys = [];
+  if (ui.island) keys.push('island');
+  if (ui.living) keys.push('living');
+  if (ui.property) keys.push('property');
+  if (ui.generations.size) keys.push('generations');
+  if (ui.yearOn) keys.push('year');
+  if (!ui.includeInlaws) keys.push('inlaws');
+  if (ui.onlyUnlinked) keys.push('unlinked');
+  activeFiltersNode.innerHTML = keys
+    .map((key) => '<button type="button" class="active-filter-chip" data-clear-filter="' + key + '">' + escapeHtml(filterLabel(key)) + '<span aria-hidden="true">×</span></button>')
+    .join('');
+  $('#filter-badge').hidden = keys.length === 0;
+  $('#filter-badge').textContent = keys.length ? String(keys.length) : '';
+}
+
+function clearFilter(key) {
+  if (key === 'island') ui.island = '';
+  if (key === 'living') ui.living = '';
+  if (key === 'property') ui.property = '';
+  if (key === 'generations') ui.generations.clear();
+  if (key === 'year') ui.yearOn = false;
+  if (key === 'inlaws') ui.includeInlaws = true;
+  if (key === 'unlinked') ui.onlyUnlinked = false;
+  $('#year-on').setAttribute('aria-pressed', String(ui.yearOn));
+  $('#year-slider').disabled = !ui.yearOn;
+  $('#year-out').textContent = ui.yearOn ? ui.year : 'alla år';
+  $('#include-inlaws').checked = ui.includeInlaws;
+  $('#toggle-lonely').setAttribute('aria-pressed', String(ui.onlyUnlinked));
+  render();
+}
+
+function visibleFilterControls() {
+  return [...filterPanel.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')]
+    .filter((node) => node.offsetParent !== null);
+}
+
+function openFilterPanel() {
+  filterReturnFocus = document.activeElement;
+  filterPanel.hidden = false;
+  filterBackdrop.hidden = false;
+  filterToggle.setAttribute('aria-expanded', 'true');
+  document.body.classList.add('filter-open');
+  filterPanel.querySelector('[data-close-filter]')?.focus();
+}
+
+function closeFilterPanel(restoreFocus = true) {
+  if (filterPanel.hidden) return;
+  filterPanel.hidden = true;
+  filterBackdrop.hidden = true;
+  filterToggle.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('filter-open');
+  if (restoreFocus && filterReturnFocus instanceof HTMLElement) filterReturnFocus.focus();
+}
+
+function toggleRelationTools() {
+  relationTools.hidden = !relationTools.hidden;
+  relationToggle.setAttribute('aria-expanded', String(!relationTools.hidden));
+  if (!relationTools.hidden) $('#rel-a').focus();
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key === 'Escape' && !filterPanel.hidden) {
+    event.preventDefault();
+    closeFilterPanel();
+    return;
+  }
+  if (event.key === 'Tab' && !filterPanel.hidden) {
+    const controls = visibleFilterControls();
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+    return;
+  }
+  if (event.key === 'Escape' && !relationTools.hidden) {
+    relationTools.hidden = true;
+    relationToggle.setAttribute('aria-expanded', 'false');
+    relationToggle.focus();
+    return;
+  }
+  if (event.key === 'Escape') closeDrawer();
 }
 
 function relationRows(links) {
@@ -1286,6 +1395,16 @@ drawer.addEventListener('change', (event) => {
 $('#find-person').addEventListener('click', findPerson);
 personSearch.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); findPerson(); } });
 $('#find-rel').addEventListener('click', showRelationshipPath);
+filterToggle.addEventListener('click', () => filterPanel.hidden ? openFilterPanel() : closeFilterPanel());
+filterBackdrop.addEventListener('click', () => closeFilterPanel());
+filterPanel.addEventListener('click', (event) => {
+  if (event.target.closest('[data-close-filter]')) closeFilterPanel();
+});
+activeFiltersNode.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-clear-filter]');
+  if (button) clearFilter(button.dataset.clearFilter);
+});
+relationToggle.addEventListener('click', toggleRelationTools);
 clanJump.addEventListener('change', () => {
   if (!clanJump.value) return;
   document.getElementById(`clan-${slug(clanJump.value)}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1336,7 +1455,7 @@ $('#review-button').addEventListener('click', () => { ui.review = !ui.review; re
 connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(() => {}));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) => setStatus(error.message, 'error')));
 familyModelButton.addEventListener('click', () => applyFamilyModelLocal().catch(error => setEditStatus(error.message, 'error')));
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeDrawer(); });
+document.addEventListener('keydown', handleGlobalKeydown);
 window.addEventListener('online', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow().catch(() => {}); });
