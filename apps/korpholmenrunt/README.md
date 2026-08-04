@@ -38,8 +38,12 @@ ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
 npm run build:migration
 npm test
 npm run build:publish
+node verktyg/standardisera-klasser.mjs "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
 På localhost kan den privata startmastern aktiveras och därefter laddas upp
 till Dropbox. Publiceringspaketet är datafritt och byggs till
 repo-rotens `korpholmenrunt/` för GitHub Pages.
+Klassmigreringen läser den materialiserade levande operationsströmmen och
+skriver endast nya, oföränderliga batcher. Den kan köras om utan att skapa
+dubbletter eller skriva över tidigare operationer.
