@@ -19,11 +19,12 @@ const manifest = await readJson(resolve(PRIVATE, 'manifest.json'));
 const state = materialize(document.operations);
 const rows = type => state.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 
-await test('alla JavaScript-filer har giltig syntax', () => {
+await test('alla JavaScript-filer har giltig syntax', async () => {
   for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-lokal-bootstrap.mjs', 'verktyg/bygg-publicering.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr}`);
   }
+  assert.match(await readFile(resolve(ROOT, 'src/config.js'), 'utf8'), /export const CURRENT_OWNER_BOOTSTRAP_URL/, 'konfigurationen ska vara bakåtkompatibel med ett cachat äldre appskal');
 });
 
 await test('v2-migrationen är giltig och har låst identitet', () => {
