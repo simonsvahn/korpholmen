@@ -146,8 +146,10 @@ await test('webbappen kan söka, visa källkontroll och skapa händelser/innehav
 });
 await test('OAuth-navet känner till den tredje appen', async () => {
   const hub = await readFile(resolve(REPO, 'index.html'), 'utf8');
+  const hubApp = await readFile(resolve(REPO, 'src/app.js'), 'utf8');
   assert.ok(hub.includes('./fastigheter/'));
-  assert.ok(hub.includes('korpholmen:oauth-return'));
+  assert.ok(hubApp.includes('korpholmen:oauth-return'));
+  assert.ok(hubApp.includes('mirrorSharedDropboxCredential'));
   assert.ok((await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).includes("new URL('fastigheter/',redirectUri())") || (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).includes("new URL('fastigheter/', redirectUri())"));
 });
 await test('publiceringsbygget är datafritt', () => {

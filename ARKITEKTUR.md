@@ -7,9 +7,9 @@ andra master för samma sorts sakuppgift.
 
 ## Grundidé
 
-Appfamiljen består av sju avgränsade ägar- och granskningsappar, en gemensam
-datafri motor och en framtida sammanhållen läsvy. Original, tolkning och
-presentation är skilda lager.
+Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
+granskningsappar, en gemensam datafri motor och en framtida sammanhållen
+läsvy. Original, tolkning och presentation är skilda lager.
 
 ```mermaid
 flowchart LR
@@ -238,8 +238,7 @@ flowchart TB
     SHELL -. "cachar bara appskal" .-> IDB
 ```
 
-Varje app har egen IndexedDB-databas, service-worker-cache och Dropbox-
-namnrymd:
+Varje sakapp har egen IndexedDB-databas och Dropbox-namnrymd:
 
 ```text
 /matrikel/ops
@@ -255,8 +254,27 @@ I appens IndexedDB får det dessutom finnas skrivskyddade snapshots av andra
 mastrar. De ligger i snapshot-/metadata-lagret, aldrig i appens `ops`-lager,
 och kan därför varken synkas tillbaka eller bli sakmaster av misstag.
 
-Publiceringsbyggen använder tillåtelselistor och ska stoppa om privat data
-har byggts in. Service workers får bara cacha det datafria appskalet.
+Korpholmens rotmanifest har scope över hela appfamiljen. Underapparna får inte
+registrera egna installerbara manifest eller egna aktiva service workers.
+Rotens gemensamma service worker installerar ett versionsatt, atomärt och
+datafritt appskal för alla sju appar. Vid övergång avregistreras äldre
+underappsregistreringar.
+
+Dropbox-inloggningen lagras i ett gemensamt lokalt sessionslager och speglas
+till de äldre appdatabasernas tokenfält under migreringen. OAuth återvänder
+alltid till Korpholmens rot och skickar därefter användaren tillbaka till den
+valda underappen. En inloggning gäller därmed hela den installerade appen.
+
+När Korpholmen eller en underapp öppnas får en låst bakgrundssynk hämta nya
+operationsbatcher till samtliga övriga appdatabaser. Bakgrundssynken är
+skrivskyddad mot Dropbox: den får aldrig ladda upp en annan apps lokala kö,
+eftersom exempelvis båtbilder måste publiceras före operationer som refererar
+till dem. Den aktiva appens vanliga synk ansvarar för uppladdning och därefter
+hämtning i sin egen namnrymd. Stora privata bildbestånd hämtas fortsatt av den
+berörda appen, inte av totalsynken.
+
+Publiceringsbyggen använder tillåtelselistor och ska stoppa om privat data har
+byggts in. Service workern får bara cacha det datafria appskalet.
 
 ## Korrigeringar, motsägelser och borttagningar
 

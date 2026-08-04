@@ -315,9 +315,11 @@ await test('publiceringspaketet har en egen offlinebar kopia av kärnan',async()
 
 await test('OAuth-returen kan skickas till båda apparna',async()=>{
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
+  const rootApp=await readFile(resolve(REPO,'src/app.js'),'utf8');
   const matrikel=await readFile(resolve(REPO,'apps/matrikel/src/app.js'),'utf8');
   const boats=await readFile(resolve(ROOT,'src/app.js'),'utf8');
-  assert.ok(root.includes('korpholmen:oauth-return'));
+  assert.ok(rootApp.includes('korpholmen:oauth-return'));
+  assert.ok(rootApp.includes('mirrorSharedDropboxCredential'));
   assert.ok(root.includes('matrikel/'));
   assert.ok(root.includes('batregister/'));
   assert.ok(matrikel.includes("isSourceTree ? '../../' : '../'"));

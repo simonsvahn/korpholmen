@@ -8,6 +8,7 @@ import {
   createBatch,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  registerKorpholmenServiceWorker,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { resolvePartyName } from '../../../packages/core/master-data.js';
@@ -258,8 +259,7 @@ async function deleteEvent(id) {
 }
 
 async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
-  try { return await navigator.serviceWorker.register('./sw.js', { scope: './' }); }
+  try { return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree }); }
   catch (error) { console.warn('Appskalet kunde inte uppdateras', error); return null; }
 }
 async function completeOAuthCallbackIfNeeded() {

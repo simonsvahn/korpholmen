@@ -91,6 +91,7 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
+  const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
   for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
@@ -137,7 +138,8 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(matchingStyles.includes('.forslagsknapp'));
   assert.ok(matchingStyles.includes('.namndelning'));
   assert.ok(matchingStyles.includes('.delningsfilter'));
-  assert.ok(app.includes("updateViaCache:'none'"));
+  assert.ok(app.includes('registerKorpholmenServiceWorker'));
+  assert.ok(sharedServiceWorkerClient.includes("updateViaCache: 'none'"));
   assert.ok(serviceWorker.includes("if(request.mode==='navigate')"));
   assert.ok(serviceWorker.includes("fetch(request,{cache:'no-store'})"));
   assert.ok(serviceWorker.indexOf("fetch(request,{cache:'no-store'})")<serviceWorker.indexOf("caches.match('./index.html')"));
@@ -158,7 +160,7 @@ await test('publiceringspaketet är datafritt och länkat från appnavet',async(
   assert.ok(publishedClasses.includes('Kanadensare'));
   assert.ok(publishedCore.includes('./storage/indexeddb.js'));
   assert.ok(root.includes('./korpholmenrunt/'));
-  assert.ok(root.includes('Sju separata verktyg'));
+  assert.ok(root.includes('En installerad app'));
   for(const result of results.slice(0,40))assert.equal(publishedApp.includes(JSON.stringify(result.boat_name_raw)),false);
 });
 
