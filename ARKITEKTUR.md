@@ -40,7 +40,7 @@ Fyra regler håller modellen samman:
 | **Dokumentarkiv** | Dokumentidentitet, ordagrann avskrift och dokumentets granskade registerkopplingar | Alla relevanta entitets-ID:n | Person-, båt- eller fastighetssanning som bara råkar nämnas i texten |
 | **Korpholmen runt** | Tävlingsutgåvor, resultat, tider, klasser och källrader | Person- och båt-ID:n | Personer och båtar som egna masterobjekt |
 | **Klubbhistorik** | Daterade matrikelutgåvor, medlemsobservationer, historiska klubbnamnsformer, roller när de är källbelagda, båtförekomster och belagda ägarobservationer | Person-, båt- och senare fastighets-ID:n | Stabil person-/båtidentitet eller ägande härlett ur kolumnplacering |
-| **Kartdata** | Kartutgåvor, ordagranna kartposter, stabila plats- och byggnadsobjekt, namnformer, `del_av`-relationer och granskade geografiska fastighetskopplingar | Fastighets-ID:n | Ägarhistorik, person–fastighetsrelationer eller masterobjekt skapade automatiskt från ogranskade arbetsförslag |
+| **Kartdata** | Aktiv kartdata, stabila öobjekt, namnformer samt strukturerade ö- och fastighetskopplingar | Fastighets-ID:n, Matrikel-personer och externa ägarparter från Fastighetshistorik | Ägarhistorik, personidentitet eller AI-förslag som aktiva sakuppgifter |
 
 `packages/core/` äger ingen sakdata. Paketet tillhandahåller operationer,
 materialisering, IndexedDB, synk, OAuth och konfliktregler.
@@ -60,7 +60,7 @@ flowchart TB
     AR["Dokumentarkiv: dokument och avskrifter"]
     KR["Korpholmen runt: tävlingsresultat"]
     KH["Klubbhistorik: daterade klubbobservationer"]
-    KD["Kartdata: kartposter, platser, byggnader och namn"]
+    KD["Kartdata: kartposter, öar och namn"]
     EX["Korpholmen Explorer: härledd, skrivskyddad totalbild"]
 
     MA -->|"stabila person- och grupp-ID:n"| BA
@@ -84,20 +84,22 @@ sakmaster. Den ska kunna visa en person, familj, båt, fastighet, handling eller
 händelse och följa länkarna mellan dem. Ett tidsfilter väljer observationer
 och giltighetsintervall från rätt master.
 
-Kartdata skiljer uttryckligen mellan en kartpost och det verkliga objekt som
-kartposten kan avse. `map-entry` bevarar källformen. `place` och `building`
-är stabila masterobjekt. En granskningsbar `map-entry-link` binder ihop dem.
-Plats- och byggnadsnamn ligger som separata `name-record`, så att föredraget,
-officiellt, historiskt och alternativt namn kan samexistera utan att objektets
-ID byts. En geografisk `object-property-link` betyder att objektet ligger på
-en fastighet; den är aldrig i sig ett påstående om ägande.
+Kartdata v2 använder `data-entry` som aktiv sakpost. Posten länkas till ett
+stabilt ö-ID genom `data-entry-island-link` och till Fastighetshistorikens
+fastighets-ID genom `data-entry-property-link`. Äldre `map-entry`, källfält,
+arbetsanteckningar och automatiska förslag ligger kvar som ett avskilt
+append-only-arkiv men läses inte av appen och ingår inte i exporten.
 
-Historiska namn som ännu inte säkert kan knytas till ett nutida objekt får
-inte gissas in som alias. Kartdata skapar i stället ett osäkert platsobjekt
-eller omfattningsobjekt (exempelvis en äldre holm med okänt läge eller hela den
-sammanvuxna ögruppen). Ett senare granskningsbeslut kan länka om eller avföra
-posten utan att källformen och den tidigare bedömningen försvinner ur
-operationshistoriken.
+Önamn ligger som separata `name-record`, så att föredraget, officiellt,
+historiskt och alternativt namn kan samexistera utan att ö-ID:t byts. En
+sakpost kopplas bara till en ö när länken är entydig. Borttagna öar och
+områdeskategorier får ingen gissad ersättningsö.
+
+Kartdata kopierar inte det äldre fritextfältet för dagens ägare. För varje
+länkad fastighet läser en reproducerbar referensmigration den senaste daterade
+ägarobservationen från Fastighetshistorik. En redan säker `person_id` blir
+`person-ref` till Matrikeln; övriga personer, organisationer och namngrupper
+blir `external-party`. Namnlikhet används aldrig för identitetsmatchning.
 
 ## Tre lager av namn
 

@@ -24,13 +24,12 @@ const bundle = (await Promise.all([
   ...CORE_FILES.map(file => readFile(resolve(OUT, 'core', file), 'utf8')),
   (async () => app)(),
 ])).join('\n');
-const privateData = JSON.parse(await readFile(resolve(ROOT, 'privat/migrering-2026-08-03/initial-ops.json'), 'utf8'));
+const privateData = JSON.parse(await readFile(resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2/clean-v2-ops.json'), 'utf8'));
 const forbiddenNames = privateData.operations
-  .filter(operation => operation.entity_type === 'map-entry' && operation.field === 'source_name' && String(operation.value || '').length >= 6)
+  .filter(operation => operation.entity_type === 'data-entry' && operation.field === 'name' && String(operation.value || '').length >= 6)
   .map(operation => operation.value)
   .filter(value => !/Korpholmen|Sviholmen|Svanö|Lövskär|Stugholmen|Skarpholmen/i.test(value));
-const workbookHash = privateData.operations.find(operation => operation.entity_type === 'source' && operation.field === 'workbook_sha256')?.value;
-if (forbiddenNames.some(name => bundle.includes(String(name))) || bundle.includes('"operations_version"') || (workbookHash && bundle.includes(workbookHash))) {
+if (forbiddenNames.some(name => bundle.includes(String(name))) || bundle.includes('"operations_version"')) {
   throw new Error('Privat kartdata har läckt in i publiceringspaketet');
 }
 console.log(`Datafri Kartdata byggd: ${FILES.length + CORE_FILES.length + 1} filer.`);

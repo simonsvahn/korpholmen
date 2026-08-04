@@ -1,72 +1,65 @@
-# Datamodell för Kartdata
+# Datamodell för Kartdata v2
 
-Kartdata är både granskningsapp för vad som faktiskt står på en viss
-kartutgåva och kanonisk master för öar, platser och byggnader. Den är inte
-master för fastighetsägande eller person–fastighetsrelationer.
+Kartdata v2 är den aktiva, strukturerade databasen för kartans sakobjekt och
+östruktur. Den äldre importen med källfält, arbetsanteckningar och
+AI-förslag är ett avskilt v1-arkiv och läses inte som aktiv data.
+
+## Aktiv data
 
 | Entitet | Ansvar |
 |---|---|
-| `source` | Arbetsbokens identitet, blad, intervall, kontrollsumma och uttalade kvalitetsläge. |
-| `map-entry` | En oföränderlig källrad med alla elva arbetsbokskolumner samt ett separat granskningslager. |
-| `place` | Stabil identitet för ö, halvö, udde, äng, park, strand, berg, vattenområde eller annan plats. |
-| `building` | Stabil identitet för en fysisk byggnad oberoende av dess namn över tid. |
-| `name-record` | Föredraget, officiellt, historiskt eller alternativt namn med källa, status och giltighetsintervall. |
-| `place-relation` | Exempelvis att Sahlskär är `del_av` Korpholmen. |
-| `object-property-link` | Källspårbar geografisk koppling från plats/byggnad till ett fastighets-ID. Betyder inte ägande. |
-| `map-entry-link` | Granskat påstående att en bestämd kartpost avser ett bestämt plats- eller byggnadsobjekt. |
+| `place` | Stabil identitet för en ö. Namnet kan ändras utan att ID:t ändras. |
+| `name-record` | Föredraget, officiellt, alternativt eller historiskt önamn. |
+| `data-entry` | En aktiv kartdatapost: namn, objektstyp, undertyp och granskningsstatus. |
+| `data-entry-island-link` | Strukturerad koppling från en datapost till exakt ett befintligt ö-ID. |
+| `property-ref` | Skrivskyddad referens till en fastighet i Fastighetshistorik. |
+| `data-entry-property-link` | Strukturerad koppling från en datapost till ett fastighets-ID. |
+| `person-ref` | Skrivskyddad referens till en säkert länkad person i Matrikeln. |
+| `external-party` | Ägarpart i Fastighetshistorik som ännu saknar säker Matrikel-länk. Kan vara person, organisation, dödsbo eller namngrupp. |
+| `property-owner-link` | En fastighets senaste daterade ägarobservation och dess länk till `person-ref` eller `external-party`. |
 
-Varje `map-entry` har två tydliga lager:
+Aktiva objekttyper är endast `byggnad`, `plats`, `namnform` och
+`ägaretikett`. `kartsymbol`, `annat` och den äldre pseudotypen
+`ingen masterpost` är inte tillåtna i v2.
 
-1. `source_*` samt `prior_*` är importerade bytebevarande uppgifter. De
-   redigeras aldrig i appen. De äldre beslutskolumnerna heter avsiktligt
-   `prior_type_decision` och `prior_correction`, eftersom Simon inte har
-   bekräftat att arbetsboken är fullständigt kvalitetsgranskad.
-2. `review_*` skrivs som nya operationer när Simon bekräftar, rättar,
-   osäkerhetsmarkerar eller avför en post.
+## Vad som uttryckligen har tagits bort
 
-`review_status` är `ogranskad | bekräftad | rättad | osäker | utgår`.
-Godkända objektfält är visningsnamn, objektklass, undertyp, överordnad
-ö/plats, fastighets-ID:n och granskningsnot.
+Följande fält och paneler ingår inte i den aktiva modellen eller exporten:
 
-## Förhållandet mellan plats, byggnad och fastighet
+- ordagrann källuppgift;
+- tidigare arbetsförslag;
+- käll-ID och fria källfält;
+- antecknings- och granskningsnoter;
+- automatiska reservvärden från de äldre förslagskolumnerna.
 
-- `plats` och `delområde` är samma objektklass. Delområde uttrycks
-  genom relationen `del_av`; undertypen kan vara ö, halvö, udde, äng, park,
-  strand, berg eller vattenområde.
-- `byggnad` förblir en egen fysisk objektklass.
-- `fastighet` förblir en juridisk registerenhet och ägs av
-  Fastighetshistorik.
+V1-operationerna ligger kvar som ett tekniskt append-only-arkiv. Det krävs
+för att redan gjorda manuella åtgärder inte ska kunna återuppstå genom en
+gammal synkbatch. Rotposten anger `active_schema_version: 2` och appen läser
+bara v2-entiteterna ovan.
 
-Startmastern innehåller stabila platsobjekt för öarna. Korpholmen, Sviholmen
-och Sahlskär bär uttryckliga beslut från Simon; övriga startobjekt är tydligt
-märkta som ogranskade förslag från KARTA-2025. Ett separat namnunderlag lägger
-till historiska namn, vardagsnamn och oidentifierade äldre holmnamn. De senare
-har egna plats-ID:n med status `osäker` i stället för att gissas ihop med en
-nutida ö. Byggnader skapas först när de granskas eller läggs in manuellt. En
-ogranskad `map-entry` skapar aldrig automatiskt ett masterobjekt.
+## Ökoppling
 
-## Namn och tid
+`data-entry-island-link.island_id` måste peka på ett aktivt `place` med
+`subtype: ö`. Byggaren gör bara säker namnnormalisering för Simons beslutade
+visningsformer `Stora Korpholmen → Korpholmen` och
+`Stora Sviholmen → Sviholmen`. Om en äldre rad nämner en borttagen ö eller
+ett område som inte är en ö lämnas länken tom; systemet gissar inte.
 
-Objektets ID ändras inte när namnet ändras. `Korpholmen` kan därför vara
-föredraget namn samtidigt som `Stora Korpholmen` är en officiell namnpost.
-Varje namn, platsrelation och fastighetskoppling kan bära `valid_from`,
-`valid_to`, `source_ids` och `review_status`.
+## Fastighet och ägare
 
-Namnunderlagets operationer har ett eget `device_id`. Befintliga grund- och
-strukturmigrationer är därför bitidentiska även när fler namn tillkommer.
-När ett importerat namn redigeras i appen återanvänds dess namnpost och dess
-källor, datering och notering bevaras; borttagning blir en senare tombstone i
-operationshistoriken.
+Fastighets-ID:n valideras mot Fastighetshistorik. Fritext lagras inte som
+fastighetskoppling. Ägare kopieras inte från den äldre Kartdata-tabellen.
+I stället används den senaste daterade `observation` som finns i
+Fastighetshistorik för respektive fastighet.
 
-När ett plats- eller byggnadsobjekt tas bort i appen tombstonas objektet och
-dess aktiva namn-, relations-, fastighets- och kartpostkopplingar tillsammans.
-De oföränderliga `map-entry`-källraderna raderas aldrig. På så vis försvinner
-objektet ur den aktiva östrukturen utan att källmaterial eller åtgärdshistorik
-går förlorade.
+Om observationens part redan har ett `person_id` som finns i Matrikeln skapas
+en `person-ref`. Annars skapas en `external-party`. Ingen namnlikhet används
+för att gissa att två personer är samma. Appen visar observationsdatum, så
+att en registerbild från 2020 inte felaktigt framställs som kontrollerad 2026.
 
-## Lagring
+## Lagring och publicering
 
-Källkopior och reproducerbara migreringar ligger privat under `privat/`.
-Den levande mastern är den append-only operationslogg som synkas i
-`/kartdata/ops`. IndexedDB är en lokal arbetskopia och JSON-exporten är en
-härledd produkt, inte en ny master.
+Den levande mastern är append-only-loggen i `/kartdata/ops`. En privat,
+reproducerbar v2-migration byggs i
+`privat/migrering-2026-08-04-ren-v2/`. GitHub Pages innehåller bara appskalet;
+varken dataposter, personnamn eller fastighetsdata byggs in i publiceringen.

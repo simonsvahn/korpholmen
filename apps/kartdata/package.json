@@ -4,8 +4,10 @@
   "type": "module",
   "scripts": {
     "build:migration": "node verktyg/bygg-startmaster.mjs",
+    "build:clean-v2": "node verktyg/bygg-ren-v2.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
+    "seed:clean-v2": "node verktyg/skriv-dropbox-ren-v2.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "test": "node test/harness.mjs"
   }
 }
