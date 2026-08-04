@@ -19,7 +19,7 @@ som GitHub.
 - `packages/core/` — gemensam datafri motor för operationer, IndexedDB,
   Dropbox-synk och OAuth.
 - `matrikel/`, `batregister/`, `fastigheter/`, `dokumentarkiv/`,
-  `korpholmenrunt/` och `klubbhistorik/` — datafria
+  `korpholmenrunt/`, `klubbhistorik/` och `kartdata/` — datafria
   publiceringspaket för GitHub Pages.
 
 Den gemensamma begrepps- och ansvarsfördelningen för nära familj,
@@ -31,9 +31,20 @@ finns i [`ARKITEKTUR.md`](ARKITEKTUR.md). Apparnas README-filer beskriver
 drift och aktuellt dataläge; arkitekturdokumentet beskriver den avsedda
 helheten och gränserna mellan mastrarna.
 
-Repo-roten är OAuth-retur och appväljare. Privat data finns aldrig i GitHub.
+Repo-roten är den enda installerbara PWA:n **Korpholmen**, gemensam OAuth-retur,
+appväljare och synkcentral. Rotmanifestet har scope över hela appfamiljen. Alla
+underappar länkar till samma manifest och registrerar samma service worker, så
+navigationen stannar i en installerad app på bland annat iPhone. Privat data
+finns aldrig i GitHub.
 
-Alla sex apparna är PWA:er med cache-först-appskal. Efter första lyckade
-Dropbox-synken startar de från lokal IndexedDB utan nät, sparar ändringar
-lokalt och skickar dem automatiskt när anslutningen återkommer. Båtregister
-lagrar även hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
+Korpholmen har ett gemensamt versionsatt, datafritt appskal. De sju
+sakapparna har fortfarande varsin IndexedDB och Dropbox-namnrymd. Efter första
+lyckade Dropbox-synken startar de från lokal IndexedDB utan nät, sparar
+ändringar lokalt och skickar dem automatiskt när anslutningen återkommer.
+En gemensam Dropbox-session återanvänds av alla appar. När en app öppnas drar
+bakgrundssynken nya operationer till de övriga lokala mastrarna; bara den
+aktiva ägarappen laddar upp sina väntande ändringar. Båtregister lagrar även
+hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
+
+Bygg hela appfamiljen och det gemensamma release-manifestet med `npm run build`.
+Kontrollera därefter samtliga data- och PWA-kontrakt med `npm test`.

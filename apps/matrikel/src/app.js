@@ -7,6 +7,7 @@ import {
   completeDropboxOAuth,
   createBatch,
   openSlaktlandskapDB,
+  registerKorpholmenServiceWorker,
   validateOperation,
 } from './data-layer.js?v=2026-08-02-3';
 import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-10';
@@ -127,18 +128,8 @@ const slug = (value) => normalizeText(value).replace(/\s+/g, '-') || 'grupp';
 const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
 
 async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
   try {
-    const hadController = Boolean(navigator.serviceWorker.controller);
-    if (hadController) {
-      let reloading = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloading) return;
-        reloading = true;
-        location.reload();
-      }, { once: true });
-    }
-    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree });
   } catch (error) {
     console.warn('Appskalet kunde inte uppdateras', error);
     return null;

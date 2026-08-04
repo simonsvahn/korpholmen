@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Korpholmen">
+  <rect width="512" height="512" rx="112" fill="#173e35"/>
+  <circle cx="256" cy="256" r="176" fill="#f3f0e8"/>
+  <path d="M132 317c61-20 97-58 124-126 27 68 63 106 124 126-41 26-83 39-124 39s-83-13-124-39Z" fill="#d7ae58"/>
+  <path d="M174 304c31-24 56-57 82-112 26 55 51 88 82 112-54-13-110-13-164 0Z" fill="#173e35"/>
+  <circle cx="256" cy="155" r="24" fill="#d7ae58"/>
+</svg>

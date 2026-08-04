@@ -8,6 +8,7 @@ import {
   createBatch,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  registerKorpholmenServiceWorker,
   validateOperation,
 } from '../core/data-layer.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
@@ -119,18 +120,8 @@ function redirectUri() {
 }
 
 async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
   try {
-    const hadController = Boolean(navigator.serviceWorker.controller);
-    if (hadController) {
-      let reloading = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloading) return;
-        reloading = true;
-        location.reload();
-      }, { once: true });
-    }
-    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree });
   } catch (error) {
     console.warn('Appskalet kunde inte uppdateras', error);
     return null;

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm --prefix packages/core test && npm --prefix apps/matrikel test && npm --prefix apps/batregister test && npm --prefix apps/fastigheter test && npm --prefix apps/dokumentarkiv test && npm --prefix apps/korpholmenrunt test && npm --prefix apps/klubbhistorik test && npm --prefix apps/kartdata test",
-    "build": "npm --prefix apps/matrikel run build:publish && npm --prefix apps/batregister run build:publish && npm --prefix apps/fastigheter run build:publish && npm --prefix apps/dokumentarkiv run build:publish && npm --prefix apps/korpholmenrunt run build:publish && npm --prefix apps/klubbhistorik run build:publish && npm --prefix apps/kartdata run build:publish"
+    "test": "npm run test:shell && npm --prefix packages/core test && npm --prefix apps/matrikel test && npm --prefix apps/batregister test && npm --prefix apps/fastigheter test && npm --prefix apps/dokumentarkiv test && npm --prefix apps/korpholmenrunt test && npm --prefix apps/klubbhistorik test && npm --prefix apps/kartdata test",
+    "test:shell": "node test/harness.mjs",
+    "build": "npm --prefix apps/matrikel run build:publish && npm --prefix apps/batregister run build:publish && npm --prefix apps/fastigheter run build:publish && npm --prefix apps/dokumentarkiv run build:publish && npm --prefix apps/korpholmenrunt run build:publish && npm --prefix apps/klubbhistorik run build:publish && npm --prefix apps/kartdata run build:publish && npm run build:shell",
+    "build:shell": "node verktyg/bygg-korpholmen-release.mjs"
   }
 }

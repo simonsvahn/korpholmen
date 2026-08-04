@@ -7,6 +7,7 @@ import {
   completeDropboxOAuth,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  registerKorpholmenServiceWorker,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { resolveCurrentOwners, resolvePropertyReferences } from '../../../packages/core/master-data.js';
@@ -314,7 +315,7 @@ function exportData() {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `kartdata-v2-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url);
 }
 
-async function registerServiceWorker() { if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null; try { return await navigator.serviceWorker.register('./sw.js', { scope: './' }); } catch (error) { console.warn('Appskalet kunde inte uppdateras', error); return null; } }
+async function registerServiceWorker() { try { return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree }); } catch (error) { console.warn('Appskalet kunde inte uppdateras', error); return null; } }
 async function completeOAuthCallbackIfNeeded() { const url = new URL(location.href); if (!url.searchParams.has('code') && !url.searchParams.has('error')) return; const token = await completeDropboxOAuth(); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token) await store.putMeta(TOKEN_META, token.refresh_token); for (const parameter of ['code', 'state', 'error', 'error_description']) url.searchParams.delete(parameter); history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`); }
 async function currentAccessToken() { if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken; const refreshToken = await store.getMeta(TOKEN_META); if (!refreshToken || !DROPBOX_CLIENT_ID || navigator.onLine === false) return null; const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken }); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token); return accessToken; }
 async function syncNow() {

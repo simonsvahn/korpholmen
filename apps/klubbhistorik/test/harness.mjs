@@ -552,7 +552,7 @@ await test('publiceringsbygget är datafritt och länkat från appfamiljen',asyn
   assert.ok(!publishedApp.includes('person-occurrence:matrikel-'));
   assert.ok(publishedCore.includes("./storage/indexeddb.js"));
   assert.ok(rootHtml.includes('./klubbhistorik/'));
-  assert.ok(rootHtml.includes('Sju separata verktyg'));
+  assert.ok(rootHtml.includes('En installerad app'));
 });
 
 console.log(`\n${passed} Klubbhistorik-kontrakt godkända.`);

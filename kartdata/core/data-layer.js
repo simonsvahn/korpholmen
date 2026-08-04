@@ -18,6 +18,9 @@ export { MemoryRemoteTransport } from './sync/memory-transport.js';
 export { beginDropboxOAuth, completeDropboxOAuth } from './sync/oauth-flow.js';
 export { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js';
 export { SyncEngine } from './sync/sync-engine.js';
+export { KorpholmenSharedStore, SharedDropboxSession, sharedDropboxTokenKey } from './sync/shared-dropbox-session.js';
+export { KORPHOLMEN_APPS, getAppFamilySyncStatuses, migrateLegacyCredentialsToShared, mirrorSharedDropboxCredential, scheduleAppFamilySync, syncAppFamily } from './sync/app-family-sync.js';
+export { registerKorpholmenServiceWorker } from './pwa/korpholmen-service-worker.js';
 export { ReadOnlyMaster } from './read-only-master.js';
 export {
   canonicalPeople,

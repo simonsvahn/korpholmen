@@ -155,11 +155,13 @@ await test('publiceringspaketet har en egen offlinebar kärna utan privata avskr
 await test('OAuth-returen och appnavigeringen omfattar Dokumentarkivet',async()=>{
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
-  assert.ok(root.includes('korpholmen:oauth-return'));
+  const rootApp=await readFile(resolve(REPO,'src/app.js'),'utf8');
+  assert.ok(rootApp.includes('korpholmen:oauth-return'));
+  assert.ok(rootApp.includes('mirrorSharedDropboxCredential'));
   assert.ok(root.includes('href="./dokumentarkiv/"'));
   assert.equal(root.includes('href="./arkiv/"'),false);
   assert.ok(root.includes('Dokumentarkiv'));
-  assert.ok(app.includes("isSourceTree ? '../../' : '../'"));
+  assert.ok(app.includes('registerKorpholmenServiceWorker({ sourceTree: isSourceTree })'));
 });
 
 console.log(`\n${passed} Dokumentarkiv-kontrakt godkända.`);

@@ -1,7 +1,7 @@
 import { canonicalStringify, cloneJson } from '../domain/canonical.js?v=2026-08-01-10';
 import { operationFingerprint, validateOperation } from '../domain/operations.js?v=2026-08-01-10';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const requestResult = request => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
@@ -22,6 +22,7 @@ export async function openSlaktlandskapDB({ indexedDB = globalThis.indexedDB, na
     if (!db.objectStoreNames.contains('ops')) db.createObjectStore('ops', { keyPath: 'op_id' });
     if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
     if (!db.objectStoreNames.contains('snapshots')) db.createObjectStore('snapshots', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'key' });
   };
   return requestResult(request);
 }

@@ -8,6 +8,7 @@ import {
   createBatch,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  registerKorpholmenServiceWorker,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
@@ -445,8 +446,7 @@ async function syncContentImages(transport) {
 }
 
 async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
-  try { return await navigator.serviceWorker.register('./sw.js', { scope: './' }); }
+  try { return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree }); }
   catch (error) { console.warn('Appskalet kunde inte uppdateras', error); return null; }
 }
 

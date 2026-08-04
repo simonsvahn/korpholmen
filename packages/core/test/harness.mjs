@@ -8,6 +8,7 @@ import {
   MemoryStore,
   ReadOnlyMaster,
   Repository,
+  SharedDropboxSession,
   SyncEngine,
   mergePersonReferences,
   resolveCurrentOwners,
@@ -66,6 +67,29 @@ await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fasti
 await test('skrivskyddad Dropbox-transport avvisar uppladdning', async () => {
   const transport = new DropboxTransport({ accessToken: 'test', readOnly: true, fetchImpl: async () => { throw new Error('fetch ska inte anropas'); } });
   await assert.rejects(() => transport.putMutable('/x.json', {}), /Skrivskyddad/);
+});
+
+await test('en gemensam Dropbox-session återanvänder och förnyar samma inloggning', async () => {
+  const values = new Map();
+  const sharedStore = {
+    get: async key => values.get(key) ?? null,
+    put: async (key, value) => values.set(key, value),
+    delete: async key => values.delete(key),
+  };
+  let exchanges = 0;
+  let now = 1_000;
+  const session = new SharedDropboxSession({
+    clientId: 'client',
+    sharedStore,
+    now: () => now,
+    exchangeRefreshToken: async ({ refreshToken }) => { exchanges += 1; assert.equal(refreshToken, 'refresh-1'); return { access_token: 'access-2', expires_in: 3600 }; },
+  });
+  await session.acceptTokenResponse({ access_token: 'access-1', refresh_token: 'refresh-1', expires_in: 1 });
+  assert.equal(await session.hasCredential(), true);
+  assert.equal(await session.getRefreshToken(), 'refresh-1');
+  now = 32_000;
+  assert.equal(await session.getAccessToken(), 'access-2');
+  assert.equal(exchanges, 1);
 });
 
 await test('nya mastermoduler importeras direkt så att äldre appcache förblir kompatibel', async () => {

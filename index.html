@@ -2,11 +2,15 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#173e35">
-  <title>Korpholmens appar</title>
-  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-2">
-  <link rel="stylesheet" href="./app-switcher.css?v=2026-08-04-ui-2">
+  <meta name="description" content="Korpholmens samlade privata register, arkiv, historia och kartdata">
+  <title>Korpholmen</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/korpholmen.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/korpholmen-180.png">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-pwa-1">
+  <link rel="stylesheet" href="./app-switcher.css?v=2026-08-04-pwa-1">
 </head>
 <body class="app-hub">
   <a class="skip-to-content" href="#hub-content">Hoppa till innehåll</a>
@@ -21,42 +25,37 @@
     <a class="app-switch" href="./kartdata/">07 Kartdata</a>
   </nav>
   <main class="hub" id="hub-content">
-    <p class="eyebrow">Korpholmen</p>
-    <h1>Klubbens appar</h1>
-    <p class="lead">Sju separata verktyg med gemensam säker Dropbox-anslutning.</p>
+    <section class="hub-intro">
+      <div>
+        <p class="eyebrow">Korpholmen</p>
+        <h1>Klubbens appar</h1>
+        <p class="lead">En installerad app, en Dropbox-inloggning och sju tydligt avgränsade register.</p>
+      </div>
+      <aside class="family-sync" aria-labelledby="family-sync-title">
+        <p class="eyebrow" id="family-sync-title">Den här enheten</p>
+        <p id="sync-summary" class="sync-summary" role="status">Kontrollerar lokal data…</p>
+        <button id="sync-all" type="button">Kontrollerar Dropbox…</button>
+        <small id="release-status">Kontrollerar appversion…</small>
+        <small>Bilder hämtas vid behov i Båtregister och Dokumentarkiv.</small>
+      </aside>
+    </section>
+
     <h2 class="domain-label">Klubben</h2>
     <p class="domain-desc">Medlemmar, båtar, tävlingar, handlingar och historik</p>
     <div class="app-grid">
-      <a class="app-card" href="./matrikel/"><span class="number">01</span><h2>Matrikel</h2><p>Medlemmar, släktingar, klubbnamn och personrelationer.</p><b>Öppna Matrikeln →</b></a>
-      <a class="app-card" href="./batregister/"><span class="number">02</span><h2>Båtregister</h2><p>Båtar, namn, ägare, personkopplingar och bilder.</p><b>Öppna Båtregister →</b></a>
-      <a class="app-card" href="./dokumentarkiv/"><span class="number">04</span><h2>Dokumentarkiv</h2><p>Ordagranna avskrifter, protokoll, sökning och strukturerade registerkopplingar.</p><b>Öppna Dokumentarkivet →</b></a>
-      <a class="app-card" href="./korpholmenrunt/"><span class="number">05</span><h2>Korpholmen runt</h2><p>Resultat, rekord, deltagar- och båtprofiler, årsöversikter och historiska dueller.</p><b>Öppna Korpholmen runt →</b></a>
-      <a class="app-card" href="./klubbhistorik/"><span class="number">06</span><h2>Klubbhistorik</h2><p>Matrikelutgåvor, medlemsförändringar, namn och båtar som källspårbara tidsresor.</p><b>Öppna Klubbhistorik →</b></a>
+      <a class="app-card" href="./matrikel/"><span class="number">01</span><h2>Matrikel</h2><p>Medlemmar, släktingar, klubbnamn och personrelationer.</p><span class="app-card-status" data-sync-status="matrikel">Kontrollerar lokal synk…</span><b>Öppna Matrikeln →</b></a>
+      <a class="app-card" href="./batregister/"><span class="number">02</span><h2>Båtregister</h2><p>Båtar, namn, ägare, personkopplingar och bilder.</p><span class="app-card-status" data-sync-status="batregister">Kontrollerar lokal synk…</span><b>Öppna Båtregister →</b></a>
+      <a class="app-card" href="./dokumentarkiv/"><span class="number">04</span><h2>Dokumentarkiv</h2><p>Ordagranna avskrifter, protokoll, sökning och strukturerade registerkopplingar.</p><span class="app-card-status" data-sync-status="dokumentarkiv">Kontrollerar lokal synk…</span><b>Öppna Dokumentarkivet →</b></a>
+      <a class="app-card" href="./korpholmenrunt/"><span class="number">05</span><h2>Korpholmen runt</h2><p>Resultat, rekord, deltagar- och båtprofiler, årsöversikter och historiska dueller.</p><span class="app-card-status" data-sync-status="korpholmenrunt">Kontrollerar lokal synk…</span><b>Öppna Korpholmen runt →</b></a>
+      <a class="app-card" href="./klubbhistorik/"><span class="number">06</span><h2>Klubbhistorik</h2><p>Matrikelutgåvor, medlemsförändringar, namn och båtar som källspårbara tidsresor.</p><span class="app-card-status" data-sync-status="klubbhistorik">Kontrollerar lokal synk…</span><b>Öppna Klubbhistorik →</b></a>
     </div>
     <h2 class="domain-label">Ön</h2>
     <p class="domain-desc">Fastigheter, kartdata, platser och byggnader</p>
     <div class="app-grid">
-      <a class="app-card" href="./fastigheter/"><span class="number">03</span><h2>Fastighetshistorik</h2><p>Fastigheter, historiska ägare, överlåtelser, förrättningar och källor.</p><b>Öppna Fastighetshistoriken →</b></a>
-      <a class="app-card" href="./kartdata/"><span class="number">07</span><h2>Kartdata</h2><p>Visuell granskning av kartans namn, byggnader, platser och föreslagna fastighetskopplingar.</p><b>Öppna Kartdata →</b></a>
+      <a class="app-card" href="./fastigheter/"><span class="number">03</span><h2>Fastighetshistorik</h2><p>Fastigheter, historiska ägare, överlåtelser, förrättningar och källor.</p><span class="app-card-status" data-sync-status="fastigheter">Kontrollerar lokal synk…</span><b>Öppna Fastighetshistoriken →</b></a>
+      <a class="app-card" href="./kartdata/"><span class="number">07</span><h2>Kartdata</h2><p>Visuell granskning av kartans namn, byggnader, platser och fastighetskopplingar.</p><span class="app-card-status" data-sync-status="kartdata">Kontrollerar lokal synk…</span><b>Öppna Kartdata →</b></a>
     </div>
   </main>
-  <script>
-    (() => {
-      const url = new URL(location.href);
-      const isCallback = url.searchParams.has('code') || url.searchParams.has('error');
-      if (isCallback) {
-        const base = new URL('./', url).pathname;
-        const saved = sessionStorage.getItem('korpholmen:oauth-return');
-        const targetPath = saved && saved.startsWith(base) ? saved : `${base}matrikel/`;
-        sessionStorage.removeItem('korpholmen:oauth-return');
-        const target = new URL(targetPath, url.origin);
-        target.search = url.search;
-        target.hash = url.hash;
-        location.replace(target.href);
-        return;
-      }
-      if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
-    })();
-  </script>
+  <script type="module" src="./src/app.js?v=2026-08-04-pwa-1"></script>
 </body>
 </html>
