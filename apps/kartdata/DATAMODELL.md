@@ -12,11 +12,11 @@ AI-förslag är ett avskilt v1-arkiv och läses inte som aktiv data.
 | `name-record` | Föredraget, officiellt, alternativt eller historiskt önamn. |
 | `data-entry` | En aktiv kartdatapost: namn, objektstyp, undertyp och granskningsstatus. |
 | `data-entry-island-link` | Strukturerad koppling från en datapost till exakt ett befintligt ö-ID. |
-| `property-ref` | Skrivskyddad referens till en fastighet i Fastighetshistorik. |
 | `data-entry-property-link` | Strukturerad koppling från en datapost till ett fastighets-ID. |
-| `person-ref` | Skrivskyddad referens till en säkert länkad person i Matrikeln. |
-| `external-party` | Ägarpart i Fastighetshistorik som ännu saknar säker Matrikel-länk. Kan vara person, organisation, dödsbo eller namngrupp. |
-| `property-owner-link` | En ägare i Fastighetshistorikens granskade nulägesbedömning och dess länk till `person-ref` eller `external-party`. |
+
+`property-ref`, `person-ref`, `external-party` och `property-owner-link` är
+äldre referenskopior. De finns kvar som migrations- och offlinefallback men är
+inte aktiva sakentiteter när Fastigheter och Matrikel kan läsas.
 
 Aktiva objekttyper är endast `byggnad`, `plats`, `namnform` och
 `ägaretikett`. `kartsymbol`, `annat` och den äldre pseudotypen
@@ -53,14 +53,20 @@ härleds inte direkt från en gammal registerobservation. I stället används
 enbart `current-owner-assessment` i Fastighetshistorik. Saknas en sådan
 bedömning visar Kartdata ingen ägare.
 
-Om nulägesbedömningens part redan har ett `person_id` som finns i Matrikeln skapas
-en `person-ref`. Annars skapas en `external-party`. Ingen namnlikhet används
-för att gissa att två personer är samma. Historiska observationsdatum och
-ägarkedjor visas i Fastighetshistorik, inte i Kartdatas nulägeskolumn.
+Kartdata läser Fastighetshistorikens `property`, `current-owner-assessment`
+och `party` skrivskyddat. Om en ägarpart har `person_id` hämtas personens
+aktuella visningsnamn skrivskyddat från Matrikel. Organisationer och oupplösta
+parter visas med partnamnet från Fastigheter. Ingen av dessa poster skrivs till
+Kartdatas operationslogg och ingen namnlikhet används för att gissa identitet.
+Historiska observationsdatum och ägarkedjor visas i Fastighetshistorik, inte i
+Kartdatas nulägeskolumn.
 
 ## Lagring och publicering
 
-Den levande mastern är append-only-loggen i `/kartdata/ops`. En privat,
+Den levande Kartdata-mastern är append-only-loggen i `/kartdata/ops`. En privat,
 reproducerbar v2-migration byggs i
 `privat/migrering-2026-08-04-ren-v2/`. GitHub Pages innehåller bara appskalet;
 varken dataposter, personnamn eller fastighetsdata byggs in i publiceringen.
+
+Fastigheter och Matrikel cachas som skrivskyddade snapshots i Kartdatas lokala
+IndexedDB. Deras operationer läggs aldrig i `/kartdata/ops`.

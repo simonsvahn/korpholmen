@@ -26,7 +26,7 @@ flowchart LR
 Fyra regler håller modellen samman:
 
 1. En saktyp har en utpekad ägarapp.
-2. Andra appar länkar med stabila ID:n och får bara ha märkta referenskopior.
+2. Andra appar lagrar stabila ID:n och läser namn och nuläge skrivskyddat från ägarmastern. En lokal cache är aldrig en andra master.
 3. Källans ordalydelse skrivs aldrig över av normalisering eller rättelse.
 4. En härledd vy får inte skriva tillbaka ett nytt faktum till någon master.
 
@@ -34,7 +34,7 @@ Fyra regler håller modellen samman:
 
 | App | Kanoniskt ansvar | Refererar till | Äger inte |
 |---|---|---|---|
-| **Matrikel** | Stabil personidentitet, verkliga personnamn och namnhistorik, personrelationer, medlemsidentitet, FAMILJ och SLÄKT | Fastigheter och båtar för navigation | Juridiskt ägande, båtar eller en matrikelutgåvas exakta stavning |
+| **Matrikel** | Stabil personidentitet för både klubb-/släktpersoner och externa personer, verkliga personnamn och namnhistorik, personrelationer, medlemsidentitet, FAMILJ och SLÄKT | Fastigheter och båtar för navigation | Juridiskt ägande, båtar eller en matrikelutgåvas exakta stavning |
 | **Båtregister** | Stabil båtidentitet, båtnamn och båthistorik, motorer, bilder samt belagda typade båtanknytningar | Person-, familje-, släkt- och fastighets-ID:n | Personidentitet eller medlemsstatus |
 | **Fastighetshistorik** | Fastigheter, historiska jordenheter, innehav, bruk, transaktioner, datumroller, källor och evidens | Person-ID:n | Släktskap eller juridiskt ägande härlett ur fastighetsgemenskap |
 | **Dokumentarkiv** | Dokumentidentitet, ordagrann avskrift och dokumentets granskade registerkopplingar | Alla relevanta entitets-ID:n | Person-, båt- eller fastighetssanning som bara råkar nämnas i texten |
@@ -45,12 +45,17 @@ Fyra regler håller modellen samman:
 `packages/core/` äger ingen sakdata. Paketet tillhandahåller operationer,
 materialisering, IndexedDB, synk, OAuth och konfliktregler.
 
-## Mastrar, referenser och den gemensamma läsvyn
+## Mastrar, skrivskyddade läsningar och den gemensamma läsvyn
 
-En app får läsa en märkt referenskatalog från en annan master för sökning och
-länkning. En `person-ref` i Klubbhistorik är därför inte en andra personpost:
-`external_id` pekar tillbaka på Matrikelns stabila person. Referensen ska kunna
-bytas mot en ny snapshot utan att historiska förekomster ändrar identitet.
+En app lagrar bara det främmande stabila ID som behövs för länken. Vid läsning
+hämtas den andra mastern med en särskild skrivskyddad läsare. Läsaren får inte
+skapa mappar, ladda upp operationer eller blanda främmande operationer med
+appens egen logg. Den sparar en versionsbar lokal snapshot för offlineläge.
+
+Äldre `person-ref`, `property-ref`, `external-party` och
+`property-owner-link` ligger kvar som migrationsfallback. När ägarmastern har
+lästs används aldrig deras kopierade namn eller ägaruppgifter. De ska fasas ut
+först när alla befintliga ID-länkar har jämförts och förlustkontrollen är grön.
 
 ```mermaid
 flowchart TB
@@ -96,10 +101,24 @@ sakpost kopplas bara till en ö när länken är entydig. Borttagna öar och
 områdeskategorier får ingen gissad ersättningsö.
 
 Kartdata kopierar inte det äldre fritextfältet för dagens ägare. För varje
-länkad fastighet läser en reproducerbar referensmigration det granskade
-`current-owner-assessment`-lagret från Fastighetshistorik. En redan säker `person_id` blir
-`person-ref` till Matrikeln; övriga personer, organisationer och namngrupper
-blir `external-party`. Namnlikhet används aldrig för identitetsmatchning.
+länkad fastighet läser appen live eller ur en märkt offlinecache det granskade
+`current-owner-assessment`-lagret från Fastighetshistorik. Därifrån följs
+`owner_party_ids` till en part. Har parten `person_id` hämtas namnet från
+Matrikel; organisationer och ännu oupplösta namngrupper visas från
+Fastigheter. Namnlikhet används aldrig för identitetsmatchning.
+
+```mermaid
+flowchart LR
+    KD["Kartdata: data-entry och ö-ID"] -->|property_id| FA["Fastigheter: property"]
+    FA --> CO["current-owner-assessment"]
+    CO --> PA["party"]
+    PA -->|person_id, när det är en person| MA["Matrikel: person och aktuellt namn"]
+    PA -->|organisation eller oupplöst part| PN["Fastigheter: partnamn"]
+```
+
+Ett namnbyte görs alltså en gång i Matrikel. Båtregister, Fastigheter,
+Kartdata, Klubbhistorik och Korpholmen runt får det nya namnet vid nästa
+skrivskyddade lässynk. Källans rånamn och historiska namnformer påverkas inte.
 
 ## Tre lager av namn
 
@@ -231,6 +250,10 @@ namnrymd:
 /klubbhistorik/ops
 /kartdata/ops
 ```
+
+I appens IndexedDB får det dessutom finnas skrivskyddade snapshots av andra
+mastrar. De ligger i snapshot-/metadata-lagret, aldrig i appens `ops`-lager,
+och kan därför varken synkas tillbaka eller bli sakmaster av misstag.
 
 Publiceringsbyggen använder tillåtelselistor och ska stoppa om privat data
 har byggts in. Service workers får bara cacha det datafria appskalet.

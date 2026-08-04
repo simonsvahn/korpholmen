@@ -18,3 +18,12 @@ export { MemoryRemoteTransport } from './sync/memory-transport.js';
 export { beginDropboxOAuth, completeDropboxOAuth } from './sync/oauth-flow.js';
 export { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js';
 export { SyncEngine } from './sync/sync-engine.js';
+export { ReadOnlyMaster } from './read-only-master.js';
+export {
+  canonicalPeople,
+  canonicalPersonMap,
+  mergePersonReferences,
+  resolveCurrentOwners,
+  resolvePartyName,
+  resolvePropertyReferences
+} from './master-data.js';

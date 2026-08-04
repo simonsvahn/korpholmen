@@ -485,6 +485,14 @@ await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',as
   assert.ok(model.includes('inte automatiskt vem'));
 });
 
+await test('personnamn löses skrivskyddat från Matrikel utan att källformer ändras',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  assert.ok(app.includes('mergePersonReferences(storedPersonRefs(),matrikelMaster)'));
+  assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
+  assert.ok(app.includes("new ReadOnlyMaster({store,cacheKey:'matrikel'})"));
+  assert.ok(app.includes('person_name_raw'));
+});
+
 await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
   const appReadmePaths=['matrikel','batregister','fastigheter','dokumentarkiv','korpholmenrunt','klubbhistorik'].map(name=>resolve(REPO,'apps',name,'README.md'));
   const [architecture,localArchitecture,rootReadme,localModel,...appReadmes]=await Promise.all([

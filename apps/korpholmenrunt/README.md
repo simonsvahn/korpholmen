@@ -12,6 +12,8 @@ kompletteras utan att ursprungsuppgiften skrivs över.
 Appen länkar båtar till Båtregistrets stabila ID och deltagare till Matrikelns
 person-ID. Endast entydiga träffar kopplas automatiskt. Möjliga och olösta
 träffar visas i appens granskningskö och kan avgöras manuellt.
+Det aktuella personnamnet läses skrivskyddat från Matrikel. Resultatets rånamn
+ligger kvar i tävlingsmastern och ändras inte när personen byter namn.
 
 Ofullständigt granskade analoga år kan publiceras som preliminära rader. De
 visas tydligt i resultatlistan och under **Granska & matcha**, där varje rad kan

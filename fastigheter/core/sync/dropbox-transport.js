@@ -15,13 +15,14 @@ const normalizePath = value => {
 const parentPath = path => path.slice(0, path.lastIndexOf('/')) || '/';
 
 export class DropboxTransport {
-  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops' }) {
+  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false }) {
     if (!accessToken) throw new TypeError('Dropbox access token saknas');
     if (!fetchImpl) throw new TypeError('fetch saknas');
     this.accessToken = accessToken;
     this.fetch = fetchImpl.bind(globalThis);
     this.id = id;
     this.opsRoot = normalizePath(opsRoot).replace(/\/$/, '') || '/';
+    this.readOnly = Boolean(readOnly);
     this.knownFolders = new Set(['/']);
   }
 
@@ -51,6 +52,7 @@ export class DropboxTransport {
   }
 
   async ensureFolder(pathValue) {
+    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte skapa mappar');
     const path = normalizePath(pathValue);
     if (path === '/' || this.knownFolders.has(path)) return;
     await this.ensureFolder(parentPath(path));
@@ -63,6 +65,7 @@ export class DropboxTransport {
   }
 
   async upload(pathValue, value, mode) {
+    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte ladda upp data');
     const path = normalizePath(pathValue);
     await this.ensureFolder(parentPath(path));
     const response = await this.fetch(`${CONTENT}/files/upload`, {
@@ -125,7 +128,7 @@ export class DropboxTransport {
         throw error;
       }
     } else {
-      await this.ensureFolder(this.opsRoot);
+      if (!this.readOnly) await this.ensureFolder(this.opsRoot);
       result = await this.rpc('/files/list_folder', {
         path: this.opsRoot, recursive: false, include_deleted: false, include_non_downloadable_files: false
       });
@@ -140,7 +143,7 @@ export class DropboxTransport {
   }
 
   async getLatestCursor() {
-    await this.ensureFolder(this.opsRoot);
+    if (!this.readOnly) await this.ensureFolder(this.opsRoot);
     const result = await this.rpc('/files/list_folder/get_latest_cursor', {
       path: this.opsRoot, recursive: false, include_deleted: false, include_non_downloadable_files: false
     });

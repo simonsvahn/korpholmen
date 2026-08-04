@@ -1,12 +1,14 @@
 import {
   DropboxTransport,
   IndexedDBStore,
+  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  mergePersonReferences,
   openSlaktlandskapDB,
   validateOperation,
 } from '../core/data-layer.js';
@@ -24,7 +26,7 @@ const isSourceTree=location.pathname.includes('/apps/korpholmenrunt/');
 const TOKEN_META='dropbox:refresh-token';
 const BOOTSTRAP_META='bootstrap:korpholmenrunt-2026-08-02';
 const ui={view:'oversikt',search:'',year:'alla',className:'alla',course:'alla',profile:null,duelA:'',duelB:'',sortKey:'year',sortDirection:'desc',splitReview:false};
-let store;let repository;let accessToken=null;let accessTokenExpiresAt=0;let syncPromise=null;
+let store;let repository;let matrikelMaster;let accessToken=null;let accessTokenExpiresAt=0;let syncPromise=null;
 
 const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const escapeAttribute=escapeHtml;
@@ -32,7 +34,8 @@ const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}
 const recordList=type=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[];
 const results=()=>recordList('race-result').sort((a,b)=>b.year-a.year||(a.duration_seconds??Infinity)-(b.duration_seconds??Infinity));
 const editions=()=>recordList('race-edition').sort((a,b)=>a.year-b.year);
-const people=()=>recordList('person-ref').sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
+const storedPeople=()=>recordList('person-ref');
+const people=()=>mergePersonReferences(storedPeople(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
 const boats=()=>recordList('boat-ref').sort((a,b)=>a.name.localeCompare(b.name,'sv'));
 const personLinks=()=>recordList('race-person-link');
 const peopleMap=()=>new Map(people().map(item=>[item.external_id,item]));
@@ -207,7 +210,7 @@ async function registerServiceWorker(){if(!('serviceWorker'in navigator)||locati
 async function completeOAuthCallbackIfNeeded(){const url=new URL(location.href);if(!url.searchParams.has('code')&&!url.searchParams.has('error'))return;const token=await completeDropboxOAuth();accessToken=token.access_token;accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000;if(token.refresh_token)await store.putMeta(TOKEN_META,token.refresh_token);for(const parameter of ['code','state','error','error_description'])url.searchParams.delete(parameter);history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`)}
 async function currentAccessToken(){if(accessToken&&Date.now()<accessTokenExpiresAt)return accessToken;const refreshToken=await store.getMeta(TOKEN_META);if(!refreshToken||!DROPBOX_CLIENT_ID||navigator.onLine===false)return null;const token=await exchangeDropboxRefreshToken({clientId:DROPBOX_CLIENT_ID,refreshToken});accessToken=token.access_token;accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000;if(token.refresh_token&&token.refresh_token!==refreshToken)await store.putMeta(TOKEN_META,token.refresh_token);return accessToken}
 async function uploadBootstrapOps(transport){const pending=await store.getMeta(BOOTSTRAP_META);if(!pending?.pending)return 0;const deviceIds=new Set(pending.device_ids||[pending.device_id]);const operations=(await store.getAllOps()).filter(operation=>deviceIds.has(operation.device_id));const byDevice=new Map();for(const operation of operations){if(!byDevice.has(operation.device_id))byDevice.set(operation.device_id,[]);byDevice.get(operation.device_id).push(operation)}let uploaded=0;for(const deviceOperations of byDevice.values()){deviceOperations.sort((a,b)=>a.seq-b.seq);for(let index=0;index<deviceOperations.length;index+=250){const batch=createBatch(deviceOperations.slice(index,index+250));await transport.putBatch(batch);uploaded+=batch.ops.length}}await store.putMeta(BOOTSTRAP_META,{...pending,pending:false,uploaded_at:new Date().toISOString()});return uploaded}
-async function syncNow(){if(syncPromise)return syncPromise;syncPromise=(async()=>{const hasCredential=Boolean(await store.getMeta(TOKEN_META));if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}resultaten finns lokalt`,'warning');return null}const token=await currentAccessToken();if(!token){setStatus('Lokal master · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}connectButton.textContent='Synka Dropbox';setStatus('Synkar resultaten…');const transport=new DropboxTransport({accessToken:token,id:'dropbox-korpholmenrunt',opsRoot:'/korpholmenrunt/ops'});const bootstrap=await uploadBootstrapOps(transport);const result=await new SyncEngine({repository,transport}).syncOnce();render();setStatus(`Synkad · ${results().length} resultat · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokal master tillgänglig','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});return syncPromise}
+async function syncNow(){if(syncPromise)return syncPromise;syncPromise=(async()=>{const hasCredential=Boolean(await store.getMeta(TOKEN_META));if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}resultaten finns lokalt`,'warning');return null}const token=await currentAccessToken();if(!token){setStatus('Lokal master · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}connectButton.textContent='Synka Dropbox';setStatus('Synkar resultaten och läser Matrikel…');const transport=new DropboxTransport({accessToken:token,id:'dropbox-korpholmenrunt',opsRoot:'/korpholmenrunt/ops'});const bootstrap=await uploadBootstrapOps(transport);const result=await new SyncEngine({repository,transport}).syncOnce();await matrikelMaster.sync(new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/matrikel/ops',readOnly:true}));render();setStatus(`Synkad · ${results().length} resultat · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · namn från Matrikel`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokal master tillgänglig','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});return syncPromise}
 async function connectDropbox(){sessionStorage.setItem('korpholmen:oauth-return',new URL('korpholmenrunt/',redirectUri()).pathname);const attempt=await beginDropboxOAuth({clientId:DROPBOX_CLIENT_ID,redirectUri:redirectUri(),scopes:DROPBOX_SCOPES});location.assign(attempt.url)}
 async function bootstrapLocal(){if(!isSourceTree)throw new Error('Startkopian kan bara aktiveras från källappen');const response=await fetch(LOCAL_BOOTSTRAP_URL,{cache:'no-store'});if(!response.ok)throw new Error(`Startkopian kunde inte läsas (${response.status})`);const data=await response.json();if(data.operations_version!==1||!Array.isArray(data.operations))throw new Error('Startkopian har fel format');data.operations.forEach(validateOperation);await repository.applyRemoteOps(data.operations);await store.putMeta(BOOTSTRAP_META,{pending:true,device_id:data.device_id,device_ids:data.device_ids||[data.device_id],migration_id:data.migration_id,operations:data.operations.length});render();setStatus('Aktuell källmaster inläst lokalt · anslut Dropbox för uppladdning','ok')}
 
@@ -234,5 +237,5 @@ app.addEventListener('input',event=>runInlineUpdate(event.target));
 app.addEventListener('change',event=>{if(event.target.id==='duel-a'){ui.duelA=event.target.value;render()}if(event.target.id==='duel-b'){ui.duelB=event.target.value;render()}runInlineUpdate(event.target,true)});
 window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-runt'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='profiler';ui.profile=`person:${params.get('person')}`}if(params.has('boat')){ui.view='profiler';ui.profile=`boat:${params.get('boat')}`}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-runt'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='profiler';ui.profile=`person:${params.get('person')}`}if(params.has('boat')){ui.view='profiler';ui.profile=`boat:${params.get('boat')}`}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

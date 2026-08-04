@@ -8,6 +8,8 @@ Lokal-först-app för Korpholmens Båtklubbs medlems- och båthistorik. Appen
 bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
 godkända förekomster till Matrikelns stabila person-ID och Båtregistrets
 stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
+Normaliserade vyer läser personens aktuella namn skrivskyddat från Matrikel;
+`person_name_raw` och källayouten förblir bundna till den historiska utgåvan.
 
 Mastern omfattar 14 årsvisa originalmatriklar från juli 1980 till augusti
 2025, inklusive den tvåsidiga medlemsmatrikeln 2010. Före dessa ligger en

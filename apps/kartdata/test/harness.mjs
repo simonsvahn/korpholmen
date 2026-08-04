@@ -70,7 +70,7 @@ await test('fastighetskopplingarna pekar bara på de 31 validerade referenserna'
   assert.ok(links.every(link => entries.has(link.entry_id) && refs.has(link.property_id)));
 });
 
-await test('nulägesägare skiljer säkra Matrikel-personer från externa parter utan namnmatchningsgissning', () => {
+await test('den äldre ägarreferensmigreringen är bevarad som fullständig fallback', () => {
   assert.equal(rows('property-owner-link').length, 52);
   assert.equal(rows('person-ref').length, 28);
   assert.equal(rows('external-party').length, 23);
@@ -109,8 +109,12 @@ await test('borttagning av en ö tar även bort dess ökopplingar men inte datap
 await test('appen visar bara Data och de strukturerade sakfälten', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
   for (const forbidden of ['Ordagrann källuppgift', 'Tidigare arbetsförslag', 'Godkänt visningsnamn', 'Granskningsnot', 'Käll-ID:n']) assert.ok(!app.includes(forbidden), forbidden);
-  for (const required of ["recordList('data-entry')", "recordList('data-entry-island-link')", "recordList('data-entry-property-link')", "recordList('property-owner-link')", '<h3>Data</h3>', '>Namn<input', '>Ö<select']) assert.ok(app.includes(required), required);
-  assert.ok(app.includes('bootstrapCurrentOwners'));
+  for (const required of ["recordList('data-entry')", "recordList('data-entry-island-link')", "recordList('data-entry-property-link')", 'resolveCurrentOwners(propertyId, fastigheterMaster, matrikelMaster)', '<h3>Data</h3>', '>Namn<input', '>Ö<select']) assert.ok(app.includes(required), required);
+  assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'fastigheter' })"));
+  assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'matrikel' })"));
+  assert.ok(app.includes("opsRoot: '/fastigheter/ops', readOnly: true"));
+  assert.ok(app.includes("opsRoot: '/matrikel/ops', readOnly: true"));
+  assert.ok(!app.includes('bootstrapCurrentOwners'));
   assert.ok(!html.includes('value="kartsymbol"')); assert.ok(!html.includes('value="annat"')); assert.ok(html.includes('Exportera data'));
 });
 
@@ -130,6 +134,9 @@ await test('exportkoden använder v2-format och utesluter arkivposterna', async 
   assert.ok(!app.includes("recordList('map-entry')"));
   assert.ok(!app.includes('source_current_owner'));
   assert.ok(!app.includes('prior_correction'));
+  assert.ok(app.includes('read_projection'));
+  assert.ok(!app.includes('person_refs:'));
+  assert.ok(!app.includes('external_parties:'));
 });
 
 await test('publiceringsbygget är datafritt och har den rena appkoden', async () => {
@@ -139,9 +146,9 @@ await test('publiceringsbygget är datafritt och har den rena appkoden', async (
   assert.ok(publishedApp.includes("../core/data-layer.js")); assert.ok(publishedApp.includes("recordList('data-entry')")); assert.ok(!publishedHtml.includes('Lilla Kryllbo')); assert.ok(!publishedApp.includes('Korpholmens Tomtägareförening'));
 });
 
-await test('arkitekturen dokumenterar v2-gränsen och externa ägarparter', async () => {
+await test('arkitekturen dokumenterar v2-gränsen och skrivskyddade masterläsningar', async () => {
   const model = await readFile(resolve(ROOT, 'DATAMODELL.md'), 'utf8'); const architecture = await readFile(resolve(REPO, 'ARKITEKTUR.md'), 'utf8');
-  assert.match(model, /äldre importen.*v1-arkiv/s); assert.match(model, /external-party/); assert.match(model, /current-owner-assessment/); assert.match(architecture, /Kartdata v2 använder `data-entry`/);
+  assert.match(model, /äldre importen.*v1-arkiv/s); assert.match(model, /skrivskyddat/); assert.match(model, /current-owner-assessment/); assert.match(architecture, /Kartdata v2 använder `data-entry`/); assert.match(architecture, /Ett namnbyte görs alltså en gång i Matrikel/);
 });
 
 console.log(`\n${passed} Kartdata-v2-kontrakt godkända.`);

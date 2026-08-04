@@ -8,6 +8,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_PATH = resolve(ROOT, 'privat/kallkopior/fastighetshistorik.json');
 const OUT = resolve(ROOT, 'privat/migrering-2026-08-02');
 const MATRIKEL = resolve(ROOT, '../matrikel/privat/migrering-2026-08-01');
+const MATRIKEL_EXTERNAL = resolve(ROOT, '../matrikel/privat/korrigeringar/2026-08-04-externa-fastighetsagare.json');
 const DEVICE = 'migration-fastigheter-full-2026-08-02';
 const CLOCK_MS = 1785690000000;
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -73,8 +74,10 @@ function parseManualText(text) {
 await mkdir(OUT, { recursive: true });
 const sourceText = await readFile(SOURCE_PATH, 'utf8');
 const source = JSON.parse(sourceText);
-const matrikelDocs = await Promise.all(['initial-ops.json', 'ui-metadata-ops.json', 'approved-excel-ops.json']
-  .map(file => readJson(resolve(MATRIKEL, file))));
+const matrikelDocs = await Promise.all([
+  ...['initial-ops.json', 'ui-metadata-ops.json', 'approved-excel-ops.json'].map(file => readJson(resolve(MATRIKEL, file))),
+  readJson(MATRIKEL_EXTERNAL),
+]);
 const matrikel = materialize(matrikelDocs.flatMap(document => document.operations));
 const people = new Map(matrikel.listEntities('person').map(entity => [entity.entity_id, { id: entity.entity_id, ...entity.fields }]));
 const properties = matrikel.listEntities('property').map(entity => ({ id: entity.entity_id, ...entity.fields }));

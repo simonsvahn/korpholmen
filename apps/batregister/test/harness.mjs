@@ -62,10 +62,33 @@ await test('startmastern och rättelserna innehåller 171 båtar och giltiga ope
   correctionOperations.forEach(validateOperation);
   assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
   assert.equal(state.listEntities('boat').length,171);
-  assert.equal(state.listEntities('boat-person-link').length,173);
+  assert.equal(state.listEntities('boat-person-link').length,176);
   assert.ok(state.listEntities('family').length>4);
   assert.equal(state.listEntities('boat-family-link').length,9);
   for(const family of decisions.families)assert.ok(state.listEntities('family').some(entity=>entity.entity_id===family.id),family.id);
+});
+
+await test('Sommarsol och Neretnieks Majsol hålls isär med källkritiskt registreringsår',()=>{
+  const holm=state.getEntity('boat','majsol_holm');
+  const neretnieks=state.getEntity('boat','majsol_neretnieks');
+  assert.equal(holm.fields.namn,'Majsol');
+  assert.deepEqual(holm.fields.tidigare_namn,['Sommarsol']);
+  assert.equal(holm.fields.typ,'S/S');
+  assert.equal(holm.fields.modell,'Örnjolle');
+  assert.equal(holm.fields.dopar,null);
+  assert.equal(holm.fields.ar,2013);
+  assert.ok(holm.fields.period.includes('registrerad 2013'));
+  assert.ok(holm.fields.period.includes('tidpunkter är okända'));
+  assert.equal(holm.fields.agare,'Inger Bethge → Anna Holm');
+  assert.equal(neretnieks.fields.typ,'S/S');
+  assert.equal(neretnieks.fields.ar,null);
+  assert.ok(neretnieks.fields.period.includes('1975/77'));
+  assert.ok(neretnieks.fields.period.includes('händelsetidpunkt okänd'));
+  assert.ok(neretnieks.fields.agarkedja.every(item=>item.ar===null));
+  assert.ok(state.getEntity('boat-person-link','majsol_holm--ingerbethge'));
+  assert.equal(state.getEntity('boat-person-link','majsol_holm--annaholm').fields.role,'ägare enligt uppgift registrerad 2013 (ägarbytets tidpunkt okänd)');
+  assert.ok(state.getEntity('boat-person-link','majsol_neretnieks--ivarsneretnieks'));
+  assert.ok(state.getEntity('boat-person-link','majsol_neretnieks--margaretaneretnieks'));
 });
 
 await test('de två bekräftade Korpholmen runt-farkosterna är källspårbara utan påstått ägarskap',()=>{
@@ -141,6 +164,9 @@ await test('Dropbox-namnrymden skiljer Båtregister från Matrikeln',async()=>{
   assert.ok(transport.includes("opsRoot = '/ops'"));
   assert.ok(app.includes("opsRoot: '/batregister/ops'"));
   assert.ok(app.includes("opsRoot:'/matrikel/ops'"));
+  assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
+  assert.ok(app.includes("new ReadOnlyMaster({store,cacheKey:'matrikel'})"));
+  assert.ok(app.includes('personNameForLink(link)'));
 });
 
 await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{

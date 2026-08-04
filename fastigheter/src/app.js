@@ -1,7 +1,7 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  MemoryStore,
+  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
@@ -9,6 +9,7 @@ import {
   createBatch,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  resolvePartyName,
   validateOperation,
 } from '../core/data-layer.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
@@ -24,7 +25,6 @@ const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/fastigheter/');
 const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:fastigheter-full-2026-08-02';
-const MATRIKEL_PEOPLE_META = 'cache:fastigheter-matrikel-people';
 const DATE_FIELDS = ['contract_date', 'possession_date', 'application_date', 'survey_date', 'approval_date', 'date_text'];
 const DATE_LABELS = {
   contract_date: 'Köpe-/kontraktsdag', possession_date: 'Tillträde', application_date: 'Ansökan',
@@ -37,7 +37,7 @@ let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
 let selectedPropertyId = null;
-let matrikelPeople = [];
+let matrikelMaster;
 const ui = { search: '', island: '', audit: '', view: 'properties', yearFrom: '', yearTo: '' };
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -97,14 +97,14 @@ function currentOwners(propertyId) {
   const assessment = currentOwnerFor(propertyId);
   if (!assessment) return { names: [], basis: null, reviewedOn: null };
   const parties = new Map(partyRecords().map(party => [party.id, party]));
-  return { names: (assessment.owner_party_ids || []).map(id => parties.get(id)?.name || id), basis: assessment.basis, reviewedOn: assessment.reviewed_on };
+  return { names: (assessment.owner_party_ids || []).map(id => resolvePartyName(parties.get(id), matrikelMaster) || id), basis: assessment.basis, reviewedOn: assessment.reviewed_on };
 }
 function propertySearchText(property) {
   return [property.id, property.display_name, property.island, ...currentOwners(property.id).names,
     ...eventsFor(property.id).flatMap(event => [event.label, event.notes]),
     ...eventClaimsFor(property.id).flatMap(event => [event.label, event.notes, event.date_text]),
     ...holdingClaimsFor(property.id).flatMap(claim => [claim.holder_text, claim.role, claim.period_text, claim.raw_text]),
-    ...communityFor(property.id).map(link => link.person_display_name),
+    ...communityFor(property.id).map(link => matrikelMaster?.getEntity('person', link.person_id)?.fields.display_name || link.person_display_name),
     auditFor(property.id)?.summary].join(' ');
 }
 function filteredProperties() {
@@ -211,7 +211,7 @@ function renderDrawer(id) {
     <section class="drawer-section"><h3>Källgranskning</h3>${audit ? `<p>${auditChip(audit)}</p><p>${escapeHtml(audit.summary)}</p><p><small>Jämförda källor: ${escapeHtml((audit.compared_source_ids || []).join(', '))}</small></p>` : '<p>Ingen granskningspost.</p>'}</section>
     <section class="drawer-section"><h3>Bäst kända nuvarande ägare</h3>${current.names.length ? `<p><b>${escapeHtml(current.names.join(', '))}</b></p><p class="section-help">${escapeHtml(current.basis || '')}${current.reviewedOn ? ` · granskat ${escapeHtml(current.reviewedOn)}` : ''}</p>` : '<p>Ingen tillräckligt säker nulägesbedömning.</p>'}</section>
     <section class="drawer-section"><h3>Observerade lagfarna ägare</h3><p class="section-help">Historiskt källager. Datumet är när registret lästes, inte automatiskt när förvärvet skedde.</p>
-      ${observations.map(item => `<div class="history-row"><time>${escapeHtml(item.observed_on)}</time><div><b>${(item.owner_party_ids || []).map(partyId => escapeHtml(parties.get(partyId)?.name || partyId)).join(', ') || 'Ägare ej tillgänglig'}</b><br><small>${escapeHtml(item.source_id)}${item.notes ? ` · ${escapeHtml(item.notes)}` : ''}</small></div></div>`).join('') || '<p>Ingen registerobservation.</p>'}
+      ${observations.map(item => `<div class="history-row"><time>${escapeHtml(item.observed_on)}</time><div><b>${(item.owner_party_ids || []).map(partyId => escapeHtml(resolvePartyName(parties.get(partyId), matrikelMaster) || partyId)).join(', ') || 'Ägare ej tillgänglig'}</b><br><small>${escapeHtml(item.source_id)}${item.notes ? ` · ${escapeHtml(item.notes)}` : ''}</small></div></div>`).join('') || '<p>Ingen registerobservation.</p>'}
     </section>
     <section class="drawer-section"><h3>Belagda händelser och transaktioner</h3>${events.map(event => `<article class="event-card"><div><span class="claim-kind belagd">belagd</span><time>${escapeHtml(eventDate(event))}</time><h4>${escapeHtml(event.label)}</h4><ul>${dateRoleList(event)}</ul>${event.amount ? `<p><b>${Number(event.amount).toLocaleString('sv-SE')} ${escapeHtml(event.currency || '')}</b>${event.area_ha ? ` · ${event.area_ha} ha` : ''}</p>` : ''}${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ''}<small>${escapeHtml((event.source_ids || []).join(', '))}</small></div><button type="button" data-delete-event="${escapeHtml(event.id)}">Ta bort</button></article>`).join('') || '<p>Inga fullt belagda händelser.</p>'}
       <form id="new-event-form" class="entry-form"><h4>Ny händelse</h4><label>Typ<input name="type" required placeholder="överlåtelse, arv, avstyckning …"></label><label class="span-2">Rubrik<input name="label" required></label><label>Kontraktsdatum<input name="contract_date" type="date"></label><label>Tillträdesdatum<input name="possession_date" type="date"></label><label>Ansökningsdatum<input name="application_date" type="date"></label><label>Fastställelsedatum<input name="approval_date" type="date"></label><label>Belopp (SEK)<input name="amount" inputmode="decimal"></label><label class="span-2">Not<input name="notes"></label><button class="primary" type="submit">Lägg till händelse</button></form>
@@ -219,10 +219,10 @@ function renderDrawer(id) {
     <section class="drawer-section"><h3>Historiska händelseuppgifter</h3><p class="section-help">Dessa poster är nu fullt strukturerade och sökbara, men kan vara ungefärliga, motstridiga eller härledda ur kedjans ordning.</p>
       ${eventClaims.map(event => `<article class="event-card claim-card"><div><span class="claim-kind uppgift">uppgift</span><time>${escapeHtml(eventDate(event))}</time><h4>${escapeHtml(event.label)}</h4>${event.amount ? `<p><b>${Number(event.amount).toLocaleString('sv-SE')} ${escapeHtml(event.currency || '')}</b></p>` : ''}<p><small>${escapeHtml(event.type)} · ${escapeHtml(event.verification_status)} · ${escapeHtml(event.certainty)}</small></p>${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ''}<small>${escapeHtml((event.source_ids || []).join(', '))}${event.source_locators?.length ? ` · ${escapeHtml(event.source_locators.join('; '))}` : ''}</small></div></article>`).join('') || '<p>Inga händelseuppgifter.</p>'}
     </section>
-    <section class="drawer-section"><h3>Innehav och roller</h3>${holdings.map(holding => `<div class="history-row"><time>${escapeHtml(holding.start_date || holding.observed_on || 'odaterat')}</time><div><b>${escapeHtml(parties.get(holding.party_id)?.name || holding.name || holding.party_id)}</b><br><small>${escapeHtml(holding.role)} · ${escapeHtml(holding.certainty || holding.basis || '')}</small></div></div>`).join('')}
+    <section class="drawer-section"><h3>Innehav och roller</h3>${holdings.map(holding => `<div class="history-row"><time>${escapeHtml(holding.start_date || holding.observed_on || 'odaterat')}</time><div><b>${escapeHtml(resolvePartyName(parties.get(holding.party_id), matrikelMaster) || holding.name || holding.party_id)}</b><br><small>${escapeHtml(holding.role)} · ${escapeHtml(holding.certainty || holding.basis || '')}</small></div></div>`).join('')}
       <form id="new-holding-form" class="entry-form"><h4>Nytt innehav eller bruk</h4><label class="span-2">Person/part<input name="name" required></label><label>Roll<select name="role"><option>ägare</option><option>lagfaren ägare</option><option>hyresgäst</option><option>brukare</option><option>arrendator</option><option>dödsbo</option></select></label><label>Från<input name="start_date" type="date"></label><label>Till<input name="end_date" type="date"></label><label>Observerad<input name="observed_on" type="date"></label><button class="primary" type="submit">Lägg till innehav</button></form>
     </section>
-    <section class="drawer-section"><h3>Kopplingar</h3><p>${relationsFor(id).map(relation => escapeHtml(`${relation.from_id} → ${relation.to_property_id}: ${relation.relation} (${relation.certainty})`)).join('<br>') || 'Ingen kadastral relation.'}</p><h4>Fastighetsgemenskap i Matrikeln</h4><p class="section-help">Dessa kopplingar betyder anknytning till fastigheten, inte lagfart.</p><p>${links.map(link => `<a href="../matrikel/?person=${encodeURIComponent(link.person_id)}">${escapeHtml(link.person_display_name)}</a>`).join(', ') || 'Inga personkopplingar.'}</p></section>
+    <section class="drawer-section"><h3>Kopplingar</h3><p>${relationsFor(id).map(relation => escapeHtml(`${relation.from_id} → ${relation.to_property_id}: ${relation.relation} (${relation.certainty})`)).join('<br>') || 'Ingen kadastral relation.'}</p><h4>Fastighetsgemenskap i Matrikeln</h4><p class="section-help">Dessa kopplingar betyder anknytning till fastigheten, inte lagfart.</p><p>${links.map(link => `<a href="../matrikel/?person=${encodeURIComponent(link.person_id)}">${escapeHtml(matrikelMaster?.getEntity('person', link.person_id)?.fields.display_name || link.person_display_name)}</a>`).join(', ') || 'Inga personkopplingar.'}</p></section>
     <section class="drawer-section"><h3>Källor</h3><ul>${unique([...events.flatMap(event => event.source_ids || []), ...eventClaims.flatMap(event => event.source_ids || []), ...holdings.flatMap(holding => holding.source_ids || []), ...holdingClaims.flatMap(holding => holding.source_ids || []), ...(audit?.compared_source_ids || [])]).map(sourceId => `<li><b>${escapeHtml(sourceId)}</b> — ${escapeHtml(sources.get(sourceId)?.label || '')}</li>`).join('')}</ul></section>`;
   drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false;
 }
@@ -287,10 +287,8 @@ async function uploadBootstrapOps(transport) {
 }
 async function loadMatrikelPeople(token) {
   if (!token) return [];
-  const repo = await new Repository({ store: new MemoryStore(), deviceId: 'fastigheter-matrikel-read' }).init();
-  await new SyncEngine({ repository: repo, transport: new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops' }) }).downloadRemote();
-  matrikelPeople = repo.listEntities('person').map(entity => ({ id: entity.entity_id, ...entity.fields }));
-  await store.putMeta(MATRIKEL_PEOPLE_META, matrikelPeople); return matrikelPeople;
+  const result = await matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true }));
+  return result;
 }
 async function syncNow() {
   if (syncPromise) return syncPromise;
@@ -301,7 +299,7 @@ async function syncNow() {
     connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar…');
     const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter', opsRoot: '/fastigheter/ops' });
     const bootstrap = await uploadBootstrapOps(transport); const result = await new SyncEngine({ repository, transport }).syncOnce();
-    if (!matrikelPeople.length) await loadMatrikelPeople(token).catch(error => console.warn('Matrikelpersoner kunde inte hämtas', error));
+    await loadMatrikelPeople(token).catch(error => console.warn('Matrikelpersoner kunde inte hämtas', error));
     render(); setStatus(`Synkad · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok'); return result;
   })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; });
   return syncPromise;
@@ -338,7 +336,7 @@ window.addEventListener('online', () => syncNow().catch(() => {})); window.addEv
 async function init() {
   const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB({ name: 'korpholmen-fastigheter' }); store = new IndexedDBStore(db);
-  repository = await new Repository({ store, deviceId: deviceId() }).init(); matrikelPeople = await store.getMeta(MATRIKEL_PEOPLE_META) || [];
+  repository = await new Repository({ store, deviceId: deviceId() }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
   bootstrapButton.hidden = !isSourceTree; render(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });

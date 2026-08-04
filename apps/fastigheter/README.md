@@ -36,6 +36,11 @@ Matrikeln är fortsatt master för personer. De 137 importerade
 person–fastighetskopplingarna heter `community-link` och betyder
 **fastighetsgemenskap**, inte juridiskt ägande.
 
+Fastighetsappen läser Matrikel skrivskyddat. Parten behåller sin historiska
+eller juridiska namnform i Fastigheter, men den normala personvisningen använder
+Matrikelns aktuella namn. Externa nuvarande personägare får egna, separata
+person-ID:n; de slås aldrig ihop med en befintlig person genom namnlikhet.
+
 ## Källgranskad startmaster
 
 Den privata, redigerbara källkopian finns i
@@ -58,6 +63,7 @@ Bygg om och verifiera med:
 ```sh
 npm run build:migration
 npm run build:current-owners
+npm run build:person-master
 npm test
 ```
 
@@ -71,3 +77,8 @@ kärna — aldrig startmaster, ägarnamn eller forskningsdata.
 En granskad nulägesändring förs till den levande mastern append-only med
 `npm run seed:current-owners`. Kommandot skriver bara den särskilda
 nulägesmigrationen och rör inte historiska observationer.
+
+Den granskade engångskopplingen för externa nuvarande personägare byggs och
+skrivs med `npm run build:person-master` respektive
+`npm run seed:person-master`. Den skapar nya person-ID:n i Matrikel och länkar
+Fastigheters parter till dem, utan namnmatchning.

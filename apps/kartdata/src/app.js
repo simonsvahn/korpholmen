@@ -1,15 +1,18 @@
 import {
   DropboxTransport,
   IndexedDBStore,
+  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
+  resolveCurrentOwners,
+  resolvePropertyReferences,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
-import { CLEAN_V2_BOOTSTRAP_URL, CURRENT_OWNER_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
+import { CLEAN_V2_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
 import {
   OBJECT_CLASSES,
   REVIEW_STATUSES,
@@ -34,10 +37,11 @@ const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/kartdata/');
 const TOKEN_META = 'dropbox:refresh-token';
 const CLEAN_V2_META = 'bootstrap:kartdata-clean-v2-2026-08-04';
-const CURRENT_OWNER_META = 'bootstrap:kartdata-current-owners-2026-08-04';
 
 let store;
 let repository;
+let fastigheterMaster;
+let matrikelMaster;
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
@@ -56,10 +60,11 @@ const islandRecords = () => recordList('place').filter(place => place.subtype ==
 const nameRecords = () => recordList('name-record');
 const islandLinks = () => recordList('data-entry-island-link');
 const entryPropertyLinks = () => recordList('data-entry-property-link');
-const propertyRefs = () => recordList('property-ref').sort((a, b) => String(a.external_id || '').localeCompare(String(b.external_id || ''), 'sv', { numeric: true }));
-const ownerLinks = () => recordList('property-owner-link').filter(link => link.basis === 'best-known-current');
-const personRefs = () => recordList('person-ref');
-const externalParties = () => recordList('external-party');
+const legacyPropertyRefs = () => recordList('property-ref');
+const propertyRefs = () => resolvePropertyReferences(fastigheterMaster, legacyPropertyRefs()).sort((a, b) => String(a.external_id || '').localeCompare(String(b.external_id || ''), 'sv', { numeric: true }));
+const legacyOwnerLinks = () => recordList('property-owner-link').filter(link => link.basis === 'best-known-current');
+const legacyPersonRefs = () => recordList('person-ref');
+const legacyExternalParties = () => recordList('external-party');
 const placeRelations = () => recordList('place-relation');
 const oldPropertyLinks = () => recordList('object-property-link');
 const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
@@ -77,11 +82,18 @@ function islandForEntry(entryId) {
 }
 function propertyIdsForEntry(entryId) { return entryPropertyLinks().filter(link => link.entry_id === entryId).map(link => link.property_id).sort((a, b) => a.localeCompare(b, 'sv', { numeric: true })); }
 function propertyRefById(propertyId) { return propertyRefs().find(item => item.external_id === propertyId) || null; }
-function ownerRef(link) {
-  if (link.owner_type === 'person-ref') return personRefs().find(item => item.external_id === link.owner_id) || null;
-  return externalParties().find(item => item.external_id === link.owner_id) || null;
+function legacyOwnersForProperty(propertyId) {
+  return legacyOwnerLinks().filter(link => link.property_id === propertyId).map(link => {
+    const ref = link.owner_type === 'person-ref'
+      ? legacyPersonRefs().find(item => item.external_id === link.owner_id)
+      : legacyExternalParties().find(item => item.external_id === link.owner_id);
+    return ref ? { ...link, display_name: ref.display_name, url: ref.url || '#', source_master: ref.source_master, party_type: ref.party_type } : null;
+  }).filter(Boolean);
 }
-function ownersForProperty(propertyId) { return ownerLinks().filter(link => link.property_id === propertyId).map(link => ({ ...link, ref: ownerRef(link) })).filter(item => item.ref); }
+function ownersForProperty(propertyId) {
+  if (fastigheterMaster?.listEntities('property').length) return resolveCurrentOwners(propertyId, fastigheterMaster, matrikelMaster);
+  return legacyOwnersForProperty(propertyId);
+}
 function ownersForEntry(entryId) { return propertyIdsForEntry(entryId).flatMap(propertyId => ownersForProperty(propertyId).map(owner => ({ ...owner, property_id: propertyId }))); }
 function namesForIsland(islandId) { return nameRecords().filter(record => record.target_type === 'place' && record.target_id === islandId); }
 
@@ -90,7 +102,7 @@ function entrySearchText(entry) {
   const properties = propertyIdsForEntry(entry.id);
   const owners = ownersForEntry(entry.id);
   return [entry.id, entry.name, entry.object_type, entry.subtype, entry.review_status, island?.preferred_name,
-    ...properties, ...owners.map(owner => owner.ref.display_name)].filter(Boolean).join(' ');
+    ...properties, ...owners.map(owner => owner.display_name)].filter(Boolean).join(' ');
 }
 function compareEntries(a, b) {
   const compare = (x, y) => String(x || '').localeCompare(String(y || ''), 'sv', { numeric: true });
@@ -132,7 +144,7 @@ function ownerChipsForProperties(propertyIds) {
   const owners = propertyIds.flatMap(propertyId => ownersForProperty(propertyId).map(owner => ({ ...owner, property_id: propertyId })));
   if (!owners.length) return '<span class="muted">Ingen tillräckligt säker ägaruppgift</span>';
   const seen = new Set();
-  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.ref.url || '#')}" title="${escapeAttribute(`${owner.property_id} · bäst kända nuvarande ägare`)}"><strong>${escapeHtml(owner.ref.display_name)}</strong><small>${owner.owner_type === 'external-party' ? 'extern part' : 'Matrikeln'}</small></a>`).join('');
+  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'party' || owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.url || '#')}" title="${escapeAttribute(`${owner.property_id} · bäst kända nuvarande ägare`)}"><strong>${escapeHtml(owner.display_name)}</strong><small>${owner.owner_type === 'person' || owner.owner_type === 'person-ref' ? 'Matrikeln' : 'extern part'}</small></a>`).join('');
 }
 function ownerChips(entryId) { return ownerChipsForProperties(propertyIdsForEntry(entryId)); }
 function entryCard(entry) {
@@ -291,10 +303,14 @@ function exportData() {
   const payload = {
     format: 'korpholmen-kartdata-v2', exported_at: new Date().toISOString(),
     islands: islandRecords().map(island => ({ id: island.id, name: island.preferred_name, review_status: island.review_status, valid_from: island.valid_from || null, valid_to: island.valid_to || null, names: namesForIsland(island.id).filter(name => name.name_type !== 'föredraget').map(name => ({ name: name.name, name_type: name.name_type, review_status: name.review_status, valid_from: name.valid_from || null, valid_to: name.valid_to || null })) })),
-    entries: entryRecords().map(entry => ({ id: entry.id, name: entry.name, object_type: entry.object_type, subtype: entry.subtype || null, review_status: entry.review_status, island_id: islandForEntry(entry.id)?.id || null, property_ids: propertyIdsForEntry(entry.id), owners: ownersForEntry(entry.id).map(owner => ({ property_id: owner.property_id, owner_type: owner.owner_type, owner_id: owner.owner_id, display_name: owner.ref.display_name, basis: owner.basis, reviewed_on: owner.reviewed_on || null })) })),
-    property_refs: propertyRefs().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, source_master: ref.source_master })),
-    person_refs: personRefs().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, source_master: ref.source_master })),
-    external_parties: externalParties().map(ref => ({ external_id: ref.external_id, display_name: ref.display_name, party_type: ref.party_type, source_master: ref.source_master })),
+    entries: entryRecords().map(entry => ({ id: entry.id, name: entry.name, object_type: entry.object_type, subtype: entry.subtype || null, review_status: entry.review_status, island_id: islandForEntry(entry.id)?.id || null, property_ids: propertyIdsForEntry(entry.id) })),
+    read_projection: {
+      note: 'Skrivskyddad nulägesprojektion. Fastigheter och personer ändras i sina ägarmastrar.',
+      current_owners: unique(entryRecords().flatMap(entry => ownersForEntry(entry.id)).map(owner => `${owner.property_id}\u0000${owner.owner_type}\u0000${owner.owner_id}`)).map(key => {
+        const [propertyId, ownerType, ownerId] = key.split('\u0000'); const owner = ownersForProperty(propertyId).find(item => item.owner_type === ownerType && item.owner_id === ownerId);
+        return { property_id: propertyId, owner_type: ownerType, owner_id: ownerId, display_name: owner?.display_name || ownerId, basis: owner?.basis || null, reviewed_on: owner?.reviewed_on || null };
+      }),
+    },
   };
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `kartdata-v2-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url);
 }
@@ -304,7 +320,10 @@ async function completeOAuthCallbackIfNeeded() { const url = new URL(location.hr
 async function currentAccessToken() { if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken; const refreshToken = await store.getMeta(TOKEN_META); if (!refreshToken || !DROPBOX_CLIENT_ID || navigator.onLine === false) return null; const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken }); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token); return accessToken; }
 async function syncNow() {
   if (syncPromise) return syncPromise;
-  syncPromise = (async () => { const hasCredential = Boolean(await store.getMeta(TOKEN_META)); if (navigator.onLine === false) { setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning'); return null; } const token = await currentAccessToken(); if (!token) { setStatus('Lokalt sparat · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; } connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar…'); const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata', opsRoot: '/kartdata/ops' }); const result = await new SyncEngine({ repository, transport }).syncOnce(); render(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
+  syncPromise = (async () => { const hasCredential = Boolean(await store.getMeta(TOKEN_META)); if (navigator.onLine === false) { setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning'); return null; } const token = await currentAccessToken(); if (!token) { setStatus('Lokalt sparat · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; } connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar Kartdata och läser mastrar…'); const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata', opsRoot: '/kartdata/ops' }); const result = await new SyncEngine({ repository, transport }).syncOnce(); await Promise.all([
+    fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
+    matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
+  ]); render(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned · ägare från Fastigheter`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
 }
 async function connectDropbox() { sessionStorage.setItem('korpholmen:oauth-return', new URL('kartdata/', redirectUri()).pathname); const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES }); location.assign(attempt.url); }
 async function bootstrapCleanV2({ force = false } = {}) {
@@ -314,14 +333,6 @@ async function bootstrapCleanV2({ force = false } = {}) {
   const document = await response.json(); if (document.operations_version !== 1 || !Array.isArray(document.operations)) throw new Error('V2-kopian har fel format');
   document.operations.forEach(validateOperation); await repository.applyRemoteOps(document.operations); await store.putMeta(CLEAN_V2_META, { applied: true, preview_only: true, migration_id: document.migration_id, operations: document.operations.length }); render(); setStatus(`${entryRecords().length} rena dataposter inlästa lokalt`, 'ok'); return true;
 }
-async function bootstrapCurrentOwners({ force = false } = {}) {
-  if (!isSourceTree) return false;
-  if (!force && (await store.getMeta(CURRENT_OWNER_META))?.applied) return false;
-  const response = await fetch(CURRENT_OWNER_BOOTSTRAP_URL, { cache: 'no-store' }); if (!response.ok) throw new Error(`Nulägesägarna kunde inte läsas (${response.status})`);
-  const document = await response.json(); if (document.migration_id !== '2026-08-04-kartdata-current-owners' || !Array.isArray(document.operations)) throw new Error('Nulägesägarnas kopia har fel format');
-  document.operations.forEach(validateOperation); await repository.applyRemoteOps(document.operations); await store.putMeta(CURRENT_OWNER_META, { applied: true, preview_only: true, migration_id: document.migration_id, operations: document.operations.length }); render(); return true;
-}
-
 content.addEventListener('click', event => { const island = event.target.closest('[data-island-id]'); if (island) { openIslandDrawer(island.dataset.islandId); return; } if (event.target.closest('[data-action="new-island"]')) { openIslandDrawer(null); return; } const entry = event.target.closest('[data-entry-id]'); if (entry) openDrawer(entry.dataset.entryId); });
 summary.addEventListener('click', event => { const target = event.target.closest('[data-summary-status]'); if (!target) return; ui.status = target.dataset.summaryStatus; $('#status-filter').value = ui.status; render(); });
 backdrop.addEventListener('click', closeDrawer);
@@ -352,12 +363,12 @@ $('#status-filter').addEventListener('change', event => { ui.status = event.targ
 $('#sort-order').addEventListener('change', event => { ui.sort = event.target.value; render(); });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { ui.view = button.dataset.view; render(); }));
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
-bootstrapButton.addEventListener('click', () => (async () => { await bootstrapCleanV2({ force: true }); await bootstrapCurrentOwners({ force: true }); setStatus(`${entryRecords().length} rena dataposter och nulägesägare inlästa lokalt`, 'ok'); })().catch(error => setStatus(error.message, 'error')));
+bootstrapButton.addEventListener('click', () => bootstrapCleanV2({ force: true }).then(() => setStatus(`${entryRecords().length} rena dataposter inlästa lokalt · ägare läses från Fastigheter`, 'ok')).catch(error => setStatus(error.message, 'error')));
 $('#export-json').addEventListener('click', exportData);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: deviceId() }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); if (isSourceTree) await bootstrapCurrentOwners(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });
