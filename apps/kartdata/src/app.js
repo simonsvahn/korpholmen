@@ -1,17 +1,16 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
-  resolveCurrentOwners,
-  resolvePropertyReferences,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
+import { resolveCurrentOwners, resolvePropertyReferences } from '../../../packages/core/master-data.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { CLEAN_V2_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
 import {
   OBJECT_CLASSES,

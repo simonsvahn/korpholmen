@@ -1,7 +1,6 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
@@ -11,6 +10,7 @@ import {
   openSlaktlandskapDB,
   validateOperation,
 } from '../core/data-layer.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import {
   FAMILY_UNIT_TYPE,
   KIN_GROUP_TYPE,
