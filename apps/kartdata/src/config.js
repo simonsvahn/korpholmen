@@ -5,3 +5,6 @@ export const DROPBOX_SCOPES = [
   'files.content.write'
 ];
 export const CLEAN_V2_BOOTSTRAP_URL = './privat/migrering-2026-08-04-lokal-bootstrap/clean-v2-base-ops.json';
+// Behålls under cacheövergången så att ett äldre appskal kan ladda den nya
+// konfigurationen utan ett fatalt modulfel. Den nya appen läser inte länken.
+export const CURRENT_OWNER_BOOTSTRAP_URL = './privat/migrering-2026-08-04-aktuella-agare/current-owner-ops.json';
