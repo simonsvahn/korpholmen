@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build:migration": "node verktyg/bygg-startmaster.mjs && python3 verktyg/bygg-sqlite.py",
+    "build:source-audit": "node verktyg/bygg-kallkontroll-delta.mjs /Users/simon/Dropbox/Appar/Korpholmen",
+    "seed:source-audit": "node verktyg/skriv-dropbox-kallkontroll.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "build:current-owners": "node verktyg/bygg-aktuella-agare.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "seed:current-owners": "node verktyg/skriv-dropbox-aktuella-agare.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "build:person-master": "node verktyg/bygg-personmasterkopplingar.mjs /Users/simon/Dropbox/Appar/Korpholmen",

@@ -175,6 +175,19 @@ ansökan, förrättning och observation. Klubbhistorik skiljer matrikelutgåvans
 `as_of` från operationsloggens HLC. Explorer ska filtrera på domäntid och
 fortfarande kunna redovisa när tolkningen tillkom.
 
+Fastigheters tidslinje är en skrivskyddad läsprojektion över kedjeordningen.
+Ett okänt slut kan visas fram till nästa kartlagda uppgift, men det härledda
+visningsslutet får aldrig skrivas tillbaka som faktum. Årtionden bevaras som
+intervall, inte som påhittade exakta startår. Tidslinjekort visar bara period,
+part och roll. Historiska källor ligger i ett separat hopfällt forskningslager
+och ska redovisas med begripliga originalhänvisningar; interna arbetskoder och
+nutida register visas inte som publika källor. Nulägesägaren visas som
+bekräftad utan källapparat.
+
+Fastighetsgemenskap från Matrikel är endast en huvudsaklig eller senast känd
+fastighetsanknytning. Den kan visas långt ned som orientering men får aldrig
+omtolkas till juridiskt ägande eller fullständig boendehistorik.
+
 ```mermaid
 timeline
     title Samma uppgift på två tidsaxlar

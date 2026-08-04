@@ -9,7 +9,7 @@
   <link rel="manifest" href="../../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../../icons/korpholmen-180.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-timeline-2">
   <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
 </head>
 <body class="app-fastigheter">
@@ -29,31 +29,26 @@
     <div>
       <p class="eyebrow">Korpholmen</p>
       <h1>Fastighetshistorik</h1>
-      <p class="intro">Master för registerenheter, historiska föregångare, ägande, bruk, transaktioner och källbelägg.</p>
+      <p class="intro">Nuvarande ägare och en tidslinje för varje fastighet.</p>
     </div>
     <div class="sync-panel"><span id="sync-status" role="status">Startar lokalt lager…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>
-  <nav class="view-tabs" aria-label="Vy">
-    <button class="active" type="button" data-view="properties">Fastigheter</button>
-    <button type="button" data-view="timeline">Tidslinje</button>
-    <button type="button" data-view="audit">Källkontroll</button>
-  </nav>
   <nav class="toolbar" aria-label="Filtrera fastighetshistoriken">
-    <label class="field wide">Sök<input id="search" type="search" placeholder="Fastighet, ägare, medlem, händelse eller källa …"></label>
+    <label class="field wide">Sök<input id="search" type="search" placeholder="Fastighet, ägare, person eller händelse …"></label>
     <label class="field">Ö/plats<select id="island-filter"><option value="">Alla öar</option></select></label>
-    <label class="field">Källläge<select id="audit-filter"><option value="">Alla</option><option value="important">Viktiga fynd</option><option value="open">Olöst eller avvikelse</option></select></label>
+    <label class="field">Visa<select id="audit-filter"><option value="">Alla fastigheter</option><option value="open">Med öppen fråga</option></select></label>
     <label class="field compact">Från år<input id="year-from" type="number" min="1700" max="2100" placeholder="1807"></label>
     <label class="field compact">Till år<input id="year-to" type="number" min="1700" max="2100" placeholder="2026"></label>
     <button id="bootstrap-local" type="button" hidden>Läs in aktuell källmaster</button>
     <output id="filter-count" aria-live="polite"></output>
   </nav>
   <main id="content" aria-live="polite"></main>
-  <aside id="property-drawer" aria-hidden="true" aria-label="Fastighetsdetaljer">
+  <aside id="property-drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fastighetsdetaljer">
     <button class="drawer-close" type="button" data-action="close" aria-label="Stäng">×</button>
     <div id="drawer-content"></div>
   </aside>
   <div id="backdrop" hidden></div>
   <script type="module" src="../../src/app-family-bootstrap.js?v=2026-08-04-pwa-1"></script>
-  <script type="module" src="./src/app.js?v=2026-08-04-pwa-1"></script>
+  <script type="module" src="./src/app.js?v=2026-08-04-timeline-2"></script>
 </body>
 </html>

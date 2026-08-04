@@ -1,4 +1,5 @@
 import { Materializer } from './domain/materializer.js';
+import { validateOperation } from './domain/operations.js';
 import { validateBatch } from './sync/batch.js';
 import { CursorResetError } from './sync/errors.js';
 
@@ -67,6 +68,21 @@ export class ReadOnlyMaster {
     await this.store.saveSnapshot(this.snapshotKey, this.state.exportSnapshot());
     await this.store.putMeta(this.cursorKey, cursor);
     await this.store.putMeta(this.statusKey, status);
+  }
+
+  async applyOperations(operations, { source = `${this.cacheKey}:local-bootstrap` } = {}) {
+    this.assertReady();
+    if (!Array.isArray(operations)) throw new TypeError('ReadOnlyMaster.applyOperations kräver en lista');
+    operations.forEach(validateOperation);
+    this.state.applyAll(operations);
+    await this.persist(this.cursor, {
+      source,
+      synced_at: new Date().toISOString(),
+      downloaded_ops: operations.length,
+      downloaded_batches: 0,
+      local_bootstrap: true,
+    });
+    return { appliedOps: operations.length };
   }
 
   async sync(transport, { allowCursorReset = true } = {}) {
