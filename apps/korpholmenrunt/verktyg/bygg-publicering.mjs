@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../korpholmenrunt');
 const CORE=resolve(ROOT,'../../packages/core');
-const FILES=['index.html','styles.css','matchning.css','manifest.webmanifest','sw.js','og.png','src/config.js'];
+const FILES=['index.html','styles.css','matchning.css','manifest.webmanifest','sw.js','og.png','src/config.js','src/klassstandard.js'];
 const CORE_FILES=['data-layer.js','domain/canonical.js','domain/hlc.js','domain/materializer.js','domain/operations.js','domain/repository.js','storage/indexeddb.js','storage/memory.js','sync/batch.js','sync/dropbox-transport.js','sync/errors.js','sync/memory-transport.js','sync/oauth-flow.js','sync/oauth-pkce.js','sync/sync-engine.js'];
 for(const relative of FILES){const source=resolve(ROOT,relative);if(!(await stat(source)).isFile())throw new Error(`Publiceringsfil saknas: ${relative}`);const target=resolve(OUT,relative);await mkdir(dirname(target),{recursive:true});await copyFile(source,target)}
 for(const relative of CORE_FILES){const source=resolve(CORE,relative);if(!(await stat(source)).isFile())throw new Error(`Gemensam kärnfil saknas: ${relative}`);const target=resolve(OUT,'core',relative);await mkdir(dirname(target),{recursive:true});await copyFile(source,target)}

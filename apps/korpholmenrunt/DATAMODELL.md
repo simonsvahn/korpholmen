@@ -17,6 +17,13 @@ Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden ka
 tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
 `60+` och `80,95` bevaras men flaggas för granskning.
 
+Klassen lagras i fyra separata fält: oförändrat `class_raw`, stabilt
+`class_id`, visningsnamnet `class_name` samt beslutets
+`class_match_status`/`class_match_method`. Klassstandarden har tolv grenar:
+Kanadensare, Kajak 1, Kajak 2, Rodd, Segel, Optimist, Gummi, Okänd,
+Örnjolle, Jolle, Paddel och Rodd + segel. Källvärdena `Dagen` och `rodel`
+normaliseras till Rodd respektive Okänd utan att råvärdet ändras.
+
 ## Registerkopplingar
 
 En person- eller båtlänk har `match_status`:

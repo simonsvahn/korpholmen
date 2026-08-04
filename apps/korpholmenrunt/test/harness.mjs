@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import { KLASSER, KLASSSTANDARD_METHOD, klassnamn, standardklass } from '../src/klassstandard.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -39,8 +40,22 @@ await test('samtliga 363 källrader är bevarade som resultat eller källnoterin
   assert.equal(results.length+notes.length,document.counts.source_rows);
   assert.equal(new Set(results.map(item=>item.source_row_id)).size,results.length);
   assert.ok(results.every(item=>item.raw_row&&item.year&&item.class_name&&item.course_code&&item.time_raw));
+  assert.ok(results.every(item=>item.class_id&&item.class_match_status==='manuell'&&item.class_match_method===KLASSSTANDARD_METHOD));
+  const dagen=results.find(item=>item.class_raw==='Dagen');assert.ok(dagen);assert.equal(dagen.class_name,'Rodd');assert.equal(dagen.class_id,'rodd');
   const digest=createHash('sha256').update(await readFile(SOURCE)).digest('hex');
   assert.equal(digest,document.source_sha256);
+});
+
+await test('klassstandarden samlar beslutade varianter och bevarar separata grenar',()=>{
+  const expected=new Map([
+    ['Canadian','Kanadensare'],['Canadian*','Kanadensare'],['kanad','Kanadensare'],['Can','Kanadensare'],
+    ['Kajak 1','Kajak 1'],['K1','Kajak 1'],['Kajak 2?','Kajak 2'],['K2','Kajak 2'],
+    ['rodd?*','Rodd'],['Dagen','Rodd'],['Segel?','Segel'],['S','Segel'],
+    ['optimist*','Optimist'],['Gummijolle','Gummi'],['','Okänd'],['?','Okänd'],['rodel','Okänd'],
+    ['Örnjolle','Örnjolle'],['jolle*','Jolle'],['Paddel','Paddel'],['rodd+segel','Rodd + segel'],
+  ]);
+  for(const [raw,name] of expected){assert.equal(klassnamn(raw),name,raw);assert.ok(standardklass(raw)?.id,raw)}
+  assert.equal(new Set(KLASSER.map(item=>item.id)).size,KLASSER.length);
 });
 
 await test('namnkopplingar använder stabila ID:n från Matrikeln och Båtregistret',()=>{
@@ -65,7 +80,7 @@ await test('osäkra träffar lämnas i granskningskö utan att källnamnet skriv
 });
 
 await test('analysdatabasen har främmande nycklar och index för topplistor',()=>{
-  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_name='Kajak 2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
+  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\ncolumns={row[1] for row in db.execute('PRAGMA table_info(result)').fetchall()}\nassert {'class_raw','class_id','class_name','class_match_status','class_match_method'} <= columns\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_id='kajak-2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
   const query=spawnSync('python3',['-c',script,resolve(PRIVATE,'korpholmenrunt.sqlite')],{encoding:'utf8'});
   assert.equal(query.status,0,query.stderr||query.stdout);
 });
@@ -73,7 +88,7 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -107,6 +122,8 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("field:'participant_structure_status'"));
   assert.ok(app.includes('Källrad före delning:'));
   assert.ok(app.includes("field:'class_match_method'"));
+  assert.ok(app.includes("field:'class_id'"));
+  assert.ok(html.includes('standardize-classes'));
   assert.ok(app.includes("field:'match_method',value:'bekräftat från förslag i resultatlistan'"));
   assert.ok(matchingStyles.includes('.sortknapp'));
   assert.ok(matchingStyles.includes('.snabbval'));
@@ -124,12 +141,15 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
 await test('publiceringspaketet är datafritt och länkat från appnavet',async()=>{
   const build=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(build.status,0,build.stderr||build.stdout);
-  const [publishedApp,publishedCore,root]=await Promise.all([
+  const [publishedApp,publishedClasses,publishedCore,root]=await Promise.all([
     readFile(resolve(REPO,'korpholmenrunt/src/app.js'),'utf8'),
+    readFile(resolve(REPO,'korpholmenrunt/src/klassstandard.js'),'utf8'),
     readFile(resolve(REPO,'korpholmenrunt/core/data-layer.js'),'utf8'),
     readFile(resolve(REPO,'index.html'),'utf8'),
   ]);
   assert.ok(publishedApp.includes("../core/data-layer.js"));
+  assert.ok(publishedApp.includes("./klassstandard.js"));
+  assert.ok(publishedClasses.includes('Kanadensare'));
   assert.ok(publishedCore.includes('./storage/indexeddb.js'));
   assert.ok(root.includes('./korpholmenrunt/'));
   assert.ok(root.includes('Sju separata verktyg'));

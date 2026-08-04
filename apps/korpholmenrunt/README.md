@@ -19,6 +19,10 @@ visas tydligt i resultatlistan och under **Granska & matcha**, där varje rad ka
 placeringar, topptider eller rekord förrän de har godkänts. Källans råvärden och
 granskningsfrågor bevaras även när den normaliserade posten ändras.
 
+Den beslutade klassstandarden kan tillämpas på hela den levande mastern med
+ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
+`class_raw` orört så att varje normalisering går att kontrollera mot källan.
+
 ## Privat master
 
 - `privat/kallkopior/Korpholmen runt konv.mdb` — bytebevarad källkopia.

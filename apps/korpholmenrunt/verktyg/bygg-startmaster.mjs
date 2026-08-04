@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { KLASSSTANDARD_METHOD, klassnamn, standardklass } from '../src/klassstandard.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -80,11 +81,6 @@ function parseTime(raw){
   if(seconds>59)return {duration_seconds:null,time_status:'ogiltig sekunddel'};
   return {duration_seconds:minutes*60+seconds,time_status:match[3]?'osäker':'tolkad'};
 }
-function className(raw){
-  const value=norm(raw).replace(/[?*]/g,'').trim();
-  const names={'segel':'Segel','rodd':'Rodd','kajak 1':'Kajak 1','kajak 2':'Kajak 2','canadian':'Canadian','kanad':'Canadian','ornjolle':'Örnjolle','optimist':'Optimist','gummi':'Gummi','paddel':'Paddel','jolle':'Jolle','rodd segel':'Rodd + segel'};
-  return names[value]||String(raw||'Okänd').replace(/[?*]/g,'').trim()||'Okänd';
-}
 const meaningful=value=>String(value||'').trim()&&!['-','.'].includes(String(value).trim());
 const results=[];
 const links=[];
@@ -102,7 +98,8 @@ for(const row of rows){
     personLinkIds.push(linkId);
     links.push({id:linkId,fields:{result_id:id,role,source_field:field,raw_name:raw,person_id:match.person_id,match_status:match.status,match_method:match.method,candidate_ids:match.candidates,confirmed:match.status==='kopplad'}});
   }
-  results.push({id,fields:{source_row_id:row.ID,source_id:'race-source:mdb',year:Number(row['År']),boat_name_raw:row.fartyg||'',boat_id:boat.boat_id,boat_match_status:boat.status,boat_match_method:boat.method,boat_candidate_ids:boat.candidates,captain_raw:row.Kapten||'',crew_1_raw:row['Besättning 1']||'',crew_2_raw:row['Besättning 2']||'',class_raw:row.Klass||'',class_name:className(row.Klass),course_code:row.Bana||'',time_raw:row.tid||'',duration_seconds:time.duration_seconds,time_status:time.time_status,person_link_ids:personLinkIds,notes:'',raw_row:row}});
+  const klass=standardklass(row.Klass);
+  results.push({id,fields:{source_row_id:row.ID,source_id:'race-source:mdb',year:Number(row['År']),boat_name_raw:row.fartyg||'',boat_id:boat.boat_id,boat_match_status:boat.status,boat_match_method:boat.method,boat_candidate_ids:boat.candidates,captain_raw:row.Kapten||'',crew_1_raw:row['Besättning 1']||'',crew_2_raw:row['Besättning 2']||'',class_raw:row.Klass||'',class_id:klass?.id??null,class_name:klassnamn(row.Klass),class_match_status:klass?'manuell':'saknas',class_match_method:klass?KLASSSTANDARD_METHOD:'ingen standardträff',course_code:row.Bana||'',time_raw:row.tid||'',duration_seconds:time.duration_seconds,time_status:time.time_status,person_link_ids:personLinkIds,notes:'',raw_row:row}});
 }
 
 const editions=[...new Set(results.map(item=>item.fields.year))].sort((a,b)=>a-b).map(year=>{
