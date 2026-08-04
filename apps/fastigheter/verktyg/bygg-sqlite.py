@@ -34,6 +34,7 @@ CREATE TABLE property_relation (id TEXT PRIMARY KEY, from_type TEXT NOT NULL, fr
 CREATE TABLE community_link (id TEXT PRIMARY KEY, property_id TEXT NOT NULL REFERENCES property(id), person_id TEXT NOT NULL, person_display_name TEXT NOT NULL, relation TEXT NOT NULL, legal_ownership INTEGER NOT NULL CHECK (legal_ownership IN (0,1)), confirmed INTEGER NOT NULL CHECK (confirmed IN (0,1)));
 CREATE TABLE manual_claim (id TEXT PRIMARY KEY, property_id TEXT NOT NULL REFERENCES property(id), claim_order INTEGER NOT NULL, text TEXT NOT NULL, role TEXT NOT NULL, normalized INTEGER NOT NULL CHECK (normalized IN (0,1)), normalized_entity_type TEXT NOT NULL, normalized_entity_id TEXT NOT NULL);
 CREATE TABLE audit_finding (id TEXT PRIMARY KEY, property_id TEXT NOT NULL REFERENCES property(id), status TEXT NOT NULL, severity TEXT NOT NULL, summary TEXT NOT NULL, reviewed_on TEXT NOT NULL, data_json TEXT NOT NULL);
+CREATE TABLE rejected_claim (id TEXT PRIMARY KEY, property_id TEXT NOT NULL REFERENCES property(id), claim TEXT NOT NULL, reason TEXT NOT NULL, locator TEXT, reviewed_on TEXT NOT NULL, data_json TEXT NOT NULL);
 CREATE TABLE evidence (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, source_id TEXT NOT NULL REFERENCES source(id), locator TEXT, stance TEXT NOT NULL);
 CREATE INDEX idx_event_dates ON property_event(contract_date, possession_date, approval_date);
 CREATE INDEX idx_holding_subject ON holding(subject_type, subject_id);
@@ -105,6 +106,9 @@ connection.executemany("INSERT INTO manual_claim VALUES (?,?,?,?,?,?,?,?)", [
 ])
 connection.executemany("INSERT INTO audit_finding VALUES (?,?,?,?,?,?,?)", [
     (row["id"], row["property_id"], row["status"], row["severity"], row["summary"], row["reviewed_on"], json.dumps(row, ensure_ascii=False, sort_keys=True)) for row in tables["audit-finding"]
+])
+connection.executemany("INSERT INTO rejected_claim VALUES (?,?,?,?,?,?,?)", [
+    (row["id"], row["property_id"], row["claim"], row["reason"], row.get("locator"), row["reviewed_on"], json.dumps(row, ensure_ascii=False, sort_keys=True)) for row in tables["rejected-claim"]
 ])
 connection.executemany("INSERT INTO evidence VALUES (:id,:subject_type,:subject_id,:source_id,:locator,:stance)", tables["evidence"])
 connection.commit()

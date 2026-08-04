@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-04-korpholmen-pwa-1",
+  "release": "2026-08-04-korpholmen-pwa-3",
   "generated_at": "2026-08-04",
   "pwa": {
     "id": "./",
@@ -98,6 +98,7 @@
     "./fastigheter/manifest.webmanifest",
     "./fastigheter/src/app.js",
     "./fastigheter/src/config.js",
+    "./fastigheter/src/timeline-model.js",
     "./fastigheter/styles.css",
     "./fastigheter/sw.js",
     "./icons/korpholmen-180.png",

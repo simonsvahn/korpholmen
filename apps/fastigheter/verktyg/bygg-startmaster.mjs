@@ -19,10 +19,18 @@ const unique = values => [...new Set(values.filter(Boolean))];
 
 function parseYearToken(raw) {
   const token = String(raw || '').trim();
+  const qualifier = /slutet/i.test(token) ? 'slutet' : /början/i.test(token) ? 'början' : /mitten/i.test(token) ? 'mitten' : null;
   const splitDecades = token.match(/\b(1\d{2})\/(\d)X\b/i);
-  if (splitDecades) return { year: null, min: Number(splitDecades[1]) * 10, max: Number(`${splitDecades[1].slice(0, 2)}${splitDecades[2]}`) * 10 + 9, precision: 'decennieintervall' };
+  if (splitDecades) return { year: null, min: Number(splitDecades[1]) * 10, max: Number(`${splitDecades[1].slice(0, 2)}${splitDecades[2]}`) * 10 + 9, precision: 'decennieintervall', qualifier };
   const decade = token.match(/\b(1\d{2}|20\d)X\b/i);
-  if (decade) return { year: null, min: Number(decade[1]) * 10, max: Number(decade[1]) * 10 + 9, precision: 'decennium' };
+  if (decade) return { year: null, min: Number(decade[1]) * 10, max: Number(decade[1]) * 10 + 9, precision: 'decennium', qualifier };
+  const fullSwedishDecade = token.match(/\b(1\d{3}|20\d{2})-talet\b/i);
+  if (fullSwedishDecade) return { year: null, min: Number(fullSwedishDecade[1]), max: Number(fullSwedishDecade[1]) + 9, precision: 'decennium', qualifier };
+  const shortSwedishDecade = token.match(/\b(\d{2})-talet\b/i);
+  if (shortSwedishDecade) {
+    const start = Number(`19${shortSwedishDecade[1]}`);
+    return { year: null, min: start, max: start + 9, precision: 'decennium', qualifier };
+  }
   const exact = token.match(/\b(1[7-9]\d{2}|20\d{2})\b/);
   if (exact) {
     const year = Number(exact[1]);
@@ -34,8 +42,20 @@ function parseYearToken(raw) {
 function parsePeriod(periodText) {
   if (!periodText) return {};
   const normalized = periodText.replace(/[–—]/g, '-').trim();
-  const parts = normalized.includes('-') ? normalized.split('-', 2) : [];
-  if (!parts.length) return { period_text: periodText, date_precision: 'fritext' };
+  const range = normalized.match(/^(.*?)\s*-\s*(?!talet\b)(.*)$/i);
+  if (!range) {
+    const start = parseYearToken(normalized);
+    if (start.precision === 'fritext') return { period_text: periodText, date_precision: 'fritext' };
+    return {
+      period_text: periodText,
+      start_year: start.year,
+      start_year_min: start.min,
+      start_year_max: start.max,
+      start_precision: start.precision,
+      start_qualifier: start.qualifier || null,
+    };
+  }
+  const parts = [range[1], range[2]];
   const start = parseYearToken(parts[0]);
   const end = parseYearToken(parts[1]);
   return {
@@ -44,6 +64,7 @@ function parsePeriod(periodText) {
     start_year_min: start.min,
     start_year_max: start.max,
     start_precision: start.precision,
+    start_qualifier: start.qualifier || null,
     end_year: end.year,
     end_year_min: end.min,
     end_year_max: end.max,
@@ -56,8 +77,8 @@ function parseManualText(text) {
   const matches = [...text.matchAll(/\(([^()]*)\)\??/g)];
   const candidate = matches.at(-1);
   const candidateText = candidate?.[1]?.trim() || '';
-  const looksLikePeriod = /(?:1[7-9]\d{2}|20\d{2}|1\d{2}X|1\d{2}\/\dX|\?\s*[–-]|[–-]\s*\?|[–-]\s*(?:1[7-9]\d{2}|20\d{2})|(?:1[7-9]\d{2}|20\d{2})\s*[–-])/.test(candidateText);
-  const periodText = looksLikePeriod ? candidateText : null;
+  const looksLikePeriod = /(?:1[7-9]\d{2}|20\d{2}|1\d{2}X|1\d{2}\/\dX|\d{2}-talet|\?\s*[–-]|[–-]\s*\?|[–-]\s*(?:1[7-9]\d{2}|20\d{2})|(?:1[7-9]\d{2}|20\d{2})\s*[–-])/.test(candidateText);
+  const periodText = looksLikePeriod ? candidateText.replace(/^hyrde\s+(?:i|under)\s+/i, '').trim() : null;
   const holderText = periodText ? `${text.slice(0, candidate.index)}${text.slice(candidate.index + candidate[0].length)}`.trim() : text.trim();
   const eventLike = /auktion|förrättning|avstyckning|avsöndring|ägostyckning/i.test(holderText);
   const role = /hyrde|hyresgäst/i.test(text) ? 'hyresgäst'
@@ -138,6 +159,10 @@ for (const support of source.manual_support || []) {
   requireProperty(support.property_id, 'manuellt källstöd');
   sourcesValid(support.source_ids, `manuellt källstöd ${support.property_id}`);
 }
+for (const rejected of source.rejected_claims || []) {
+  requireProperty(rejected.property_id, 'avfört ägaranspråk');
+  sourcesValid(rejected.source_ids, `avfört ägaranspråk ${rejected.id}`);
+}
 for (const finding of source.audit_findings) requireProperty(finding.property_id, 'källgranskning');
 const manualIds = new Set(source.manual_chains.map(item => item.property_id));
 const auditIds = new Set(source.audit_findings.map(item => item.property_id));
@@ -159,6 +184,7 @@ const records = {
   'holding-claim': [],
   'event-claim': [],
   'audit-finding': [],
+  'rejected-claim': [],
   'community-link': [],
   evidence: [],
 };
@@ -227,8 +253,10 @@ for (const chain of source.manual_chains) {
     if (roleOverride) parsed.role = roleOverride;
     const sourceIdsForClaim = unique(['NOT-INTFAKTA', ...supports.flatMap(item => item.source_ids || [])]);
     const verificationStatus = supports.some(item => item.verification_status === 'primärbelagd') ? 'primärbelagd'
-      : supports.some(item => item.verification_status === 'sekundärbelagd') ? 'sekundärbelagd'
+      : supports.some(item => item.verification_status === 'förstahandsbelagd') ? 'förstahandsbelagd'
+        : supports.some(item => item.verification_status === 'sekundärbelagd') ? 'sekundärbelagd'
         : parsed.certainty === 'osäker' ? 'osäker uppgift i arbetsnot' : 'uppgift i granskad arbetsnot';
+    if (!roleOverride && /belagd/.test(verificationStatus) && parsed.role === 'möjlig ägare eller innehavare') parsed.role = 'ägare';
     let normalizedEntityType;
     let normalizedEntityId;
     if (parsed.event_like) {
@@ -322,11 +350,13 @@ function propertySourceIds(propertyId) {
   source.property_relations.filter(item => item.to_property_id === propertyId || item.from_id === propertyId).flatMap(item => item.source_ids).forEach(id => ids.add(id));
   (source.manual_support || []).filter(item => item.property_id === propertyId).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
   (source.manual_event_claims || []).filter(item => item.property_ids.includes(propertyId)).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
+  (source.rejected_claims || []).filter(item => item.property_id === propertyId).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
   return [...ids];
 }
 records['audit-finding'] = source.audit_findings.map((item, index) => ({
   id: `audit-${slug(item.property_id)}`, ...item, order: index + 1, compared_source_ids: propertySourceIds(item.property_id), reviewed_on: '2026-08-02',
 }));
+records['rejected-claim'] = (source.rejected_claims || []).map(item => ({ ...item }));
 
 const matrikelPropertyLinks = matrikel.listEntities('property-link');
 for (const entity of matrikelPropertyLinks) {
@@ -358,6 +388,7 @@ for (const holding of records['holding-claim']) for (const sourceId of holding.s
 for (const event of records['event-claim']) for (const sourceId of event.source_ids) addEvidence('event-claim', event.id, sourceId, event.source_locators?.join('; ') || null, event.verification_status?.includes('belagd') ? 'stöd' : 'anspråk');
 for (const relation of records['property-relation']) for (const sourceId of relation.source_ids) addEvidence('property-relation', relation.id, sourceId);
 for (const finding of records['audit-finding']) for (const sourceId of finding.compared_source_ids) addEvidence('audit-finding', finding.id, sourceId);
+for (const rejected of records['rejected-claim']) for (const sourceId of rejected.source_ids) addEvidence('rejected-claim', rejected.id, sourceId, null, 'motsäger');
 
 let seq = 0;
 const operations = [];
@@ -397,13 +428,83 @@ const researchExport = {
   tables: records,
 };
 const important = records['audit-finding'].filter(item => item.severity === 'viktig');
-const auditReport = `# Källkontroll av den manuella ägartabellen\n\n` +
-  `Skapad 2026-08-02. Den manuella tabellens ${source.manual_chains.length} fastighetsrader har jämförts med senare Lantmäteriakter och registerutdrag. ` +
-  `FAST-1/FAST-2 behandlas som observationer, inte som automatiska förvärvsdatum.\n\n` +
-  `## Sammanfattning\n\n- ${records['audit-finding'].length} granskade fastigheter\n- ${important.length} viktiga rättelser eller olösta frågor\n- ${records.event.length} belagda händelser\n- ${records['event-claim'].length} strukturerade händelseanspråk och härledda övergångar\n- ${records.holding.length} belagda innehav/ägarobservationer\n- ${records['holding-claim'].length} strukturerade innehavsanspråk ur hela råkedjan\n- ${records['manual-claim'].filter(item => item.normalized).length}/${records['manual-claim'].length} råposter normaliserade\n\n` +
-  `## Viktiga fynd\n\n` + important.map(item => `### ${item.property_id} — ${item.status}\n\n${item.summary}\n`).join('\n') +
-  `\n## Fullständig granskningsmatris\n\n| Fastighet | Status | Bedömning |\n|---|---|---|\n` +
-  records['audit-finding'].map(item => `| ${item.property_id} | ${item.status} | ${item.summary.replaceAll('|', '\\|')} |`).join('\n') + '\n';
+const sourceById = new Map(records.source.map(item => [item.id, item]));
+const md = value => String(value ?? '').replaceAll('|', '\\|').replaceAll('\n', ' ').trim();
+const sourceNames = ids => unique(ids || []).map(id => sourceById.get(id)?.label || id).join('; ') || 'inget fristående belägg';
+const claimPeriod = item => item.period_text || item.date_text || item.contract_date || item.possession_date || item.survey_date || item.survey_date_text || item.approval_date || item.approval_date_text || item.application_date || item.observed_on || 'odaterat';
+const claimStatus = item => item.verification_status || (item.report_kind === 'belagd händelse' ? 'källbelagd' : item.certainty || 'ej bedömd');
+const claimSources = item => {
+  const names = sourceNames(item.source_ids || (item.source_id ? [item.source_id] : []));
+  const locators = (item.source_locators || []).filter(Boolean).join('; ');
+  return locators ? `${names} — ${locators}` : names;
+};
+const independentlySupported = records['holding-claim'].filter(item => /belagd/.test(item.verification_status));
+const workingClaims = records['holding-claim'].filter(item => !/belagd/.test(item.verification_status));
+const derivedTransitions = records['event-claim'].filter(item => item.origin === 'härledd övergång');
+const propertiesSorted = [...records.property].sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
+const sourceCatalog = records.source.map(item => `| ${item.id} | ${md(item.label)} | ${md(item.type)} | \`${md(item.path)}\` |`).join('\n');
+const fullPropertyAudit = propertiesSorted.map(property => {
+  const propertyId = property.id;
+  const finding = records['audit-finding'].find(item => item.property_id === propertyId);
+  const current = records['current-owner-assessment'].find(item => item.property_id === propertyId);
+  const claims = records['holding-claim'].filter(item => item.property_id === propertyId).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const propertyEvents = [
+    ...records.event.filter(item => item.property_ids.includes(propertyId)).map(item => ({ ...item, report_kind: 'belagd händelse' })),
+    ...records['event-claim'].filter(item => item.property_ids.includes(propertyId) && item.origin !== 'härledd övergång' && !item.superseded_by_event_id)
+      .map(item => ({ ...item, report_kind: 'händelseanspråk' })),
+  ].sort((a, b) => Number(String(claimPeriod(a)).match(/\b(1[7-9]\d{2}|20\d{2})\b/)?.[1] || 9999) - Number(String(claimPeriod(b)).match(/\b(1[7-9]\d{2}|20\d{2})\b/)?.[1] || 9999));
+  const relations = records['property-relation'].filter(item => item.to_property_id === propertyId || item.from_id === propertyId);
+  const rejected = records['rejected-claim'].filter(item => item.property_id === propertyId);
+  const community = records['community-link'].filter(item => item.property_id === propertyId);
+  const currentText = current
+    ? `**Bäst kända nuvarande ägare:** ${current.owners.join(', ')}. Belägg: ${sourceNames(current.source_ids)}. ${current.basis}`
+    : '**Bäst kända nuvarande ägare:** saknas.';
+  const claimLines = claims.length ? claims.map(item => {
+    const notes = [...(item.evidence_notes || []), /belagd/.test(item.verification_status) ? null : item.certainty].filter(Boolean).join(' ');
+    return `- **${md(claimPeriod(item))} — ${md(item.holder_text)}** · ${md(item.role)} · _${md(claimStatus(item))}_\n  - Belägg: ${md(claimSources(item))}${notes ? `\n  - Anmärkning: ${md(notes)}` : ''}`;
+  }).join('\n') : '- Ingen historisk innehavskedja är införd.';
+  const eventLines = propertyEvents.length ? propertyEvents.map(item =>
+    `- **${md(claimPeriod(item))} — ${md(item.label)}** · ${md(item.report_kind)} · _${md(claimStatus(item))}_\n  - Belägg: ${md(claimSources(item))}${item.notes ? `\n  - Anmärkning: ${md(item.notes)}` : ''}`
+  ).join('\n') : '- Inga fristående händelser är införda.';
+  const relationLines = relations.length ? relations.map(item =>
+    `- ${md(item.from_id)} → ${md(item.to_property_id)} · ${md(item.relation)} · Belägg: ${md(sourceNames(item.source_ids))}${item.notes ? ` · ${md(item.notes)}` : ''}`
+  ).join('\n') : '- Inga strukturerade fastighetsrelationer är införda.';
+  const rejectedLines = rejected.length ? rejected.map(item =>
+    `- ~~${md(item.claim)}~~ — ${md(item.reason)} Belägg för avförandet: ${md(sourceNames(item.source_ids))}${item.locator ? ` — ${md(item.locator)}` : ''}.`
+  ).join('\n') : '- Inga uttryckligen avförda ägaranspråk.';
+  const communityNames = community.map(item => item.person_display_name).filter(Boolean);
+  return `## ${propertyId}\n\n${currentText}\n\n` +
+    `**Granskningsbedömning:** ${finding ? `${finding.status}. ${finding.summary}` : 'ingen särskild bedömning registrerad.'}\n\n` +
+    `### Innehav och bruk i källornas kedjeordning\n\n${claimLines}\n\n` +
+    `### Händelser\n\n${eventLines}\n\n` +
+    `### Fastighetsrelationer\n\n${relationLines}\n\n` +
+    `### Avförda slutsatser\n\n${rejectedLines}\n\n` +
+    `### Fastighetsgemenskap i Matrikeln\n\n${communityNames.length ? communityNames.join(', ') : 'Ingen koppling registrerad.'}\n\n` +
+    `_Fastighetsgemenskap är en nutida person–fastighetskoppling i Matrikeln, inte i sig bevis för lagfart eller historiskt boende._`;
+}).join('\n\n---\n\n');
+const auditReport = `# Fullständig källkontroll — Fastigheter\n\n` +
+  `Skapad 2026-08-04 direkt från den privata Fastigheter-mastern efter kontroll mot lantmäteriakter, fastighetsregister, intervjuer, minnesberättelser och tryckt material. ` +
+  `Rapporten är ett granskningsunderlag, inte ett påstående om att alla luckor är lösta. FAST-1/FAST-2 är ögonblicksbilder av ägare och får inte automatiskt användas som förvärvsdatum.\n\n` +
+  `## Läsregler\n\n` +
+  `- **Primärbelagd:** direkt lantmäteri-/registerhandling eller annan primär dokumentation.\n` +
+  `- **Förstahandsbelagd:** namngiven persons egen berättelse om sitt eller familjens förhållande.\n` +
+  `- **Sekundärbelagd:** tryckt framställning eller annan återberättande källa.\n` +
+  `- **Arbetsnot/osäker:** uppgiften är bevarad för granskning men saknar ännu självständigt belägg.\n` +
+  `- Härledda övergångar mellan två rader räknas inte som självständiga fakta och listas därför inte bland händelserna nedan.\n\n` +
+  `## Sammanfattning\n\n` +
+  `- ${records.property.length} fastighetsobjekt\n` +
+  `- ${records['audit-finding'].length} fastigheter med särskild granskningsbedömning\n` +
+  `- ${important.length} viktiga rättelser eller olösta frågor\n` +
+  `- ${records['holding-claim'].length} strukturerade innehavs-/bruksposter ur råkedjorna\n` +
+  `- ${independentlySupported.length} poster med fristående primär-, förstahands- eller sekundärbelägg\n` +
+  `- ${workingClaims.length} poster som ännu bara är arbetsuppgifter eller uttryckligen osäkra\n` +
+  `- ${records['rejected-claim'].length} felaktiga slutsatser uttryckligen avförda\n` +
+  `- ${derivedTransitions.length} tekniskt härledda kedjeövergångar, inte redovisade som fakta\n\n` +
+  `## Viktig proveniensrättelse\n\n` +
+  `Transkriptionsfilen i mappen ”Bok Hans Lundin” innehåller från rad 1264 ett avsnitt som uttryckligen är markerat som troligen ur Lena Bövings bok. ` +
+  `Uppgifter från sidorna 69–73 hänförs därför till **Fotograferat bokutdrag, troligen Lena Böving**, inte till Hans Lundin.\n\n` +
+  `## Källkatalog\n\n| ID | Källa | Typ | Sökväg |\n|---|---|---|---|\n${sourceCatalog}\n\n` +
+  `## Fastighet för fastighet\n\n${fullPropertyAudit}\n`;
 
 await Promise.all([
   writeFile(resolve(OUT, 'initial-ops.json'), JSON.stringify(document, null, 2)),

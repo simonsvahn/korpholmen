@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DropboxTransport,
+  openSlaktlandskapDB,
   MemoryRemoteTransport,
   MemoryStore,
   ReadOnlyMaster,
@@ -25,6 +26,23 @@ async function writableMaster(deviceId, remote) {
   return { repository, sync: () => new SyncEngine({ repository, transport: remote }).syncOnce() };
 }
 
+await test('en blockerad IndexedDB-uppgradering ger begriplig återkoppling i stället för att hänga', async () => {
+  let request;
+  let blocked = 0;
+  const indexedDB = {
+    open() {
+      request = { result: null, error: null };
+      queueMicrotask(() => request.onblocked());
+      return request;
+    },
+  };
+  await assert.rejects(
+    openSlaktlandskapDB({ indexedDB, onBlocked: () => { blocked += 1; }, blockedTimeoutMs: 5 }),
+    /En annan flik blockerar uppgraderingen/,
+  );
+  assert.equal(blocked, 1);
+});
+
 await test('en skrivskyddad master cachar främmande operationer utan att blanda dem med appens op-logg', async () => {
   const remote = new MemoryRemoteTransport({ id: 'matrikel' });
   const source = await writableMaster('matrikel-test', remote);
@@ -37,6 +55,19 @@ await test('en skrivskyddad master cachar främmande operationer utan att blanda
   assert.equal((await cache.getAllOps()).length, 0);
   const offlineReader = await new ReadOnlyMaster({ store: cache, cacheKey: 'matrikel' }).init();
   assert.equal(offlineReader.getEntity('person', 'p1').fields.display_name, 'Första namnet');
+});
+
+await test('en lokal referensmaster kan startas från operationer utan att de hamnar i appens op-logg', async () => {
+  const sourceStore = new MemoryStore();
+  const sourceRepository = await new Repository({ store: sourceStore, deviceId: 'kartdata-seed' }).init();
+  await sourceRepository.setField('place', 'korpholmen', 'preferred_name', 'Korpholmen');
+  const cache = new MemoryStore();
+  const reader = await new ReadOnlyMaster({ store: cache, cacheKey: 'kartdata' }).init();
+  await reader.applyOperations(await sourceStore.getAllOps(), { source: 'kartdata-test' });
+  assert.equal(reader.getEntity('place', 'korpholmen').fields.preferred_name, 'Korpholmen');
+  assert.equal((await cache.getAllOps()).length, 0);
+  const offlineReader = await new ReadOnlyMaster({ store: cache, cacheKey: 'kartdata' }).init();
+  assert.equal(offlineReader.getEntity('place', 'korpholmen').fields.preferred_name, 'Korpholmen');
 });
 
 await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fastighetsägare', async () => {
