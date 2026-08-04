@@ -1,7 +1,6 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
@@ -9,9 +8,10 @@ import {
   createBatch,
   exchangeDropboxRefreshToken,
   openSlaktlandskapDB,
-  resolvePartyName,
   validateOperation,
 } from '../core/data-layer.js';
+import { resolvePartyName } from '../../../packages/core/master-data.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
 
 const $ = selector => document.querySelector(selector);

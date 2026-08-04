@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   DropboxTransport,
   MemoryRemoteTransport,
@@ -11,6 +14,7 @@ import {
 } from '../data-layer.js';
 
 let passed = 0;
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 async function test(name, action) {
   await action(); passed += 1; console.log(`✓ ${name}`);
 }
@@ -62,6 +66,18 @@ await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fasti
 await test('skrivskyddad Dropbox-transport avvisar uppladdning', async () => {
   const transport = new DropboxTransport({ accessToken: 'test', readOnly: true, fetchImpl: async () => { throw new Error('fetch ska inte anropas'); } });
   await assert.rejects(() => transport.putMutable('/x.json', {}), /Skrivskyddad/);
+});
+
+await test('nya mastermoduler importeras direkt så att äldre appcache förblir kompatibel', async () => {
+  const apps = ['batregister', 'fastigheter', 'kartdata', 'klubbhistorik', 'korpholmenrunt'];
+  for (const app of apps) {
+    const source = await readFile(resolve(REPO_ROOT, 'apps', app, 'src/app.js'), 'utf8');
+    const barrelFields = source.match(/import\s*\{([\s\S]*?)\}\s*from\s*'\.\.\/\.\.\/\.\.\/packages\/core\/data-layer\.js';/)?.[1] || '';
+    for (const field of ['ReadOnlyMaster', 'mergePersonReferences', 'resolveCurrentOwners', 'resolvePropertyReferences', 'resolvePartyName']) {
+      assert.ok(!new RegExp(`\\b${field}\\b`).test(barrelFields), `${app} importerar ${field} genom den cachekänsliga data-layer-filen`);
+    }
+    assert.match(source, /packages\/core\/read-only-master\.js/, `${app} ska importera ReadOnlyMaster direkt`);
+  }
 });
 
 console.log(`\n${passed} kärnkontrakt godkända.`);

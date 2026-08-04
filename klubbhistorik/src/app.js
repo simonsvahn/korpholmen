@@ -1,17 +1,17 @@
 import {
   DropboxTransport,
   IndexedDBStore,
-  ReadOnlyMaster,
   Repository,
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
-  mergePersonReferences,
   openSlaktlandskapDB,
   validateOperation,
 } from '../core/data-layer.js';
+import { mergePersonReferences } from '../../../packages/core/master-data.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URLS } from './config.js';
 import { boatOptionLabel, boatReferenceLines } from './boat-reference.js';
 
