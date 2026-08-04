@@ -8,9 +8,22 @@
   <title>Matrikel · Korpholmen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-02-2">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-04-ui-1">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-04-ui-2">
 </head>
-<body>
+<body class="app-matrikel">
+  <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
+  <nav class="app-switcher" aria-label="Byt app">
+    <a class="app-switch" href="../">Korpholmen</a>
+    <a class="app-switch" href="./" aria-current="page">01 Matrikel</a>
+    <a class="app-switch" href="../batregister/">02 Båtregister</a>
+    <a class="app-switch" href="../fastigheter/">03 Fastigheter</a>
+    <a class="app-switch" href="../dokumentarkiv/">04 Dokumentarkiv</a>
+    <a class="app-switch" href="../korpholmenrunt/">05 Korpholmen runt</a>
+    <a class="app-switch" href="../klubbhistorik/">06 Klubbhistorik</a>
+    <a class="app-switch" href="../kartdata/">07 Kartdata</a>
+  </nav>
+  <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
   <header class="site-header">
     <div class="header-line">
       <div>
@@ -32,69 +45,82 @@
   </header>
 
   <nav class="toolbar" aria-label="Navigering i matrikeln">
-    <div class="toolbar-inner">
+    <div class="toolbar-compact">
       <div class="field search-field">
-        <label for="person-search">Sök och hoppa till person</label>
+        <label class="visually-hidden" for="person-search">Sök och hoppa till person</label>
         <div class="search-wrap">
-          <input type="search" id="person-search" list="person-options" placeholder="Namn eller klubbnamn …" autocomplete="off">
+          <input type="search" id="person-search" list="person-options" placeholder="Sök person eller klubbnamn …" autocomplete="off">
           <button type="button" class="action" id="find-person">Hitta</button>
         </div>
       </div>
-      <div class="field">
-        <label for="clan-jump">Hoppa till släktkrets</label>
-        <select id="clan-jump"><option value="">Välj släktkrets …</option></select>
-      </div>
-      <button type="button" class="toggle" id="toggle-names" aria-pressed="false">Visa klubbnamn först</button>
-      <button type="button" class="toggle" id="toggle-gaps" aria-pressed="false">Markera relationsluckor</button>
-      <div class="field">
-        <label for="island-filter">Ö</label>
-        <select id="island-filter"><option value="">Alla öar</option></select>
-      </div>
-      <div class="field">
-        <label for="living-filter">Livsstatus</label>
-        <select id="living-filter"><option value="">Alla</option><option value="ja">Levande</option><option value="nej">Avlidna</option><option value="okänt">Okänt</option></select>
-      </div>
-      <div class="field property-filter-field">
-        <label for="property-filter">Fastighet</label>
-        <select id="property-filter"><option value="">Alla fastigheter</option></select>
-      </div>
-      <div class="field relation-field">
-        <label for="rel-a">Hur är de släkt?</label>
-        <div class="relation-search">
-          <input type="search" id="rel-a" list="person-options" placeholder="Person …" autocomplete="off">
-          <input type="search" id="rel-b" list="person-options" placeholder="… och person" autocomplete="off">
-          <button type="button" class="action" id="find-rel">Visa vägen</button>
-        </div>
-      </div>
-    </div>
-    <div class="filter-row year-row">
-      <label class="filter-label" for="year-slider">Levde år <output id="year-out">alla år</output></label>
-      <input type="range" id="year-slider" min="1850" max="2026" step="1" value="2026" disabled>
-      <button type="button" class="toggle" id="year-on" aria-pressed="false">Slå på årsvy</button>
-    </div>
-    <div class="filter-row">
       <div class="view-switcher" role="group" aria-label="Välj huvudvy">
         <button type="button" data-view-mode="groups" aria-pressed="true">Familjer &amp; släkter</button>
         <button type="button" data-view-mode="kinship" aria-pressed="false">Släktväven</button>
         <button type="button" data-view-mode="property" aria-pressed="false">Fastigheter</button>
         <button type="button" data-view-mode="register" aria-pressed="false">Personlista</button>
       </div>
-      <div class="generation-filter" role="group" aria-labelledby="generation-label">
-        <span class="filter-label" id="generation-label">Äldre presentationsled <small>inte jämförbara mellan släkter</small></span>
-        <div class="generation-buttons" id="generation-buttons"></div>
-      </div>
-      <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
-      <button type="button" class="toggle" id="toggle-lonely" aria-pressed="false">Bara utan kända band</button>
+      <button type="button" class="panel-toggle" id="filter-panel-toggle" aria-expanded="false" aria-controls="filter-panel">Filter <span id="filter-badge" hidden></span></button>
+      <button type="button" class="panel-toggle" id="relation-panel-toggle" aria-expanded="false" aria-controls="relation-tools">Släktväg</button>
       <button type="button" class="toggle" id="review-button" aria-pressed="false">Granska</button>
       <output class="filter-count" id="filter-count" aria-live="polite"></output>
     </div>
+    <div id="active-filters" class="active-filters" aria-label="Aktiva filter"></div>
+    <div id="relation-tools" class="relation-tools" aria-label="Hur är de släkt?" hidden>
+      <label class="visually-hidden" for="rel-a">Första personen</label>
+      <input type="search" id="rel-a" list="person-options" placeholder="Person …" autocomplete="off">
+      <span aria-hidden="true">→</span>
+      <label class="visually-hidden" for="rel-b">Andra personen</label>
+      <input type="search" id="rel-b" list="person-options" placeholder="… och person" autocomplete="off">
+      <button type="button" class="action" id="find-rel">Visa vägen</button>
+    </div>
+    <div id="relation-path" class="relation-path" hidden></div>
     <div class="edit-status-row">
       <span id="edit-status">Ändringar sparas lokalt direkt och synkas med Dropbox.</span>
       <button type="button" id="bootstrap-local" hidden>Aktivera godkänd startkopia</button>
       <button type="button" id="family-model-local" hidden>Aktivera godkänd familjemodell</button>
     </div>
-    <div id="relation-path" class="relation-path" hidden></div>
   </nav>
+
+  <section id="filter-panel" class="filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-panel-title" hidden>
+    <header>
+      <div><span>Matrikeln</span><b id="filter-panel-title">Filtrera och visa personer</b></div>
+      <button type="button" data-close-filter aria-label="Stäng filter">×</button>
+    </header>
+    <div class="filter-sheet-grid">
+      <section class="sheet-section">
+        <h2>Grundfilter</h2>
+        <label class="field" for="island-filter">Ö<select id="island-filter"><option value="">Alla öar</option></select></label>
+        <label class="field" for="living-filter">Livsstatus<select id="living-filter"><option value="">Alla</option><option value="ja">Levande</option><option value="nej">Avlidna</option><option value="okänt">Okänt</option></select></label>
+        <label class="field" for="property-filter">Fastighet<select id="property-filter"><option value="">Alla fastigheter</option></select></label>
+      </section>
+      <section class="sheet-section">
+        <h2>Årsvy</h2>
+        <div class="year-controls">
+          <label class="filter-label" for="year-slider">Levde år <output id="year-out">alla år</output></label>
+          <input type="range" id="year-slider" min="1850" max="2026" step="1" value="2026" disabled>
+          <button type="button" class="toggle" id="year-on" aria-pressed="false">Slå på årsvy</button>
+        </div>
+      </section>
+      <section class="sheet-section kinship-filter" hidden>
+        <h2>Släktväven</h2>
+        <label class="field" for="clan-jump">Hoppa till släktkrets<select id="clan-jump"><option value="">Välj släktkrets …</option></select></label>
+        <div class="generation-filter" role="group" aria-labelledby="generation-label">
+          <span class="filter-label" id="generation-label">Äldre presentationsled <small>inte jämförbara mellan släkter</small></span>
+          <div class="generation-buttons" id="generation-buttons"></div>
+        </div>
+        <label class="ingift-toggle" for="include-inlaws"><input type="checkbox" id="include-inlaws" checked> Visa ingifta</label>
+        <button type="button" class="toggle" id="toggle-lonely" aria-pressed="false">Bara utan kända band</button>
+      </section>
+      <section class="sheet-section">
+        <h2>Visning</h2>
+        <div class="sheet-actions">
+          <button type="button" class="toggle" id="toggle-names" aria-pressed="false">Visa klubbnamn först</button>
+          <button type="button" class="toggle" id="toggle-gaps" aria-pressed="false">Markera relationsluckor</button>
+        </div>
+      </section>
+    </div>
+  </section>
+  <div id="filter-backdrop" class="filter-backdrop" hidden></div>
 
   <datalist id="person-options"></datalist>
   <datalist id="drawer-person-options"></datalist>
@@ -120,6 +146,6 @@
     <div id="drawer-content"></div>
   </aside>
 
-  <script type="module" src="./src/app.js?v=2026-08-02-5"></script>
+  <script type="module" src="./src/app.js?v=2026-08-04-ui-1"></script>
 </body>
 </html>

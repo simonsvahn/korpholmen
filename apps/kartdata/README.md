@@ -6,7 +6,7 @@ källpaneler, anteckningar eller AI-förslag. Appen har fyra vyer: översikt,
 
 Varje datapost innehåller namn, objektstyp, valfri undertyp och
 granskningsstatus. Ö och fastighet är strukturerade länkar. Dagens ägare
-visas från Fastighetshistorikens senaste daterade registerobservation och
+visas enbart från Fastighetshistorikens granskade nulägesbedömning och
 länkas antingen till Matrikeln eller till en extern ägarpart.
 
 Den konkreta modellen finns i [`DATAMODELL.md`](DATAMODELL.md). Appfamiljens
@@ -16,6 +16,7 @@ ansvarsgränser finns i [`../../ARKITEKTUR.md`](../../ARKITEKTUR.md).
 
 ```sh
 npm run build:clean-v2
+npm run build:current-owners
 npm test
 npm run build:publish
 ```
@@ -30,3 +31,7 @@ npm run seed:clean-v2
 
 Dropbox-namnrymden är fortsatt `/kartdata/ops`. Det publika paketet i
 `kartdata/` är datafritt.
+
+Ägarreferenserna uppdateras append-only med `npm run seed:current-owners`.
+Äldre ägarlänkar ligger kvar tekniskt men appen läser bara länkar märkta
+`best-known-current`.

@@ -56,16 +56,28 @@ const matrikelState=materialize([...matrikelDocuments.flatMap(item=>item.operati
 const entityRows=type=>matrikelState.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
 const familyContext=buildFamilyContext({people:entityRows('person'),relations:entityRows('relation'),familyUnits:entityRows('family-unit'),kinGroups:entityRows(KIN_GROUP_TYPE)});
 
-await test('startmastern och rättelserna innehåller 169 båtar och giltiga operationer',()=>{
+await test('startmastern och rättelserna innehåller 171 båtar och giltiga operationer',()=>{
   assert.equal(sha256(firstPeterBytes),sha256(secondPeterBytes));
   document.operations.forEach(validateOperation);
   correctionOperations.forEach(validateOperation);
   assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
-  assert.equal(state.listEntities('boat').length,169);
+  assert.equal(state.listEntities('boat').length,171);
   assert.equal(state.listEntities('boat-person-link').length,173);
   assert.ok(state.listEntities('family').length>4);
   assert.equal(state.listEntities('boat-family-link').length,9);
   for(const family of decisions.families)assert.ok(state.listEntities('family').some(entity=>entity.entity_id===family.id),family.id);
+});
+
+await test('de två bekräftade Korpholmen runt-farkosterna är källspårbara utan påstått ägarskap',()=>{
+  const aquilo=state.getEntity('boat','aquilogunillo');
+  const kareMorfarBengt=state.getEntity('boat','käremorfarbengt');
+  assert.equal(aquilo.fields.namn,'Aquilo Gunillo');
+  assert.equal(aquilo.fields.period,'belagd i Korpholmen runt 2020');
+  assert.equal(aquilo.fields.agare,null);
+  assert.equal(kareMorfarBengt.fields.namn,'Käre Morfar Bengt');
+  assert.equal(kareMorfarBengt.fields.modell,'Kanadensare (tävlingsklass)');
+  assert.equal(kareMorfarBengt.fields.agare,null);
+  assert.equal(state.listEntities('boat-person-link').filter(link=>['aquilogunillo','käremorfarbengt'].includes(link.fields.boat_id)).length,0);
 });
 
 await test('Junior Peter hålls isär från Peter-Pedal i båtägandet',()=>{

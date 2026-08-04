@@ -12,6 +12,7 @@
 | `event-claim` | Strukturerad förrättnings-, pris- eller övergångsuppgift med intervall, säkerhet och verifieringsstatus. |
 | `event-party` | Köpare, säljare, sökande eller annan roll i en händelse. |
 | `observation` | Samlat registerögonblick med `observed_on`; anger inte automatiskt förvärvsdatum. |
+| `current-owner-assessment` | Granskat anspråk på bäst kända nuvarande ägare. Pekar på parter men ersätter eller raderar aldrig äldre observationer. |
 | `source` + `evidence` | Källan och dess stöd för ett specifikt objekt. |
 | `audit-finding` | Källkontrollen av den äldre manuella ägartabellen. |
 | `community-link` | Personanknytning från Matrikeln; alltid `legal_ownership: false`. |

@@ -118,6 +118,14 @@ for (const observation of source.ownership_observations) {
   requireProperty(observation.property_id, 'ägarobservation');
   requireSource(observation.source_id, 'ägarobservation');
 }
+const currentOwnerProperties = new Set();
+for (const assessment of source.current_owner_assessments || []) {
+  requireProperty(assessment.property_id, 'bedömning av nuvarande ägare');
+  sourcesValid(assessment.source_ids, `bedömning av nuvarande ägare ${assessment.property_id}`);
+  if (!assessment.owners?.length) throw new Error(`Bedömningen saknar ägare: ${assessment.property_id}`);
+  if (currentOwnerProperties.has(assessment.property_id)) throw new Error(`Flera nulägesbedömningar för ${assessment.property_id}`);
+  currentOwnerProperties.add(assessment.property_id);
+}
 for (const chain of source.manual_chains) requireProperty(chain.property_id, 'manuell ägarkedja');
 for (const event of source.manual_event_claims || []) {
   event.property_ids.forEach(id => requireProperty(id, `manuellt händelseanspråk ${event.id}`));
@@ -143,6 +151,7 @@ const records = {
   'event-party': [],
   holding: [],
   observation: [],
+  'current-owner-assessment': [],
   'manual-claim': [],
   'holding-claim': [],
   'event-claim': [],
@@ -191,6 +200,13 @@ for (const observation of source.ownership_observations) {
       certainty: 'säker vid observationen', basis: 'registerobservation',
       notes: 'Observationen fastställer inte förvärvsdatum.',
     });
+  });
+}
+for (const assessment of source.current_owner_assessments || []) {
+  records['current-owner-assessment'].push({
+    id: `current-owner-${slug(assessment.property_id)}`,
+    ...assessment,
+    owner_party_ids: assessment.owners.map(partyFor),
   });
 }
 function supportFor(propertyId, text) {
@@ -299,6 +315,7 @@ function propertySourceIds(propertyId) {
   const ids = new Set(['NOT-INTFAKTA']);
   source.events.filter(item => item.property_ids.includes(propertyId)).flatMap(item => item.source_ids).forEach(id => ids.add(id));
   source.ownership_observations.filter(item => item.property_id === propertyId).forEach(item => ids.add(item.source_id));
+  (source.current_owner_assessments || []).filter(item => item.property_id === propertyId).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
   source.property_relations.filter(item => item.to_property_id === propertyId || item.from_id === propertyId).flatMap(item => item.source_ids).forEach(id => ids.add(id));
   (source.manual_support || []).filter(item => item.property_id === propertyId).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
   (source.manual_event_claims || []).filter(item => item.property_ids.includes(propertyId)).flatMap(item => item.source_ids || []).forEach(id => ids.add(id));
@@ -333,6 +350,7 @@ function addEvidence(subjectType, subjectId, sourceId, locator = null, stance = 
 }
 for (const event of records.event) for (const sourceId of event.source_ids) addEvidence('event', event.id, sourceId);
 for (const holding of records.holding) for (const sourceId of holding.source_ids) addEvidence('holding', holding.id, sourceId);
+for (const assessment of records['current-owner-assessment']) for (const sourceId of assessment.source_ids) addEvidence('current-owner-assessment', assessment.id, sourceId, null, 'bäst kända nuläge');
 for (const holding of records['holding-claim']) for (const sourceId of holding.source_ids) addEvidence('holding-claim', holding.id, sourceId, holding.source_locators?.join('; ') || null, holding.verification_status.includes('belagd') ? 'stöd' : 'anspråk');
 for (const event of records['event-claim']) for (const sourceId of event.source_ids) addEvidence('event-claim', event.id, sourceId, event.source_locators?.join('; ') || null, event.verification_status?.includes('belagd') ? 'stöd' : 'anspråk');
 for (const relation of records['property-relation']) for (const sourceId of relation.source_ids) addEvidence('property-relation', relation.id, sourceId);
@@ -352,6 +370,7 @@ set('root', 'fastigheter', 'migration_id', '2026-08-02-fastighetshistorik-full')
 set('root', 'fastigheter', 'source_sha256', sha256(sourceText));
 set('root', 'fastigheter', 'date_roles', source.principles.date_roles);
 set('root', 'fastigheter', 'owner_observation_principle', source.principles.owner_observation);
+set('root', 'fastigheter', 'current_owner_principle', source.principles.current_owner);
 for (const [entityType, items] of Object.entries(records)) for (const item of items) {
   const { id, ...fields } = item;
   for (const [field, value] of Object.entries(fields)) set(entityType, id, field, value);

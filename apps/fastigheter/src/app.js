@@ -49,6 +49,7 @@ const propertyRecords = () => recordList('property').sort((a, b) => a.id.localeC
 const eventRecords = () => recordList('event');
 const holdingRecords = () => recordList('holding');
 const observationRecords = () => recordList('observation');
+const currentOwnerRecords = () => recordList('current-owner-assessment');
 const auditRecords = () => recordList('audit-finding');
 const sourceRecords = () => recordList('source').sort((a, b) => a.id.localeCompare(b.id, 'sv'));
 const communityRecords = () => recordList('community-link');
@@ -60,6 +61,7 @@ const relationRecords = () => recordList('property-relation');
 const eventsFor = id => eventRecords().filter(event => (event.property_ids || []).includes(id));
 const holdingsFor = id => holdingRecords().filter(holding => holding.subject_type === 'property' && holding.subject_id === id);
 const observationsFor = id => observationRecords().filter(item => item.property_id === id).sort((a, b) => b.observed_on.localeCompare(a.observed_on));
+const currentOwnerFor = id => currentOwnerRecords().find(item => item.property_id === id) || null;
 const auditFor = id => auditRecords().find(item => item.property_id === id);
 const communityFor = id => communityRecords().filter(item => item.property_id === id);
 const claimsFor = id => manualClaimRecords().filter(item => item.property_id === id).sort((a, b) => a.order - b.order);
@@ -91,14 +93,14 @@ function eventDate(event) {
   if (event.year_min || event.year_max) return event.year_min === event.year_max ? String(event.year_min) : `${event.year_min || '?'}–${event.year_max || '?'}`;
   return 'Odaterad';
 }
-function latestOwners(propertyId) {
-  const latest = observationsFor(propertyId)[0];
-  if (!latest) return { date: null, names: [] };
+function currentOwners(propertyId) {
+  const assessment = currentOwnerFor(propertyId);
+  if (!assessment) return { names: [], basis: null, reviewedOn: null };
   const parties = new Map(partyRecords().map(party => [party.id, party]));
-  return { date: latest.observed_on, names: (latest.owner_party_ids || []).map(id => parties.get(id)?.name || id) };
+  return { names: (assessment.owner_party_ids || []).map(id => parties.get(id)?.name || id), basis: assessment.basis, reviewedOn: assessment.reviewed_on };
 }
 function propertySearchText(property) {
-  return [property.id, property.display_name, property.island, ...latestOwners(property.id).names,
+  return [property.id, property.display_name, property.island, ...currentOwners(property.id).names,
     ...eventsFor(property.id).flatMap(event => [event.label, event.notes]),
     ...eventClaimsFor(property.id).flatMap(event => [event.label, event.notes, event.date_text]),
     ...holdingClaimsFor(property.id).flatMap(claim => [claim.holder_text, claim.role, claim.period_text, claim.raw_text]),
@@ -126,11 +128,11 @@ function auditChip(audit) {
   return `<span class="chip ${audit.severity === 'viktig' ? 'warn' : ''}">${escapeHtml(audit.status)}</span>`;
 }
 function propertyCard(property) {
-  const owners = latestOwners(property.id); const audit = auditFor(property.id); const events = eventsFor(property.id); const claims = eventClaimsFor(property.id);
+  const owners = currentOwners(property.id); const audit = auditFor(property.id); const events = eventsFor(property.id); const claims = eventClaimsFor(property.id);
   return `<button class="property-card" type="button" data-property-id="${escapeHtml(property.id)}">
     <span class="property-code">${escapeHtml(property.id.replace('Alsvik ', ''))}</span>
     <span class="property-copy"><h3>${escapeHtml(property.display_name || property.id)}</h3>
-      <p>${owners.names.length ? escapeHtml(owners.names.join(', ')) : 'Ingen registerobservation av ägare'}${owners.date ? ` <small>(${escapeHtml(owners.date)})</small>` : ''}</p>
+      <p>${owners.names.length ? escapeHtml(owners.names.join(', ')) : 'Ingen bedömd nuvarande ägare'}</p>
       <span class="chips"><span class="chip">${events.length} belagda · ${claims.length} uppgifter</span><span class="chip">${holdingClaimsFor(property.id).length} kedjeled</span><span class="chip">${communityFor(property.id).length} personkopplingar</span>${auditChip(audit)}</span>
     </span></button>`;
 }
@@ -194,6 +196,7 @@ function renderDrawer(id) {
   if (!property) return closeDrawer();
   const events = eventsFor(id).sort((a, b) => eventDate(a).localeCompare(eventDate(b), 'sv'));
   const observations = observationsFor(id); const holdings = holdingsFor(id); const audit = auditFor(id);
+  const current = currentOwners(id);
   const holdingClaims = holdingClaimsFor(id); const eventClaims = eventClaimsFor(id).sort((a, b) => (eventYear(a) || 9999) - (eventYear(b) || 9999));
   const sources = new Map(sourceRecords().map(source => [source.id, source]));
   const parties = new Map(partyRecords().map(party => [party.id, party]));
@@ -206,7 +209,8 @@ function renderDrawer(id) {
       <label class="span-2">Kort etikett<input data-property-field="label" value="${escapeHtml(property.label || '')}"></label>
     </div><p><b>Master:</b> Fastighetsregistret · stabilt id från Matrikeln.</p></section>
     <section class="drawer-section"><h3>Källgranskning</h3>${audit ? `<p>${auditChip(audit)}</p><p>${escapeHtml(audit.summary)}</p><p><small>Jämförda källor: ${escapeHtml((audit.compared_source_ids || []).join(', '))}</small></p>` : '<p>Ingen granskningspost.</p>'}</section>
-    <section class="drawer-section"><h3>Observerade lagfarna ägare</h3><p class="section-help">Datumet är när registret lästes, inte automatiskt när förvärvet skedde.</p>
+    <section class="drawer-section"><h3>Bäst kända nuvarande ägare</h3>${current.names.length ? `<p><b>${escapeHtml(current.names.join(', '))}</b></p><p class="section-help">${escapeHtml(current.basis || '')}${current.reviewedOn ? ` · granskat ${escapeHtml(current.reviewedOn)}` : ''}</p>` : '<p>Ingen tillräckligt säker nulägesbedömning.</p>'}</section>
+    <section class="drawer-section"><h3>Observerade lagfarna ägare</h3><p class="section-help">Historiskt källager. Datumet är när registret lästes, inte automatiskt när förvärvet skedde.</p>
       ${observations.map(item => `<div class="history-row"><time>${escapeHtml(item.observed_on)}</time><div><b>${(item.owner_party_ids || []).map(partyId => escapeHtml(parties.get(partyId)?.name || partyId)).join(', ') || 'Ägare ej tillgänglig'}</b><br><small>${escapeHtml(item.source_id)}${item.notes ? ` · ${escapeHtml(item.notes)}` : ''}</small></div></div>`).join('') || '<p>Ingen registerobservation.</p>'}
     </section>
     <section class="drawer-section"><h3>Belagda händelser och transaktioner</h3>${events.map(event => `<article class="event-card"><div><span class="claim-kind belagd">belagd</span><time>${escapeHtml(eventDate(event))}</time><h4>${escapeHtml(event.label)}</h4><ul>${dateRoleList(event)}</ul>${event.amount ? `<p><b>${Number(event.amount).toLocaleString('sv-SE')} ${escapeHtml(event.currency || '')}</b>${event.area_ha ? ` · ${event.area_ha} ha` : ''}</p>` : ''}${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ''}<small>${escapeHtml((event.source_ids || []).join(', '))}</small></div><button type="button" data-delete-event="${escapeHtml(event.id)}">Ta bort</button></article>`).join('') || '<p>Inga fullt belagda händelser.</p>'}
@@ -284,7 +288,7 @@ async function uploadBootstrapOps(transport) {
 async function loadMatrikelPeople(token) {
   if (!token) return [];
   const repo = await new Repository({ store: new MemoryStore(), deviceId: 'fastigheter-matrikel-read' }).init();
-  await new SyncEngine({ repository: repo, transport: new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/ops' }) }).downloadRemote();
+  await new SyncEngine({ repository: repo, transport: new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops' }) }).downloadRemote();
   matrikelPeople = repo.listEntities('person').map(entity => ({ id: entity.entity_id, ...entity.fields }));
   await store.putMeta(MATRIKEL_PEOPLE_META, matrikelPeople); return matrikelPeople;
 }

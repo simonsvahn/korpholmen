@@ -16,7 +16,7 @@ AI-förslag är ett avskilt v1-arkiv och läses inte som aktiv data.
 | `data-entry-property-link` | Strukturerad koppling från en datapost till ett fastighets-ID. |
 | `person-ref` | Skrivskyddad referens till en säkert länkad person i Matrikeln. |
 | `external-party` | Ägarpart i Fastighetshistorik som ännu saknar säker Matrikel-länk. Kan vara person, organisation, dödsbo eller namngrupp. |
-| `property-owner-link` | En fastighets senaste daterade ägarobservation och dess länk till `person-ref` eller `external-party`. |
+| `property-owner-link` | En ägare i Fastighetshistorikens granskade nulägesbedömning och dess länk till `person-ref` eller `external-party`. |
 
 Aktiva objekttyper är endast `byggnad`, `plats`, `namnform` och
 `ägaretikett`. `kartsymbol`, `annat` och den äldre pseudotypen
@@ -48,14 +48,15 @@ ett område som inte är en ö lämnas länken tom; systemet gissar inte.
 ## Fastighet och ägare
 
 Fastighets-ID:n valideras mot Fastighetshistorik. Fritext lagras inte som
-fastighetskoppling. Ägare kopieras inte från den äldre Kartdata-tabellen.
-I stället används den senaste daterade `observation` som finns i
-Fastighetshistorik för respektive fastighet.
+fastighetskoppling. Ägare kopieras inte från den äldre Kartdata-tabellen och
+härleds inte direkt från en gammal registerobservation. I stället används
+enbart `current-owner-assessment` i Fastighetshistorik. Saknas en sådan
+bedömning visar Kartdata ingen ägare.
 
-Om observationens part redan har ett `person_id` som finns i Matrikeln skapas
+Om nulägesbedömningens part redan har ett `person_id` som finns i Matrikeln skapas
 en `person-ref`. Annars skapas en `external-party`. Ingen namnlikhet används
-för att gissa att två personer är samma. Appen visar observationsdatum, så
-att en registerbild från 2020 inte felaktigt framställs som kontrollerad 2026.
+för att gissa att två personer är samma. Historiska observationsdatum och
+ägarkedjor visas i Fastighetshistorik, inte i Kartdatas nulägeskolumn.
 
 ## Lagring och publicering
 

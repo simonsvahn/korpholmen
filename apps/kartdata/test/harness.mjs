@@ -20,7 +20,7 @@ const state = materialize(document.operations);
 const rows = type => state.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 
 await test('alla JavaScript-filer har giltig syntax', () => {
-  for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-publicering.mjs']) {
+  for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-lokal-bootstrap.mjs', 'verktyg/bygg-publicering.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr}`);
   }
@@ -70,20 +70,21 @@ await test('fastighetskopplingarna pekar bara på de 31 validerade referenserna'
   assert.ok(links.every(link => entries.has(link.entry_id) && refs.has(link.property_id)));
 });
 
-await test('ägare skiljer säkra Matrikel-personer från externa parter utan namnmatchningsgissning', () => {
-  assert.equal(rows('property-owner-link').length, 50);
-  assert.equal(rows('person-ref').length, 21);
-  assert.equal(rows('external-party').length, 28);
-  assert.ok(rows('external-party').some(ref => ref.external_id === 'party-kaj-gunder-boving'));
-  assert.ok(!rows('person-ref').some(ref => ref.external_id === 'kajböving'));
+await test('nulägesägare skiljer säkra Matrikel-personer från externa parter utan namnmatchningsgissning', () => {
+  assert.equal(rows('property-owner-link').length, 52);
+  assert.equal(rows('person-ref').length, 28);
+  assert.equal(rows('external-party').length, 23);
+  assert.ok(rows('person-ref').some(ref => ref.external_id === 'olaböving'));
+  assert.ok(rows('person-ref').some(ref => ref.external_id === 'månsböving'));
+  assert.ok(!rows('property-owner-link').some(link => link.owner_id === 'kajböving' || link.owner_id === 'party-kaj-gunder-boving'));
 });
 
-await test('varje ägarlänk är daterad och pekar på en existerande referens', () => {
+await test('varje ägarlänk kommer från nulägesbedömningen och pekar på en existerande referens', () => {
   const properties = new Set(rows('property-ref').map(ref => ref.external_id));
   const people = new Set(rows('person-ref').map(ref => ref.external_id));
   const parties = new Set(rows('external-party').map(ref => ref.external_id));
   for (const link of rows('property-owner-link')) {
-    assert.ok(properties.has(link.property_id)); assert.match(link.observed_on, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(properties.has(link.property_id)); assert.equal(link.basis, 'best-known-current'); assert.match(link.reviewed_on, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(link.owner_type === 'person-ref' ? people.has(link.owner_id) : parties.has(link.owner_id));
   }
 });
@@ -109,6 +110,7 @@ await test('appen visar bara Data och de strukturerade sakfälten', async () => 
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
   for (const forbidden of ['Ordagrann källuppgift', 'Tidigare arbetsförslag', 'Godkänt visningsnamn', 'Granskningsnot', 'Käll-ID:n']) assert.ok(!app.includes(forbidden), forbidden);
   for (const required of ["recordList('data-entry')", "recordList('data-entry-island-link')", "recordList('data-entry-property-link')", "recordList('property-owner-link')", '<h3>Data</h3>', '>Namn<input', '>Ö<select']) assert.ok(app.includes(required), required);
+  assert.ok(app.includes('bootstrapCurrentOwners'));
   assert.ok(!html.includes('value="kartsymbol"')); assert.ok(!html.includes('value="annat"')); assert.ok(html.includes('Exportera data'));
 });
 
@@ -139,7 +141,7 @@ await test('publiceringsbygget är datafritt och har den rena appkoden', async (
 
 await test('arkitekturen dokumenterar v2-gränsen och externa ägarparter', async () => {
   const model = await readFile(resolve(ROOT, 'DATAMODELL.md'), 'utf8'); const architecture = await readFile(resolve(REPO, 'ARKITEKTUR.md'), 'utf8');
-  assert.match(model, /äldre importen.*v1-arkiv/s); assert.match(model, /external-party/); assert.match(model, /senaste daterade/); assert.match(architecture, /Kartdata v2 använder `data-entry`/);
+  assert.match(model, /äldre importen.*v1-arkiv/s); assert.match(model, /external-party/); assert.match(model, /current-owner-assessment/); assert.match(architecture, /Kartdata v2 använder `data-entry`/);
 });
 
 console.log(`\n${passed} Kartdata-v2-kontrakt godkända.`);
