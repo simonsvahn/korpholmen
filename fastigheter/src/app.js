@@ -11,8 +11,8 @@ import {
   registerKorpholmenServiceWorker,
   validateOperation,
 } from '../core/data-layer.js';
-import { resolvePartyName } from '../../../packages/core/master-data.js';
-import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { resolvePartyName } from '../core/master-data.js';
+import { ReadOnlyMaster } from '../core/read-only-master.js';
 import {
   buildClaimChain,
   currentClaimMatchesNames,

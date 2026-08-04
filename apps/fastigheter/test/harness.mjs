@@ -208,6 +208,7 @@ await test('det datafria paketet har egen offlinebar kärna', async () => {
   const core = await readFile(resolve(REPO, 'fastigheter/core/data-layer.js'), 'utf8');
   const sw = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
   assert.ok(app.includes("../core/data-layer.js"));
+  assert.equal(app.includes('../../../packages/core/'), false);
   assert.ok(timeline.includes('buildClaimChain'));
   assert.ok(core.includes("./storage/indexeddb.js"));
   assert.ok(sw.includes("key.startsWith('korpholmen-fastigheter-')"));

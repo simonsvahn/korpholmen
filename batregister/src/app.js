@@ -11,7 +11,7 @@ import {
   registerKorpholmenServiceWorker,
   validateOperation,
 } from '../core/data-layer.js';
-import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { ReadOnlyMaster } from '../core/read-only-master.js';
 import {
   FAMILY_UNIT_TYPE,
   KIN_GROUP_TYPE,

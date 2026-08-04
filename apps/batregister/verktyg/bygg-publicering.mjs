@@ -11,7 +11,7 @@ for(const relative of FILES){const source=resolve(ROOT,relative);if(!(await stat
 const sharedIndex=(await readFile(resolve(ROOT,'index.html'),'utf8')).replaceAll('../../manifest.webmanifest','../manifest.webmanifest').replaceAll('../../icons/korpholmen.svg','../icons/korpholmen.svg').replaceAll('../../icons/korpholmen-180.png','../icons/korpholmen-180.png').replaceAll('../../src/app-family-bootstrap.js','../src/app-family-bootstrap.js');
 await writeFile(resolve(OUT,'index.html'),sharedIndex);
 for(const relative of CORE_FILES){const source=resolve(CORE,relative);if(!(await stat(source)).isFile())throw new Error(`Gemensam kärnfil saknas: ${relative}`);const target=resolve(OUT,'core',relative);await mkdir(dirname(target),{recursive:true});await copyFile(source,target)}
-const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replace("../../../packages/core/data-layer.js","../core/data-layer.js").replace("../../../packages/core/family-context.js","../core/family-context.js");
+const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../../packages/core/','../core/');
 await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'src/app.js'),app);
 const connectionFilter=(await readFile(resolve(ROOT,'src/connection-filter.js'),'utf8')).replace("../../../packages/core/family-context.js","../core/family-context.js");
 await writeFile(resolve(OUT,'src/connection-filter.js'),connectionFilter);
