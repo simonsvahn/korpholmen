@@ -56,4 +56,11 @@ await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', as
   assert.ok(release.shell_files.every(path => !path.includes('/privat/') && !path.includes('/apps/')));
 });
 
+await test('publicerade appmoduler pekar bara inom GitHub Pages-paketet', async () => {
+  for (const app of APPS) {
+    const source = await readFile(resolve(ROOT, app, 'src/app.js'), 'utf8');
+    assert.equal(source.includes('../../../packages/core/'), false, `${app} har en modulväg som lämnar GitHub Pages-projektet`);
+  }
+});
+
 console.log(`\n${passed} Korpholmen-kontrakt godkända.`);

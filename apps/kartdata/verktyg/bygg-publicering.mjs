@@ -18,7 +18,7 @@ for (const relative of CORE_FILES) {
   const source = resolve(CORE, relative); if (!(await stat(source)).isFile()) throw new Error(`Gemensam kärnfil saknas: ${relative}`);
   const target = resolve(OUT, 'core', relative); await mkdir(dirname(target), { recursive: true }); await copyFile(source, target);
 }
-const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).replace("../../../packages/core/data-layer.js", "../core/data-layer.js");
+const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).replaceAll('../../../packages/core/', '../core/');
 await mkdir(resolve(OUT, 'src'), { recursive: true }); await writeFile(resolve(OUT, 'src/app.js'), app);
 
 const bundle = (await Promise.all([
