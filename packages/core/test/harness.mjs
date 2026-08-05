@@ -12,6 +12,8 @@ import {
   Repository,
   SharedDropboxSession,
   SyncEngine,
+  createRevisionCache,
+  debounce,
   disconnectDropboxEverywhere,
   isOfflineError,
   mergePersonReferences,
@@ -75,6 +77,42 @@ await test('en lokal referensmaster kan startas från operationer utan att de ha
   assert.equal((await cache.getAllOps()).length, 0);
   const offlineReader = await new ReadOnlyMaster({ store: cache, cacheKey: 'kartdata' }).init();
   assert.equal(offlineReader.getEntity('place', 'korpholmen').fields.preferred_name, 'Korpholmen');
+});
+
+await test('kompakta checkpoints läser bara operationer efter vattenmärket vid nästa start', async () => {
+  class CountingStore extends MemoryStore {
+    constructor() { super(); this.fullReads = 0; this.incrementalReads = 0; }
+    async getAllOps() { this.fullReads += 1; return super.getAllOps(); }
+    async getOpsAfter(watermarks) { this.incrementalReads += 1; return super.getOpsAfter(watermarks); }
+  }
+  const store = new CountingStore();
+  const first = await new Repository({ store, deviceId: 'checkpoint-device' }).init();
+  await first.setFields(Array.from({ length: 25 }, (_, index) => ({ entityType: 'person', entityId: `p${index}`, field: 'name', value: `Person ${index}` })));
+  const snapshot = await first.saveSnapshot();
+  assert.equal(snapshot.snapshot_version, 2);
+  assert.deepEqual(snapshot.applied, []);
+  assert.equal(snapshot.op_watermarks['checkpoint-device'], 25);
+  await first.setField('person', 'p25', 'name', 'Person 25');
+
+  store.fullReads = 0;
+  store.incrementalReads = 0;
+  const resumed = await new Repository({ store, deviceId: 'checkpoint-device' }).init();
+  assert.equal(store.fullReads, 0);
+  assert.equal(store.incrementalReads, 1);
+  assert.equal(resumed.listEntities('person').length, 26);
+  assert.equal(resumed.seq, 26);
+});
+
+await test('lyckad synk sparar automatiskt ett kompakt checkpoint', async () => {
+  const store = new MemoryStore();
+  const repository = await new Repository({ store, deviceId: 'sync-checkpoint' }).init();
+  await repository.setField('person', 'p1', 'name', 'Checkpoint');
+  const remote = new MemoryRemoteTransport({ id: 'checkpoint' });
+  await new SyncEngine({ repository, transport: remote }).syncOnce();
+  const snapshotId = await store.getMeta('latest_snapshot');
+  const snapshot = await store.getSnapshot(snapshotId);
+  assert.equal(snapshot.snapshot_version, 2);
+  assert.equal(snapshot.op_watermarks['sync-checkpoint'], 1);
 });
 
 await test('tombstonade deterministiska länkar återställs atomiskt vid upsert', async () => {
@@ -199,6 +237,27 @@ await test('beständig webblagring efterfrågas en gång när stödet finns', as
   } });
   assert.deepEqual(result, { supported: true, persisted: true, requested: true });
   assert.equal(requests, 1);
+});
+
+await test('revisionscache och debounce undviker onödiga omräkningar', async () => {
+  let revision = 1;
+  let computations = 0;
+  const cached = createRevisionCache(() => revision);
+  assert.equal(cached('lista', () => ++computations), 1);
+  assert.equal(cached('lista', () => ++computations), 1);
+  revision += 1;
+  assert.equal(cached('lista', () => ++computations), 2);
+
+  let scheduled = null;
+  let latest = null;
+  const delayed = debounce(value => { latest = value; }, 100, {
+    setTimer: callback => { scheduled = callback; return 1; },
+    clearTimer: () => {},
+  });
+  delayed('första');
+  delayed('senaste');
+  scheduled();
+  assert.equal(latest, 'senaste');
 });
 
 await test('Dropbox-token spärras med den officiella revoke-slutpunkten', async () => {

@@ -5,6 +5,8 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -50,15 +52,16 @@ let syncPromise = null;
 let selectedEntryId = null;
 let selectedIslandId = null;
 const ui = { search: '', island: '', objectClass: '', subtype: '', property: '', status: '', sort: 'name', view: 'atlas' };
+const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${fastigheterMaster?.revision || 0}:${matrikelMaster?.revision || 0}`);
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const escapeAttribute = escapeHtml;
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('sv');
 const cssToken = value => String(value || '').replaceAll(' ', '-');
 const unique = values => [...new Set(values.filter(Boolean))];
-const recordList = type => repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
-const entryRecords = () => recordList('data-entry').sort((a, b) => entryIdNumber(a.id) - entryIdNumber(b.id));
-const islandRecords = () => recordList('place').filter(place => place.subtype === 'ö').sort((a, b) => String(a.preferred_name || '').localeCompare(String(b.preferred_name || ''), 'sv'));
+const recordList = type => viewCache(`records:${type}`, () => repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })));
+const entryRecords = () => viewCache('data-entries', () => [...recordList('data-entry')].sort((a, b) => entryIdNumber(a.id) - entryIdNumber(b.id)));
+const islandRecords = () => viewCache('islands', () => recordList('place').filter(place => place.subtype === 'ö').sort((a, b) => String(a.preferred_name || '').localeCompare(String(b.preferred_name || ''), 'sv')));
 const nameRecords = () => recordList('name-record');
 const islandLinks = () => recordList('data-entry-island-link');
 const entryPropertyLinks = () => recordList('data-entry-property-link');
@@ -121,7 +124,7 @@ function filteredEntries() {
     if (ui.subtype && entry.subtype !== ui.subtype) return false;
     if (ui.property && !properties.includes(ui.property)) return false;
     if (ui.status && entry.review_status !== ui.status) return false;
-    if (query && !normalize(entrySearchText(entry)).includes(query)) return false;
+    if (query && !viewCache(`entry-search:${entry.id}`, () => normalize(entrySearchText(entry))).includes(query)) return false;
     return true;
   }).sort(compareEntries);
 }
@@ -354,7 +357,8 @@ drawer.addEventListener('click', event => {
   if (event.target.closest('[data-action="delete-island"]')) deleteIsland().catch(error => setStatus(error.message, 'error'));
 });
 drawer.addEventListener('submit', event => { event.preventDefault(); if (event.target.id === 'data-form') saveEntry(event.target).catch(error => setStatus(error.message, 'error')); if (event.target.id === 'island-form') saveIsland(event.target).catch(error => setStatus(error.message, 'error')); });
-$('#search').addEventListener('input', event => { ui.search = event.target.value; render(); });
+const renderSearch = debounce(render, 120);
+$('#search').addEventListener('input', event => { ui.search = event.target.value; renderSearch(); });
 $('#island-filter').addEventListener('change', event => { ui.island = event.target.value; render(); });
 $('#class-filter').addEventListener('change', event => { ui.objectClass = event.target.value; render(); });
 $('#subtype-filter').addEventListener('change', event => { ui.subtype = event.target.value; render(); });

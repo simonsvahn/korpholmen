@@ -10,7 +10,7 @@ export {
 } from './domain/operations.js';
 export { Materializer, materialize } from './domain/materializer.js';
 export { Repository } from './domain/repository.js';
-export { isOfflineError, requestPersistentStorage, resolveDeviceId } from './runtime-safety.js';
+export { createRevisionCache, debounce, isOfflineError, requestPersistentStorage, resolveDeviceId } from './runtime-safety.js';
 export { MemoryStore } from './storage/memory.js';
 export { IndexedDBStore, openSlaktlandskapDB } from './storage/indexeddb.js';
 export { createBatch, batchPath, validateBatch } from './sync/batch.js';

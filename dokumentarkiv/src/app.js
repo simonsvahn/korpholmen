@@ -5,7 +5,9 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -39,15 +41,16 @@ let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
 const contentImageUrls = new Map();
+const viewCache = createRevisionCache(() => repository?.revision || 0);
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const escapeAttribute = escapeHtml;
 const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCase('sv');
 const typeLabel = type => type ? type.charAt(0).toLocaleUpperCase('sv') + type.slice(1) : 'Okänd';
-const recordList = type => repository ? repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })) : [];
-const documentRecords = () => recordList('document').sort((a, b) => String(a.document_date).localeCompare(String(b.document_date), 'sv') || a.title.localeCompare(b.title, 'sv'));
-const entityRecords = () => recordList('archive-entity').sort((a, b) => a.name.localeCompare(b.name, 'sv'));
-const entityMap = () => new Map(entityRecords().map(entity => [entity.id, entity]));
+const recordList = type => viewCache(`records:${type}`, () => repository ? repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })) : []);
+const documentRecords = () => viewCache('documents', () => [...recordList('document')].sort((a, b) => String(a.document_date).localeCompare(String(b.document_date), 'sv') || String(a.title || '').localeCompare(String(b.title || ''), 'sv')));
+const entityRecords = () => viewCache('archive-entities', () => [...recordList('archive-entity')].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'sv')));
+const entityMap = () => viewCache('archive-entity-map', () => new Map(entityRecords().map(entity => [entity.id, entity])));
 const summaryRecord = () => recordList('archive-summary')[0] || {};
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
@@ -152,7 +155,8 @@ function baseFilteredDocuments() {
     if (ui.entityType !== 'alla' && !entities.some(entity => entity.entity_type === ui.entityType)) return false;
     if (ui.status !== 'alla' && document.status !== ui.status) return false;
     if (!query) return true;
-    return normalize([document.title, document.document_type, document.document_date, document.collection, document.transcript, ...entities.map(entity => entity.name)].join(' ')).includes(query);
+    const searchText = viewCache(`document-search:${document.id}`, () => normalize([document.title, document.document_type, document.document_date, document.collection, document.transcript, ...entities.map(entity => entity.name)].join(' ')));
+    return searchText.includes(query);
   });
 }
 
@@ -523,8 +527,9 @@ function clearFilters({ includeSearch = false } = {}) {
   render();
 }
 
-$('#search').addEventListener('input', event => { ui.search = event.target.value; render(); });
-$('#clear-search').addEventListener('click', () => { ui.search = ''; $('#search').value = ''; render(); });
+const renderSearch = debounce(render, 120);
+$('#search').addEventListener('input', event => { ui.search = event.target.value; renderSearch(); });
+$('#clear-search').addEventListener('click', () => { renderSearch.cancel(); ui.search = ''; $('#search').value = ''; render(); });
 $('#clear-filters').addEventListener('click', () => clearFilters());
 $('#entity-filter').addEventListener('change', event => { ui.entityType = event.target.value; render(); });
 $('#status-filter').addEventListener('change', event => { ui.status = event.target.value; render(); });

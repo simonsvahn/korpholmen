@@ -67,10 +67,11 @@ export class SyncEngine {
 
   async uploadLocal() {
     const uploadedSeq = await this.repository.store.getMeta(this.uploadedSeqKey) ?? 0;
-    const all = await this.repository.store.getAllOps();
-    const pending = all
-      .filter(op => op.device_id === this.repository.deviceId && op.seq > uploadedSeq)
-      .sort((a, b) => a.seq - b.seq);
+    const pending = typeof this.repository.store.getOpsForDeviceAfter === 'function'
+      ? await this.repository.store.getOpsForDeviceAfter(this.repository.deviceId, uploadedSeq)
+      : (await this.repository.store.getAllOps())
+        .filter(op => op.device_id === this.repository.deviceId && op.seq > uploadedSeq)
+        .sort((a, b) => a.seq - b.seq);
     let uploadedOps = 0;
     let uploadedBatches = 0;
     for (let index = 0; index < pending.length; index += this.batchSize) {
@@ -117,7 +118,8 @@ export class SyncEngine {
         }
         throw error;
       }
-      const entries = page.entries.filter(entry => isBatchPath(entry.path));
+      const ownBatchPrefix = `${encodeURIComponent(this.repository.deviceId)}-`;
+      const entries = page.entries.filter(entry => isBatchPath(entry.path) && !String(entry.path).split('/').at(-1).startsWith(ownBatchPrefix));
       const batches = await mapConcurrent(entries, this.downloadConcurrency, async entry => {
         const batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
         validateBatch(batch);
@@ -134,6 +136,7 @@ export class SyncEngine {
       await this.repository.store.putMeta(`${this.keyPrefix}:cursor`, cursor);
       if (!page.has_more) break;
     }
+    await this.repository.saveSnapshot();
     return { downloadedOps, downloadedBatches, cursor, cursorReset: resetUsed };
   }
 

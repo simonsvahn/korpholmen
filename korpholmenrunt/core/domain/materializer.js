@@ -16,6 +16,7 @@ export class Materializer {
   constructor(snapshot = null) {
     this.entities = new Map();
     this.applied = new Map();
+    this.opWatermarks = new Map();
     if (snapshot) this.loadSnapshot(snapshot);
   }
 
@@ -27,6 +28,8 @@ export class Materializer {
       if (previousFingerprint !== fingerprint) throw new Error(`Kollision för op_id ${op.op_id}`);
       return { applied: false, reason: 'duplicate' };
     }
+
+    this.opWatermarks.set(op.device_id, Math.max(this.opWatermarks.get(op.device_id) || 0, op.seq));
 
     const key = entityKey(op.entity_type, op.entity_id);
     let entity = this.entities.get(key);
@@ -79,7 +82,7 @@ export class Materializer {
     return out;
   }
 
-  exportSnapshot() {
+  exportSnapshot({ compactApplied = false } = {}) {
     const entities = [...this.entities.values()]
       .map(entity => ({
         entity_type: entity.entity_type,
@@ -89,14 +92,17 @@ export class Materializer {
           .sort((a, b) => a.field.localeCompare(b.field))
       }))
       .sort((a, b) => (a.entity_type + '\u0000' + a.entity_id).localeCompare(b.entity_type + '\u0000' + b.entity_id));
-    const applied = [...this.applied.entries()]
+    const applied = compactApplied ? [] : [...this.applied.entries()]
       .map(([op_id, fingerprint]) => ({ op_id, fingerprint }))
       .sort((a, b) => a.op_id.localeCompare(b.op_id));
-    return { snapshot_version: 1, entities, applied };
+    if (!compactApplied) return { snapshot_version: 1, entities, applied };
+    const op_watermarks = Object.fromEntries([...this.opWatermarks.entries()].sort(([a], [b]) => a.localeCompare(b)));
+    return { snapshot_version: 2, entities, applied, op_watermarks };
   }
 
   loadSnapshot(snapshot) {
-    if (!snapshot || snapshot.snapshot_version !== 1 || !Array.isArray(snapshot.entities) || !Array.isArray(snapshot.applied)) throw new TypeError('Ogiltig snapshot');
+    if (!snapshot || ![1, 2].includes(snapshot.snapshot_version) || !Array.isArray(snapshot.entities) || !Array.isArray(snapshot.applied)) throw new TypeError('Ogiltig snapshot');
+    if (snapshot.snapshot_version === 2 && (!snapshot.op_watermarks || typeof snapshot.op_watermarks !== 'object' || Array.isArray(snapshot.op_watermarks))) throw new TypeError('Ogiltiga vattenmärken i snapshot');
     canonicalStringify(snapshot);
     const entityKeys = new Set();
     const appliedIds = new Set();
@@ -119,14 +125,29 @@ export class Materializer {
       if (appliedIds.has(entry.op_id)) throw new Error(`Dubblerat op-id i snapshot: ${entry.op_id}`);
       appliedIds.add(entry.op_id);
     }
+    if (snapshot.snapshot_version === 2) {
+      for (const [deviceId, seq] of Object.entries(snapshot.op_watermarks)) {
+        if (!deviceId || !Number.isSafeInteger(seq) || seq < 0) throw new TypeError('Ogiltigt vattenmärke i snapshot');
+      }
+    }
     this.entities.clear();
     this.applied.clear();
+    this.opWatermarks.clear();
     for (const raw of snapshot.entities) {
       const fields = new Map();
       for (const cell of raw.fields) fields.set(cell.field, { value: cloneJson(cell.value), hlc: cell.hlc, op_id: cell.op_id });
       this.entities.set(entityKey(raw.entity_type, raw.entity_id), { entity_type: raw.entity_type, entity_id: raw.entity_id, fields });
     }
-    for (const entry of snapshot.applied) this.applied.set(entry.op_id, entry.fingerprint);
+    for (const entry of snapshot.applied) {
+      this.applied.set(entry.op_id, entry.fingerprint);
+      const separator = entry.op_id.lastIndexOf(':');
+      const deviceId = entry.op_id.slice(0, separator);
+      const seq = Number(entry.op_id.slice(separator + 1));
+      if (deviceId && Number.isSafeInteger(seq)) this.opWatermarks.set(deviceId, Math.max(this.opWatermarks.get(deviceId) || 0, seq));
+    }
+    if (snapshot.snapshot_version === 2) {
+      for (const [deviceId, seq] of Object.entries(snapshot.op_watermarks)) this.opWatermarks.set(deviceId, seq);
+    }
   }
 }
 

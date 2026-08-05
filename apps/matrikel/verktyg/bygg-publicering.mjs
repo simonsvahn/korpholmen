@@ -57,10 +57,7 @@ for (const relative of CORE_FILES) {
 }
 
 const dataLayer = (await readFile(resolve(ROOT, 'src/data-layer.js'), 'utf8'))
-  .replaceAll('../../../packages/core/sync/shared-dropbox-session.js', '../core/sync/shared-dropbox-session.js')
-  .replaceAll('../../../packages/core/sync/app-family-sync.js', '../core/sync/app-family-sync.js')
-  .replaceAll('../../../packages/core/pwa/korpholmen-service-worker.js', '../core/pwa/korpholmen-service-worker.js')
-  .replaceAll('../../../packages/core/runtime-safety.js', '../core/runtime-safety.js');
+  .replaceAll('../../../packages/core/', '../core/');
 await writeFile(resolve(OUT, 'src/data-layer.js'), dataLayer);
 
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))

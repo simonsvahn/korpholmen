@@ -20,12 +20,15 @@ export class Repository {
   }
 
   async init() {
-    const ops = await this.store.getAllOps();
     const latestSnapshotId = await this.store.getMeta('latest_snapshot');
     const snapshot = latestSnapshotId ? await this.store.getSnapshot(latestSnapshotId) : null;
+    const canResumeSnapshot = snapshot?.snapshot_version === 2 && snapshot.op_watermarks && typeof this.store.getOpsAfter === 'function';
+    const ops = canResumeSnapshot ? await this.store.getOpsAfter(snapshot.op_watermarks) : await this.store.getAllOps();
     this.state = new Materializer(snapshot);
     this.state.applyAll(ops);
-    const snapshotOwnMax = snapshot?.applied?.reduce((max, entry) => {
+    const snapshotOwnMax = snapshot?.snapshot_version === 2
+      ? Number(snapshot.op_watermarks?.[this.deviceId] || 0)
+      : snapshot?.applied?.reduce((max, entry) => {
       const prefix = `${this.deviceId}:`;
       if (!entry.op_id.startsWith(prefix)) return max;
       const seq = Number(entry.op_id.slice(prefix.length));
@@ -211,8 +214,9 @@ export class Repository {
 
   async saveSnapshot(id = 'latest') {
     this.assertReady();
-    const snapshot = this.state.exportSnapshot();
+    const snapshot = this.state.exportSnapshot({ compactApplied: true });
     await this.store.saveSnapshot(id, snapshot);
+    await this.store.putMeta('device_ids', Object.keys(snapshot.op_watermarks));
     await this.store.putMeta('latest_snapshot', String(id));
     return snapshot;
   }

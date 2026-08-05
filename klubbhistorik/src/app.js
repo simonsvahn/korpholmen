@@ -5,7 +5,9 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -24,25 +26,26 @@ const isSourceTree=location.pathname.includes('/apps/klubbhistorik/');
 const TOKEN_META='dropbox:refresh-token';const BOOTSTRAP_META='bootstrap:klubbhistorik-pilot-2026-08-02';
 const ui={view:'oversikt',search:'',releaseId:'matrikel-1980',layer:'normalized',kind:'person',from:'matrikel-1980',to:'matrikel-1986',personId:null};
 let store;let repository;let matrikelMaster;let accessToken=null;let accessTokenExpiresAt=0;let syncPromise=null;
+const viewCache=createRevisionCache(()=>`${repository?.revision||0}:${matrikelMaster?.revision||0}`);
 
 const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const escapeAttribute=escapeHtml;
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
 const confirmed=item=>Boolean(item?.confirmed&&item?.person_id||item?.confirmed&&item?.boat_id);
-const recordList=type=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[];
+const recordList=type=>viewCache(`records:${type}`,()=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[]);
 const releaseMoment=release=>String(release?.as_of||release?.year||'');
 const releaseCompare=(a,b)=>(Number(a?.year)||9999)-(Number(b?.year)||9999)||releaseMoment(a).localeCompare(releaseMoment(b),'sv')||String(a.title||'').localeCompare(String(b.title||''),'sv')||a.id.localeCompare(b.id,'sv');
-const releases=()=>recordList('matrikel-release').filter(item=>item.retained!==false).sort(releaseCompare);
-const personOccurrences=()=>recordList('person-occurrence').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order);
-const boatOccurrences=()=>recordList('boat-occurrence').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order);
-const sourceRows=()=>recordList('source-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.kind.localeCompare(b.kind)||a.order-b.order);
-const sourceLayoutRows=()=>recordList('source-layout-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order);
+const releases=()=>viewCache('releases',()=>recordList('matrikel-release').filter(item=>item.retained!==false).sort(releaseCompare));
+const personOccurrences=()=>viewCache('person-occurrences',()=>recordList('person-occurrence').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
+const boatOccurrences=()=>viewCache('boat-occurrences',()=>recordList('boat-occurrence').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
+const sourceRows=()=>viewCache('source-rows',()=>recordList('source-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.kind.localeCompare(b.kind)||a.order-b.order));
+const sourceLayoutRows=()=>viewCache('source-layout-rows',()=>recordList('source-layout-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
 const storedPersonRefs=()=>recordList('person-ref');
-const personRefs=()=>mergePersonReferences(storedPersonRefs(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
-const boatRefs=()=>recordList('boat-ref').sort((a,b)=>boatOptionLabel(a).localeCompare(boatOptionLabel(b),'sv'));
-const personMap=()=>new Map(personRefs().map(item=>[item.external_id,item]));
-const boatMap=()=>new Map(boatRefs().map(item=>[item.external_id,item]));
-const releaseMap=()=>new Map(releases().map(item=>[item.id,item]));
+const personRefs=()=>viewCache('person-refs',()=>mergePersonReferences(storedPersonRefs(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')));
+const boatRefs=()=>viewCache('boat-refs',()=>[...recordList('boat-ref')].sort((a,b)=>boatOptionLabel(a).localeCompare(boatOptionLabel(b),'sv')));
+const personMap=()=>viewCache('person-map',()=>new Map(personRefs().map(item=>[item.external_id,item])));
+const boatMap=()=>viewCache('boat-map',()=>new Map(boatRefs().map(item=>[item.external_id,item])));
+const releaseMap=()=>viewCache('release-map',()=>new Map(releases().map(item=>[item.id,item])));
 const statusLabel=status=>({active:'Aktiv',passive:'Passiv',junior:'Junior',corresponding:'Korresponderande',listed:'Listad',founder:'Grundare (rekonstruktion)'}[status]||status||'Okänd');
 const boatCategoryLabel=category=>({registered:'Inregistrerat fartyg','registered-passive':'Fartyg vid passivavsnitt','registered-junior':'Fartyg vid junioravsnitt','registered-corresponding':'Fartyg vid korresponderande','deregistered-or-renamed':'Avregistrerat eller namnändrat'}[category]||category||'Fartyg');
 const matchLabel=status=>({kopplad:'Kopplad',godkand:'Godkänd',foreslagen:'Föreslagen',saknas:'Saknas',manuell:'Manuell'}[status]||status||'Okänd');
@@ -199,8 +202,9 @@ async function connectDropbox(){sessionStorage.setItem('korpholmen:oauth-return'
 async function bootstrapLocal(){if(!isSourceTree)throw new Error('Pilotmastern kan bara aktiveras från källappen');const responses=await Promise.all(LOCAL_BOOTSTRAP_URLS.map(url=>fetch(url,{cache:'no-store'})));const failed=responses.find(response=>!response.ok);if(failed)throw new Error(`Pilotmastern kunde inte läsas (${failed.status})`);const documents=await Promise.all(responses.map(response=>response.json()));if(documents.some(data=>data.operations_version!==1||!Array.isArray(data.operations)))throw new Error('Pilotmastern har fel format');const operations=documents.flatMap(data=>data.operations);operations.forEach(validateOperation);await repository.applyRemoteOps(operations);const deviceIds=[...new Set(documents.flatMap(data=>data.device_ids||[data.device_id]).filter(Boolean))];await store.putMeta(BOOTSTRAP_META,{pending:true,device_ids:deviceIds,migration_id:'klubbhistorik-full-master-2026-08-03',operations:operations.length});render();setStatus('Full källsäker master inläst lokalt · Matrikel och Båtregister är oförändrade','ok')}
 
 document.addEventListener('click',event=>{const view=event.target.closest('[data-view]')?.dataset.view;if(view){ui.view=view;ui.personId=null;render();app.focus()}const release=event.target.closest('[data-open-release]')?.dataset.openRelease;if(release){ui.releaseId=release;ui.view='utgava';$('#release-filter').value=release;render()}const layer=event.target.closest('[data-layer]')?.dataset.layer;if(layer){ui.layer=layer;render()}const kind=event.target.closest('[data-kind]')?.dataset.kind;if(kind){ui.kind=kind;render()}const personId=event.target.closest('[data-person-id]')?.dataset.personId;if(personId){ui.personId=personId;ui.view='personer';render()}const action=event.target.closest('[data-action]')?.dataset.action;if(action==='back-people'){ui.personId=null;render()}if(action==='confirm-person')confirmPerson(event.target.closest('[data-occurrence-id]').dataset.occurrenceId).catch(error=>setStatus(error.message,'error'));if(action==='confirm-boat')confirmBoat(event.target.closest('[data-occurrence-id]').dataset.occurrenceId).catch(error=>setStatus(error.message,'error'))});
-$('#global-search').addEventListener('input',event=>{ui.search=event.target.value;if(ui.view==='oversikt')ui.view='personer';render()});
-$('#clear-search').addEventListener('click',()=>{ui.search='';$('#global-search').value='';render()});
+const renderSearch=debounce(render,120);
+$('#global-search').addEventListener('input',event=>{ui.search=event.target.value;if(ui.view==='oversikt')ui.view='personer';renderSearch()});
+$('#clear-search').addEventListener('click',()=>{renderSearch.cancel();ui.search='';$('#global-search').value='';render()});
 $('#release-filter').addEventListener('change',event=>{ui.releaseId=event.target.value;ui.view='utgava';render()});
 $('#export-audit').addEventListener('click',exportAudit);
 connectButton.addEventListener('click',()=>currentAccessToken().then(token=>token?syncNow():connectDropbox()).catch(error=>setStatus(error.message,'error')));

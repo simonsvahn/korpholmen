@@ -59,6 +59,20 @@ export class MemoryStore {
     return [...this.ops.values()].map(cloneJson).sort((a, b) => a.op_id.localeCompare(b.op_id));
   }
 
+  async getOpsAfter(watermarks = {}) {
+    return [...this.ops.values()]
+      .filter(op => op.seq > Number(watermarks[op.device_id] || 0))
+      .map(cloneJson)
+      .sort((a, b) => a.op_id.localeCompare(b.op_id));
+  }
+
+  async getOpsForDeviceAfter(deviceId, seq = 0) {
+    return [...this.ops.values()]
+      .filter(op => op.device_id === deviceId && op.seq > seq)
+      .map(cloneJson)
+      .sort((a, b) => a.seq - b.seq);
+  }
+
   async putMeta(key, value) {
     this.meta.set(String(key), cloneJson(value));
   }

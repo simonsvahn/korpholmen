@@ -38,6 +38,7 @@ export class ReadOnlyMaster {
     this.state = new Materializer();
     this.cursor = null;
     this.initialized = false;
+    this.revision = 0;
   }
 
   async init() {
@@ -45,6 +46,7 @@ export class ReadOnlyMaster {
     this.state = snapshot ? new Materializer(snapshot) : new Materializer();
     this.cursor = snapshot ? await this.store.getMeta(this.cursorKey) : null;
     this.initialized = true;
+    this.revision += 1;
     return this;
   }
 
@@ -65,7 +67,7 @@ export class ReadOnlyMaster {
   async persist(cursor, status) {
     // Snapshoten skrivs före cursorn. Ett avbrott kan då högst ge en säker
     // omhämtning av redan tillämpade operationer, aldrig ett tyst datahål.
-    await this.store.saveSnapshot(this.snapshotKey, this.state.exportSnapshot());
+    await this.store.saveSnapshot(this.snapshotKey, this.state.exportSnapshot({ compactApplied: true }));
     await this.store.putMeta(this.cursorKey, cursor);
     await this.store.putMeta(this.statusKey, status);
   }
@@ -75,6 +77,7 @@ export class ReadOnlyMaster {
     if (!Array.isArray(operations)) throw new TypeError('ReadOnlyMaster.applyOperations kräver en lista');
     operations.forEach(validateOperation);
     this.state.applyAll(operations);
+    if (operations.length) this.revision += 1;
     await this.persist(this.cursor, {
       source,
       synced_at: new Date().toISOString(),
@@ -128,6 +131,7 @@ export class ReadOnlyMaster {
       if (!page.has_more) break;
     }
     this.cursor = cursor;
+    if (downloadedOps || resetUsed) this.revision += 1;
     return { downloadedOps, downloadedBatches, cursor, cursorReset: resetUsed };
   }
 }

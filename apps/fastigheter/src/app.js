@@ -5,7 +5,9 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -49,12 +51,13 @@ let matrikelMaster;
 let kartdataMaster;
 let returnFocus = null;
 const ui = { search: '', island: '', audit: '', yearFrom: '', yearTo: '' };
+const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelMaster?.revision || 0}:${kartdataMaster?.revision || 0}`);
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('sv');
 const unique = values => [...new Set(values.filter(Boolean))];
-const recordList = type => repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
-const propertyRecords = () => recordList('property').sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
+const recordList = type => viewCache(`records:${type}`, () => repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })));
+const propertyRecords = () => viewCache('properties', () => [...recordList('property')].sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true })));
 const eventRecords = () => recordList('event');
 const holdingRecords = () => recordList('holding');
 const currentOwnerRecords = () => recordList('current-owner-assessment');
@@ -181,7 +184,7 @@ function filteredProperties() {
   return propertyRecords().filter(property => {
     if (ui.island && propertyIslandName(property) !== ui.island) return false;
     if (ui.audit === 'open' && !hasOpenQuestion(property.id)) return false;
-    if (query && !normalize(propertySearchText(property)).includes(query)) return false;
+    if (query && !viewCache(`property-search:${property.id}`, () => normalize(propertySearchText(property))).includes(query)) return false;
     if (ui.yearFrom || ui.yearTo) {
       const years = historyYears(property.id);
       const from = Number(ui.yearFrom || -Infinity);
@@ -533,11 +536,13 @@ content.addEventListener('click', event => {
 });
 backdrop.addEventListener('click', closeDrawer);
 drawer.addEventListener('click', event => { if (event.target.closest('[data-action="close"]')) closeDrawer(); });
-$('#search').addEventListener('input', event => { ui.search = event.target.value; render(); });
+const renderSearch = debounce(render, 120);
+const renderYearRange = debounce(render, 100);
+$('#search').addEventListener('input', event => { ui.search = event.target.value; renderSearch(); });
 $('#island-filter').addEventListener('change', event => { ui.island = event.target.value; render(); });
 $('#audit-filter').addEventListener('change', event => { ui.audit = event.target.value; render(); });
-$('#year-from').addEventListener('input', event => { ui.yearFrom = event.target.value; render(); });
-$('#year-to').addEventListener('input', event => { ui.yearTo = event.target.value; render(); });
+$('#year-from').addEventListener('input', event => { ui.yearFrom = event.target.value; renderYearRange(); });
+$('#year-to').addEventListener('input', event => { ui.yearTo = event.target.value; renderYearRange(); });
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && selectedPropertyId) closeDrawer(); });
