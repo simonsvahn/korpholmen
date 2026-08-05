@@ -152,6 +152,12 @@ a.registernamn:hover {
   color: var(--rod);
 }
 
+.registeretikett.platshallare {
+  background: color-mix(in srgb, var(--hav) 10%, transparent);
+  border-color: color-mix(in srgb, var(--hav) 30%, var(--linje));
+  color: var(--hav);
+}
+
 .registerroll,
 .registerkalla,
 .registersaknas {

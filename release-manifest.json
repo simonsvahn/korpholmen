@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-04-korpholmen-pwa-3",
+  "release": "2026-08-05-korpholmen-pwa-4",
   "generated_at": "2026-08-04",
   "pwa": {
     "id": "./",
@@ -190,6 +190,7 @@
     "./korpholmenrunt/src/app.js",
     "./korpholmenrunt/src/config.js",
     "./korpholmenrunt/src/klassstandard.js",
+    "./korpholmenrunt/src/time.js",
     "./korpholmenrunt/styles.css",
     "./korpholmenrunt/sw.js",
     "./manifest.webmanifest",

@@ -24,14 +24,16 @@ CREATE TABLE source (id TEXT PRIMARY KEY, label TEXT NOT NULL, source_type TEXT,
 CREATE TABLE edition (id TEXT PRIMARY KEY, year INTEGER NOT NULL UNIQUE, result_count INTEGER NOT NULL, classes_json TEXT NOT NULL, course_codes_json TEXT NOT NULL, source_id TEXT NOT NULL REFERENCES source(id));
 CREATE TABLE person_ref (id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, island TEXT, living TEXT, url TEXT);
 CREATE TABLE boat_ref (id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, type TEXT, period TEXT, owner_text TEXT, url TEXT);
+CREATE TABLE participant_placeholder (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, label TEXT NOT NULL, kind TEXT NOT NULL, terminal INTEGER NOT NULL CHECK (terminal IN (0,1)), review_status TEXT NOT NULL, description TEXT);
 CREATE TABLE result (id TEXT PRIMARY KEY, source_row_id INTEGER UNIQUE, source_id TEXT NOT NULL REFERENCES source(id), year INTEGER NOT NULL, boat_name_raw TEXT, boat_id TEXT, boat_match_status TEXT NOT NULL, captain_raw TEXT, crew_1_raw TEXT, crew_2_raw TEXT, class_raw TEXT, class_id TEXT, class_name TEXT NOT NULL, class_match_status TEXT, class_match_method TEXT, course_code TEXT NOT NULL, time_raw TEXT NOT NULL, duration_seconds INTEGER, time_status TEXT NOT NULL, notes TEXT, raw_json TEXT NOT NULL);
-CREATE TABLE result_person (id TEXT PRIMARY KEY, result_id TEXT NOT NULL REFERENCES result(id), role TEXT NOT NULL, source_field TEXT NOT NULL, raw_name TEXT NOT NULL, person_id TEXT, match_status TEXT NOT NULL, match_method TEXT, candidate_ids_json TEXT NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0,1)));
+CREATE TABLE result_person (id TEXT PRIMARY KEY, result_id TEXT NOT NULL REFERENCES result(id), role TEXT NOT NULL, source_field TEXT NOT NULL, source_parent_field TEXT, source_raw_name TEXT, raw_name TEXT NOT NULL, participant_kind TEXT NOT NULL, person_id TEXT, placeholder_id TEXT REFERENCES participant_placeholder(id), match_status TEXT NOT NULL, match_method TEXT, candidate_ids_json TEXT NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0,1)));
 CREATE TABLE source_note (id TEXT PRIMARY KEY, source_row_id INTEGER, note_text TEXT, raw_json TEXT NOT NULL, source_id TEXT NOT NULL REFERENCES source(id));
 CREATE INDEX idx_result_year_class_course ON result(year, class_id, course_code);
 CREATE INDEX idx_result_duration ON result(course_code, duration_seconds) WHERE duration_seconds IS NOT NULL;
 CREATE INDEX idx_result_boat ON result(boat_id, year) WHERE boat_id IS NOT NULL;
 CREATE INDEX idx_result_person_person ON result_person(person_id, result_id) WHERE person_id IS NOT NULL;
-CREATE INDEX idx_result_person_review ON result_person(match_status) WHERE match_status != 'kopplad';
+CREATE INDEX idx_result_person_placeholder ON result_person(placeholder_id, result_id) WHERE placeholder_id IS NOT NULL;
+CREATE INDEX idx_result_person_review ON result_person(match_status) WHERE confirmed = 0;
 """)
 
 def rows(entity_type):
@@ -50,12 +52,14 @@ for entity_id, item in rows("person-ref"):
     db.execute("INSERT INTO person_ref VALUES (?,?,?,?,?,?)", (entity_id, item["external_id"], item["display_name"], item.get("island"), item.get("living"), item.get("url")))
 for entity_id, item in rows("boat-ref"):
     db.execute("INSERT INTO boat_ref VALUES (?,?,?,?,?,?,?)", (entity_id, item["external_id"], item["name"], item.get("type"), item.get("period"), item.get("owner_text"), item.get("url")))
+for entity_id, item in rows("race-participant-placeholder"):
+    db.execute("INSERT INTO participant_placeholder VALUES (?,?,?,?,?,?,?)", (entity_id, item["code"], item["label"], item["kind"], int(bool(item.get("terminal"))), item["review_status"], item.get("description")))
 for entity_id, item in rows("race-result"):
     db.execute("INSERT INTO result VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
         entity_id, item.get("source_row_id"), item["source_id"], item["year"], item.get("boat_name_raw"), item.get("boat_id"), item["boat_match_status"], item.get("captain_raw"), item.get("crew_1_raw"), item.get("crew_2_raw"), item.get("class_raw"), item.get("class_id"), item["class_name"], item.get("class_match_status"), item.get("class_match_method"), item["course_code"], item["time_raw"], item.get("duration_seconds"), item["time_status"], item.get("notes"), json.dumps(item.get("raw_row"), ensure_ascii=False, sort_keys=True)
     ))
 for entity_id, item in rows("race-person-link"):
-    db.execute("INSERT INTO result_person VALUES (?,?,?,?,?,?,?,?,?,?)", (entity_id, item["result_id"], item["role"], item["source_field"], item["raw_name"], item.get("person_id"), item["match_status"], item.get("match_method"), json.dumps(item.get("candidate_ids", []), ensure_ascii=False), int(bool(item.get("confirmed")))))
+    db.execute("INSERT INTO result_person VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (entity_id, item["result_id"], item["role"], item["source_field"], item.get("source_parent_field"), item.get("source_raw_name"), item["raw_name"], item.get("participant_kind", "person"), item.get("person_id"), item.get("placeholder_id"), item["match_status"], item.get("match_method"), json.dumps(item.get("candidate_ids", []), ensure_ascii=False), int(bool(item.get("confirmed")))))
 for entity_id, item in rows("source-note"):
     db.execute("INSERT INTO source_note VALUES (?,?,?,?,?)", (entity_id, item.get("source_row_id"), item.get("note_text"), json.dumps(item.get("raw_row"), ensure_ascii=False, sort_keys=True), item["source_id"]))
 

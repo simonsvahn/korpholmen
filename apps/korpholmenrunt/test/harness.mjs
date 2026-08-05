@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
 import { KLASSER, KLASSSTANDARD_METHOD, klassnamn, standardklass } from '../src/klassstandard.js';
+import { parseRaceTime } from '../src/time.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -29,9 +30,25 @@ const list=type=>state.listEntities(type).map(entity=>({id:entity.entity_id,...e
 const results=list('race-result');
 const editions=list('race-edition');
 const links=list('race-person-link');
+const participantPlaceholders=list('race-participant-placeholder');
 const people=list('person-ref');
 const boats=list('boat-ref');
 const notes=list('source-note');
+
+await test('v2-startmastern använder nya och avgränsade device-id:n',()=>{
+  const retired=new Set(['migration-korpholmenrunt-2026-08-02','migration-korpholmenrunt-granskning-2026-08-02']);
+  assert.deepEqual(new Set(document.device_ids),new Set(['migration-korpholmenrunt-2026-08-04-v2','migration-korpholmenrunt-granskning-2026-08-04-v2']));
+  assert.equal(document.device_id,'migration-korpholmenrunt-2026-08-04-v2');
+  assert.ok(document.operations.every(operation=>document.device_ids.includes(operation.device_id)));
+  assert.ok(document.operations.every(operation=>!retired.has(operation.device_id)));
+});
+
+await test('appinmatning accepterar minuter och sekunder men inte tvetydiga tretalstider',()=>{
+  assert.deepEqual(parseRaceTime('21:05'),{seconds:1265,status:'tolkad'});
+  assert.deepEqual(parseRaceTime('21,05?'),{seconds:1265,status:'osäker'});
+  assert.deepEqual(parseRaceTime('21:05:30'),{seconds:null,status:'ogiltigt format'});
+  assert.deepEqual(parseRaceTime('21:67'),{seconds:null,status:'ogiltig sekunddel'});
+});
 
 await test('samtliga 363 källrader är bevarade som resultat eller källnotering',async()=>{
   assert.equal(results.length,357);
@@ -73,8 +90,21 @@ await test('namnkopplingar använder stabila ID:n från Matrikeln och Båtregist
   for(const id of ['linje3','rödeorm','snusmumriken'])assert.ok(boatIds.has(id));
 });
 
+await test('med flera är ett strukturerat och avslutat deltagarobjekt',()=>{
+  assert.equal(participantPlaceholders.length,1);
+  const placeholder=participantPlaceholders[0];
+  assert.equal(placeholder.id,'race-participant-placeholder:med-flera');
+  assert.equal(placeholder.label,'Med flera');
+  assert.equal(placeholder.terminal,true);
+  const placeholderLinks=links.filter(item=>item.placeholder_id===placeholder.id);
+  assert.equal(placeholderLinks.length,9);
+  assert.ok(placeholderLinks.every(item=>item.participant_kind==='placeholder'&&item.confirmed===true&&item.match_status==='strukturerad-placeholder'&&!item.person_id));
+  assert.ok(links.filter(item=>item.source_raw_name&&/m\s*\.?\s*fl/iu.test(item.source_raw_name)).some(item=>item.raw_name==='Peter'&&!item.confirmed));
+  assert.ok(!links.some(item=>!item.confirmed&&/^(?:m\s*\.?\s*fl\.?|med flera)$/iu.test(item.raw_name)));
+});
+
 await test('osäkra träffar lämnas i granskningskö utan att källnamnet skrivs över',()=>{
-  assert.equal(links.length,574);
+  assert.equal(links.length,578);
   assert.equal(links.filter(item=>item.match_status==='kopplad').length,document.counts.person_links_connected);
   assert.equal(results.filter(item=>item.boat_match_status==='kopplad').length,document.counts.boats_connected);
   assert.ok(links.some(item=>item.match_status==='föreslagen'&&item.raw_name&&item.candidate_ids.length));
@@ -84,7 +114,7 @@ await test('osäkra träffar lämnas i granskningskö utan att källnamnet skriv
 });
 
 await test('analysdatabasen har främmande nycklar och index för topplistor',()=>{
-  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\ncolumns={row[1] for row in db.execute('PRAGMA table_info(result)').fetchall()}\nassert {'class_raw','class_id','class_name','class_match_status','class_match_method'} <= columns\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_id='kajak-2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
+  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\nassert db.execute('select count(*) from participant_placeholder').fetchone()[0]==1\nassert db.execute(\"select count(*) from result_person where placeholder_id='race-participant-placeholder:med-flera' and confirmed=1\").fetchone()[0]==9\ncolumns={row[1] for row in db.execute('PRAGMA table_info(result)').fetchall()}\nassert {'class_raw','class_id','class_name','class_match_status','class_match_method'} <= columns\nperson_columns={row[1] for row in db.execute('PRAGMA table_info(result_person)').fetchall()}\nassert {'participant_kind','placeholder_id','source_raw_name','source_parent_field'} <= person_columns\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_id='kajak-2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
   const query=spawnSync('python3',['-c',script,resolve(PRIVATE,'korpholmenrunt.sqlite')],{encoding:'utf8'});
   assert.equal(query.status,0,query.stderr||query.stdout);
 });
@@ -93,7 +123,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -117,7 +147,12 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes('Förslag i Båtregistret:'));
   assert.ok(app.includes('data-action="open-register"'));
   assert.ok(matchingStyles.includes('.registeretikett'));
+  assert.ok(matchingStyles.includes('.registeretikett.platshallare'));
   assert.ok(matchingStyles.includes('.registernamn'));
+  assert.ok(app.includes('Strukturerad platshållare'));
+  assert.ok(app.includes('Okända ytterligare tävlande · avslutad fråga'));
+  assert.ok(app.includes('Startkopian kan bara aktiveras i en tom lokal databas'));
+  assert.ok(app.includes("const deviceIds=new Set(data.device_ids||[data.device_id])"));
   assert.ok(app.includes('data-sort-key='));
   assert.ok(app.includes('inline-person-options'));
   assert.ok(app.includes('inline-boat-options'));
@@ -149,9 +184,10 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
 await test('publiceringspaketet är datafritt och länkat från appnavet',async()=>{
   const build=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(build.status,0,build.stderr||build.stdout);
-  const [publishedApp,publishedClasses,publishedCore,root]=await Promise.all([
+  const [publishedApp,publishedClasses,publishedTime,publishedCore,root]=await Promise.all([
     readFile(resolve(REPO,'korpholmenrunt/src/app.js'),'utf8'),
     readFile(resolve(REPO,'korpholmenrunt/src/klassstandard.js'),'utf8'),
+    readFile(resolve(REPO,'korpholmenrunt/src/time.js'),'utf8'),
     readFile(resolve(REPO,'korpholmenrunt/core/data-layer.js'),'utf8'),
     readFile(resolve(REPO,'index.html'),'utf8'),
   ]);
@@ -161,6 +197,7 @@ await test('publiceringspaketet är datafritt och länkat från appnavet',async(
   assert.equal(publishedApp.includes('../../../packages/core/'),false);
   assert.ok(publishedApp.includes("./klassstandard.js"));
   assert.ok(publishedClasses.includes('Kanadensare'));
+  assert.ok(publishedTime.includes('parseRaceTime'));
   assert.ok(publishedCore.includes('./storage/indexeddb.js'));
   assert.ok(root.includes('./korpholmenrunt/'));
   assert.ok(root.includes('En installerad app'));
