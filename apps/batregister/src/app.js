@@ -5,7 +5,9 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -78,6 +80,8 @@ let matrikelFamilyUnits = [];
 let matrikelKinGroups = [];
 let connectionSearchActiveIndex = -1;
 let connectionPanelMode = 'browse';
+let matrikelContextRevision = 0;
+const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelContextRevision}`);
 
 const requestedPersonId = new URL(location.href).searchParams.get('person') || '';
 const ui = {
@@ -123,19 +127,17 @@ async function registerServiceWorker() {
     return null;
   }
 }
-function boatRecords() { return repository.listEntities('boat').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.namn).localeCompare(String(b.namn),'sv')); }
-function linkRecords() { return repository.listEntities('boat-person-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
+function boatRecords() { return viewCache('boats', () => repository.listEntities('boat').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.namn).localeCompare(String(b.namn),'sv'))); }
+function linkRecords() { return viewCache('boat-person-links', () => repository.listEntities('boat-person-link').map(entity => ({ id: entity.entity_id, ...entity.fields }))); }
 function linksForBoat(id) { return linkRecords().filter(link => link.boat_id === id); }
 function personForId(id) { return matrikelPeople.find(person => person.id === id) || null; }
 function personNameForLink(link) { return personForId(link.person_id)?.display_name || link.person_display_name || link.person_id; }
-function familyRecords() { return repository.listEntities('family').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'sv')); }
-function familyLinkRecords() { return repository.listEntities('boat-family-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
+function familyRecords() { return viewCache('families', () => repository.listEntities('family').map(entity => ({ id: entity.entity_id, ...entity.fields })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'sv'))); }
+function familyLinkRecords() { return viewCache('boat-family-links', () => repository.listEntities('boat-family-link').map(entity => ({ id: entity.entity_id, ...entity.fields }))); }
 function familyLinksForBoat(id) { return familyLinkRecords().filter(link => link.boat_id === id); }
-function groupLinkRecords() { return repository.listEntities('boat-group-link').map(entity => ({ id: entity.entity_id, ...entity.fields })); }
+function groupLinkRecords() { return viewCache('boat-group-links', () => repository.listEntities('boat-group-link').map(entity => ({ id: entity.entity_id, ...entity.fields }))); }
 function groupLinksForBoat(id) { return groupLinkRecords().filter(link => link.boat_id === id); }
-function matrikelFamilyContext() {
-  return buildFamilyContext({ people: matrikelPeople, relations: matrikelRelations, familyUnits: matrikelFamilyUnits, kinGroups: matrikelKinGroups });
-}
+function matrikelFamilyContext() { return viewCache('matrikel-family-context', () => buildFamilyContext({ people: matrikelPeople, relations: matrikelRelations, familyUnits: matrikelFamilyUnits, kinGroups: matrikelKinGroups })); }
 
 function closeConnectionSearch() {
   connectionFilterResults.hidden = true;
@@ -699,6 +701,7 @@ function applyMatrikelMaster() {
   matrikelRelations=list('relation');
   matrikelFamilyUnits=list(FAMILY_UNIT_TYPE);
   matrikelKinGroups=list(KIN_GROUP_TYPE);
+  matrikelContextRevision += 1;
 }
 
 async function syncNow() {
@@ -731,7 +734,12 @@ content.addEventListener('click',event=>{const target=event.target.closest('[dat
 backdrop.addEventListener('click',closeDrawer);
 drawer.addEventListener('click',event=>{if(event.target.closest('[data-action="close"]'))closeDrawer();const remove=event.target.closest('[data-delete-link]');if(remove)deleteLink(remove.dataset.linkType,remove.dataset.deleteLink);if(event.target.closest('[data-action="add-link"]'))addRelationLink();if(event.target.closest('[data-action="delete-boat"]'))deleteBoat();if(event.target.closest('[data-action="refresh-people"]'))currentAccessToken().then(loadMatrikelPeople)});
 drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
-$('#search').addEventListener('input',event=>{ui.search=event.target.value;render()});
+const renderSearch = debounce(render, 120);
+const renderConnectionSearch = debounce(() => {
+  if (connectionFilterSearch.value.trim()) renderConnectionSearchResults();
+  else renderConnectionBrowseResults();
+}, 100);
+$('#search').addEventListener('input',event=>{ui.search=event.target.value;renderSearch()});
 connectionFilterSearch.addEventListener('focus',()=>connectionFilterSearch.value.trim() && !ui.connection ? renderConnectionSearchResults() : renderConnectionBrowseResults());
 connectionFilterSearch.addEventListener('input',()=>{
   if (ui.connection) {
@@ -740,8 +748,7 @@ connectionFilterSearch.addEventListener('input',()=>{
     connectionFilterClear.hidden = true;
   }
   connectionSearchActiveIndex = 0;
-  if (connectionFilterSearch.value.trim()) renderConnectionSearchResults();
-  else renderConnectionBrowseResults();
+  renderConnectionSearch();
 });
 connectionFilterSearch.addEventListener('keydown',event=>{
   let options=[...connectionFilterResults.querySelectorAll('[data-connection-person],[data-connection-value]')];

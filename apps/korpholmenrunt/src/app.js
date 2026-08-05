@@ -5,7 +5,9 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
+  debounce,
   exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
@@ -31,22 +33,23 @@ const TOKEN_META='dropbox:refresh-token';
 const BOOTSTRAP_META='bootstrap:korpholmenrunt-2026-08-04-v2';
 const ui={view:'oversikt',search:'',year:'alla',className:'alla',course:'alla',profile:null,duelA:'',duelB:'',sortKey:'year',sortDirection:'desc',splitReview:false};
 let store;let repository;let matrikelMaster;let accessToken=null;let accessTokenExpiresAt=0;let syncPromise=null;
+const viewCache=createRevisionCache(()=>`${repository?.revision||0}:${matrikelMaster?.revision||0}`);
 
 const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const escapeAttribute=escapeHtml;
 const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
-const recordList=type=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[];
-const results=()=>recordList('race-result').sort((a,b)=>b.year-a.year||(a.duration_seconds??Infinity)-(b.duration_seconds??Infinity));
-const editions=()=>recordList('race-edition').sort((a,b)=>a.year-b.year);
+const recordList=type=>viewCache(`records:${type}`,()=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[]);
+const results=()=>viewCache('results',()=>[...recordList('race-result')].sort((a,b)=>b.year-a.year||(a.duration_seconds??Infinity)-(b.duration_seconds??Infinity)));
+const editions=()=>viewCache('editions',()=>[...recordList('race-edition')].sort((a,b)=>a.year-b.year));
 const storedPeople=()=>recordList('person-ref');
-const people=()=>mergePersonReferences(storedPeople(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
-const boats=()=>recordList('boat-ref').sort((a,b)=>a.name.localeCompare(b.name,'sv'));
+const people=()=>viewCache('people',()=>mergePersonReferences(storedPeople(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')));
+const boats=()=>viewCache('boats',()=>[...recordList('boat-ref')].sort((a,b)=>a.name.localeCompare(b.name,'sv')));
 const personLinks=()=>recordList('race-person-link');
 const participantPlaceholders=()=>recordList('race-participant-placeholder');
-const peopleMap=()=>new Map(people().map(item=>[item.external_id,item]));
-const boatsMap=()=>new Map(boats().map(item=>[item.external_id,item]));
-const participantPlaceholdersMap=()=>new Map(participantPlaceholders().map(item=>[item.id,item]));
-const linksByResult=()=>{const map=new Map();for(const link of personLinks()){if(!map.has(link.result_id))map.set(link.result_id,[]);map.get(link.result_id).push(link)}return map};
+const peopleMap=()=>viewCache('people-map',()=>new Map(people().map(item=>[item.external_id,item])));
+const boatsMap=()=>viewCache('boats-map',()=>new Map(boats().map(item=>[item.external_id,item])));
+const participantPlaceholdersMap=()=>viewCache('placeholder-map',()=>new Map(participantPlaceholders().map(item=>[item.id,item])));
+const linksByResult=()=>viewCache('links-by-result',()=>{const map=new Map();for(const link of personLinks()){if(!map.has(link.result_id))map.set(link.result_id,[]);map.get(link.result_id).push(link)}return map});
 const validTime=result=>Number.isInteger(result.duration_seconds)&&result.duration_seconds>=0;
 const reviewPending=result=>['utkast','oklar','granskning krävs'].includes(result.review_status);
 const rankEligible=result=>validTime(result)&&(result.time_status||'tolkad')==='tolkad'&&!reviewPending(result);
@@ -69,8 +72,8 @@ function rankMap(){
   return ranks;
 }
 
-function resultSearchText(result,linkMap,pMap,bMap){const placeholderMap=participantPlaceholdersMap();const linked=(linkMap.get(result.id)||[]).map(link=>pMap.get(link.person_id)?.display_name||placeholderMap.get(link.placeholder_id)?.label||link.raw_name);return normalize([result.year,result.boat_name_raw,bMap.get(result.boat_id)?.name,result.captain_raw,result.crew_1_raw,result.crew_2_raw,result.class_name,result.time_raw,...linked].join(' '))}
-function filteredResults(){const linkMap=linksByResult();const pMap=peopleMap();const bMap=boatsMap();const refs=[...pMap.values()];const query=normalize(ui.search);return results().filter(result=>(ui.year==='alla'||String(result.year)===ui.year)&&(ui.className==='alla'||result.class_name===ui.className)&&(ui.course==='alla'||result.course_code===ui.course)&&(!ui.splitReview||(linkMap.get(result.id)||[]).some(link=>participantMayBeMerged(link,refs)))&&(!query||resultSearchText(result,linkMap,pMap,bMap).includes(query)))}
+function resultSearchText(result,linkMap,pMap,bMap,placeholderMap){return viewCache(`result-search:${result.id}`,()=>{const linked=(linkMap.get(result.id)||[]).map(link=>pMap.get(link.person_id)?.display_name||placeholderMap.get(link.placeholder_id)?.label||link.raw_name);return normalize([result.year,result.boat_name_raw,bMap.get(result.boat_id)?.name,result.captain_raw,result.crew_1_raw,result.crew_2_raw,result.class_name,result.time_raw,...linked].join(' '))})}
+function filteredResults(){const linkMap=linksByResult();const pMap=peopleMap();const bMap=boatsMap();const placeholderMap=participantPlaceholdersMap();const refs=[...pMap.values()];const query=normalize(ui.search);return results().filter(result=>(ui.year==='alla'||String(result.year)===ui.year)&&(ui.className==='alla'||result.class_name===ui.className)&&(ui.course==='alla'||result.course_code===ui.course)&&(!ui.splitReview||(linkMap.get(result.id)||[]).some(link=>participantMayBeMerged(link,refs)))&&(!query||resultSearchText(result,linkMap,pMap,bMap,placeholderMap).includes(query)))}
 function participantLabel(result){return [result.captain_raw,result.crew_1_raw,result.crew_2_raw].filter(Boolean).join(' · ')||'Deltagare saknas'}
 const participantRoleLabel=value=>({'kapten':'Tävlande 1','besattning-1':'Tävlande 2','besattning-2':'Tävlande 3','Kapten':'Tävlande 1','Besättning 1':'Tävlande 2','Besättning 2':'Tävlande 3'}[value]||value||'Tävlande');
 const participantRole=link=>Number.isInteger(link?.participant_order)?`Tävlande ${link.participant_order+1}`:participantRoleLabel(link?.source_field||link?.role);
@@ -229,8 +232,9 @@ document.addEventListener('click',event=>{
   const profile=event.target.closest('[data-profile]')?.dataset.profile;if(profile){ui.profile=profile;render()}
   if(action==='back-profiles'){ui.profile=null;render()}if(action==='sort-results'){const key=actionNode.dataset.sortKey;if(ui.sortKey===key)ui.sortDirection=ui.sortDirection==='asc'?'desc':'asc';else{ui.sortKey=key;ui.sortDirection='asc'}render()}if(action==='toggle-split-review'){ui.splitReview=!ui.splitReview;ui.view='resultat';render()}if(action==='open-result')openResultDialog(resultId);if(action==='approve-result')approveResult(resultId).catch(error=>setStatus(error.message,'error'));if(action==='confirm-person')confirmPerson(event.target.closest('[data-link-id]').dataset.linkId).catch(error=>setStatus(error.message,'error'));if(action==='confirm-boat')confirmBoat(resultId).catch(error=>setStatus(error.message,'error'));if(action==='quick-confirm-person')confirmPersonCandidate(actionNode.dataset.linkId,actionNode.dataset.personId).catch(error=>setStatus(error.message,'error'));if(action==='quick-confirm-boat')confirmBoatCandidate(resultId,actionNode.dataset.boatId).catch(error=>setStatus(error.message,'error'));if(action==='split-participant'){let parts=[];try{parts=JSON.parse(actionNode.dataset.splitParts||'[]')}catch{}splitParticipantLink(actionNode.dataset.linkId,parts).catch(error=>setStatus(error.message,'error'))}
 });
-$('#global-search').addEventListener('input',event=>{ui.search=event.target.value;if(ui.view==='oversikt')ui.view='resultat';render()});
-$('#clear-search').addEventListener('click',()=>{ui.search='';$('#global-search').value='';render()});
+const renderSearch=debounce(render,120);
+$('#global-search').addEventListener('input',event=>{ui.search=event.target.value;if(ui.view==='oversikt')ui.view='resultat';renderSearch()});
+$('#clear-search').addEventListener('click',()=>{renderSearch.cancel();ui.search='';$('#global-search').value='';render()});
 $('#year-filter').addEventListener('change',event=>{ui.year=event.target.value;ui.view='resultat';render()});
 $('#class-filter').addEventListener('change',event=>{ui.className=event.target.value;ui.view='resultat';render()});
 $('#course-filter').addEventListener('change',event=>{ui.course=event.target.value;ui.view='resultat';render()});

@@ -1,7 +1,7 @@
 import { canonicalStringify, cloneJson } from '../domain/canonical.js';
 import { operationFingerprint, validateOperation } from '../domain/operations.js';
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const requestResult = request => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
@@ -24,7 +24,8 @@ export async function openSlaktlandskapDB({
   const request = indexedDB.open(name, DB_VERSION);
   request.onupgradeneeded = () => {
     const db = request.result;
-    if (!db.objectStoreNames.contains('ops')) db.createObjectStore('ops', { keyPath: 'op_id' });
+    const ops = db.objectStoreNames.contains('ops') ? request.transaction.objectStore('ops') : db.createObjectStore('ops', { keyPath: 'op_id' });
+    if (!ops.indexNames.contains('by_device_seq')) ops.createIndex('by_device_seq', ['device_id', 'seq'], { unique: true });
     if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
     if (!db.objectStoreNames.contains('snapshots')) db.createObjectStore('snapshots', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'key' });
@@ -118,6 +119,16 @@ export class IndexedDBStore {
           transaction.abort();
         };
       }
+      const devicesRequest = meta.get('device_ids');
+      devicesRequest.onsuccess = () => {
+        const deviceIds = new Set(Array.isArray(devicesRequest.result?.value) ? devicesRequest.result.value : []);
+        for (const deviceId of maxima.keys()) deviceIds.add(deviceId);
+        meta.put({ key: 'device_ids', value: [...deviceIds].sort() });
+      };
+      devicesRequest.onerror = () => {
+        collision = devicesRequest.error;
+        transaction.abort();
+      };
       transaction.oncomplete = () => resolve(inserted);
       transaction.onabort = () => reject(collision || transaction.error || new Error('IndexedDB-transaktionen avbröts'));
       transaction.onerror = () => reject(collision || transaction.error);
@@ -149,6 +160,16 @@ export class IndexedDBStore {
             opStore.add(cloneJson(op));
           });
           metaStore.put({ key, value: operations.at(-1).seq });
+          const devicesRequest = metaStore.get('device_ids');
+          devicesRequest.onsuccess = () => {
+            const deviceIds = new Set(Array.isArray(devicesRequest.result?.value) ? devicesRequest.result.value : []);
+            deviceIds.add(deviceId);
+            metaStore.put({ key: 'device_ids', value: [...deviceIds].sort() });
+          };
+          devicesRequest.onerror = () => {
+            failure = devicesRequest.error;
+            transaction.abort();
+          };
         } catch (error) {
           failure = error;
           transaction.abort();
@@ -169,6 +190,43 @@ export class IndexedDBStore {
     const values = await requestResult(transaction.objectStore('ops').getAll());
     await transactionDone(transaction);
     return values.map(cloneJson).sort((a, b) => a.op_id.localeCompare(b.op_id));
+  }
+
+  async getOpsAfter(watermarks = {}) {
+    if (!globalThis.IDBKeyRange) {
+      const all = await this.getAllOps();
+      return all.filter(op => op.seq > Number(watermarks[op.device_id] || 0));
+    }
+    const knownDeviceIds = await this.getMeta('device_ids');
+    const deviceIds = [...new Set([
+      ...Object.keys(watermarks),
+      ...(Array.isArray(knownDeviceIds) ? knownDeviceIds : []),
+    ])].sort();
+    if (!deviceIds.length) return [];
+    const transaction = this.db.transaction('ops', 'readonly');
+    const index = transaction.objectStore('ops').index('by_device_seq');
+    const requests = deviceIds.map(deviceId => {
+      const minimum = Math.max(0, Number(watermarks[deviceId] || 0)) + 1;
+      const range = globalThis.IDBKeyRange.bound([deviceId, minimum], [deviceId, Number.MAX_SAFE_INTEGER]);
+      return requestResult(index.getAll(range));
+    });
+    const values = (await Promise.all(requests)).flat();
+    await transactionDone(transaction);
+    return values.map(cloneJson).sort((a, b) => a.op_id.localeCompare(b.op_id));
+  }
+
+  async getOpsForDeviceAfter(deviceId, seq = 0) {
+    if (!globalThis.IDBKeyRange) {
+      const all = await this.getAllOps();
+      return all.filter(op => op.device_id === deviceId && op.seq > seq).sort((a, b) => a.seq - b.seq);
+    }
+    const transaction = this.db.transaction('ops', 'readonly');
+    const index = transaction.objectStore('ops').index('by_device_seq');
+    const minimum = Math.max(0, Number(seq || 0)) + 1;
+    const range = globalThis.IDBKeyRange.bound([deviceId, minimum], [deviceId, Number.MAX_SAFE_INTEGER]);
+    const values = await requestResult(index.getAll(range));
+    await transactionDone(transaction);
+    return values.map(cloneJson).sort((a, b) => a.seq - b.seq);
   }
 
   async putMeta(key, value) {

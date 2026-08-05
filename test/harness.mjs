@@ -78,6 +78,23 @@ await test('lagring, offlinefel och Dropbox-frånkoppling hanteras gemensamt', a
   }
 });
 
+await test('alla appar använder kompakta checkpoints, revisionscache och debounce', async () => {
+  const repository = await readFile(resolve(ROOT, 'packages/core/domain/repository.js'), 'utf8');
+  const materializer = await readFile(resolve(ROOT, 'packages/core/domain/materializer.js'), 'utf8');
+  const indexeddb = await readFile(resolve(ROOT, 'packages/core/storage/indexeddb.js'), 'utf8');
+  const syncEngine = await readFile(resolve(ROOT, 'packages/core/sync/sync-engine.js'), 'utf8');
+  assert.match(repository, /getOpsAfter/);
+  assert.match(repository, /compactApplied:\s*true/);
+  assert.match(materializer, /snapshot_version:\s*2/);
+  assert.match(indexeddb, /by_device_seq/);
+  assert.match(syncEngine, /repository\.saveSnapshot\(\)/);
+  for (const app of APPS) {
+    const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
+    assert.match(source, /debounce/, `${app} saknar debounce`);
+    assert.ok(source.includes('createRevisionCache') || app === 'matrikel' && source.includes('refreshedRepositoryRevision'), `${app} saknar revisionscache`);
+  }
+});
+
 await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', async () => {
   const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
   assert.deepEqual(release.apps, APPS);

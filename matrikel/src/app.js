@@ -6,6 +6,7 @@ import {
   beginDropboxOAuth,
   completeDropboxOAuth,
   createBatch,
+  debounce,
   isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
@@ -94,6 +95,7 @@ let currentProperties = [];
 let currentPropertyLinks = [];
 let currentFamilyUnits = [];
 let currentKinGroups = [];
+let refreshedRepositoryRevision = -1;
 let familyContext = null;
 let propertyById = new Map();
 let requestedPersonApplied = false;
@@ -189,6 +191,7 @@ function kinGroupRecords() {
 }
 
 function refreshData() {
+  if (refreshedRepositoryRevision === repository.revision) return;
   const people = personRecords();
   currentRelations = relationRecords();
   currentProperties = propertyRecords();
@@ -239,6 +242,7 @@ function refreshData() {
     const records = ui.selectedGroup.entityType === FAMILY_UNIT_TYPE ? currentFamilyUnits : currentKinGroups;
     if (!records.some(group => group.id === ui.selectedGroup.id)) ui.selectedGroup = null;
   }
+  refreshedRepositoryRevision = repository.revision;
 }
 
 function propertyNames(person) {
@@ -1439,7 +1443,8 @@ $('#year-on').addEventListener('click', (event) => {
   $('#year-out').textContent = ui.yearOn ? ui.year : 'alla år';
   render();
 });
-$('#year-slider').addEventListener('input', (event) => { ui.year = Number(event.currentTarget.value); $('#year-out').textContent = ui.year; render(); });
+const renderYear = debounce(render, 80);
+$('#year-slider').addEventListener('input', (event) => { ui.year = Number(event.currentTarget.value); $('#year-out').textContent = ui.year; renderYear(); });
 document.querySelectorAll('[data-view-mode]').forEach((button) => button.addEventListener('click', () => {
   ui.view = button.dataset.viewMode;
   ui.review = false;

@@ -43,3 +43,50 @@ export async function requestPersistentStorage({ storage = globalThis.navigator?
   const persisted = await storage.persist().catch(() => false);
   return { supported: true, persisted: Boolean(persisted), requested: true };
 }
+
+export function debounce(callback, waitMs = 120, { setTimer = globalThis.setTimeout, clearTimer = globalThis.clearTimeout } = {}) {
+  if (typeof callback !== 'function') throw new TypeError('debounce kräver en funktion');
+  if (!Number.isFinite(waitMs) || waitMs < 0) throw new TypeError('debounce kräver en giltig väntetid');
+  let timer = null;
+  let latestArgs = [];
+  let latestThis = null;
+  const invoke = () => {
+    timer = null;
+    const result = callback.apply(latestThis, latestArgs);
+    latestArgs = [];
+    latestThis = null;
+    return result;
+  };
+  function debounced(...args) {
+    latestArgs = args;
+    latestThis = this;
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(invoke, waitMs);
+  }
+  debounced.cancel = () => {
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    latestArgs = [];
+    latestThis = null;
+  };
+  debounced.flush = () => timer === null ? undefined : (clearTimer(timer), invoke());
+  return debounced;
+}
+
+export function createRevisionCache(getRevision) {
+  if (typeof getRevision !== 'function') throw new TypeError('createRevisionCache kräver en revisionsläsare');
+  let revision = Symbol('tom revision');
+  const values = new Map();
+  return (key, compute) => {
+    const nextRevision = getRevision();
+    if (nextRevision !== revision) {
+      revision = nextRevision;
+      values.clear();
+    }
+    if (!values.has(key)) {
+      if (typeof compute !== 'function') throw new TypeError('Revisionscachen kräver en beräkning');
+      values.set(key, compute());
+    }
+    return values.get(key);
+  };
+}
