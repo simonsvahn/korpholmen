@@ -19,6 +19,7 @@ import {
   disconnectDropboxEverywhere,
   isOfflineError,
   mergePersonReferences,
+  migrateLegacyCredentialsToShared,
   mirrorSharedDropboxCredential,
   requestPersistentStorage,
   resolveArchiveEntity,
@@ -101,6 +102,32 @@ await test('automatisk totalsynk dubbelköas inte av flera flikar', async () => 
   assert.equal(second.skipped, true);
   assert.equal(second.reason, 'fresh');
   assert.equal(pulls, 2);
+});
+
+await test('ett upptaget flerflikslås blockerar varken start eller köar en extra totalsynk', async () => {
+  const sharedStore = { get: async () => null, put: async () => {} };
+  const unavailableLock = async (_name, _action, options) => {
+    assert.equal(options.ifAvailable, true);
+    return options.unavailableValue;
+  };
+  let opened = 0;
+  const migrated = await migrateLegacyCredentialsToShared({
+    sharedStore,
+    appList: [{ id: 'matrikel' }],
+    storeFactory: async () => { opened += 1; throw new Error('ska inte öppnas'); },
+    lock: unavailableLock,
+  });
+  const synced = await syncAppFamily({
+    accessToken: 'token',
+    sharedStore,
+    appList: [{ id: 'matrikel' }],
+    pull: async () => { throw new Error('ska inte köras'); },
+    lock: unavailableLock,
+  });
+  assert.equal(migrated, false);
+  assert.equal(opened, 0);
+  assert.equal(synced.skipped, true);
+  assert.equal(synced.reason, 'locked');
 });
 
 await test('ett synkfel utlöser inte en kö av omedelbara flerfliksomtag', async () => {

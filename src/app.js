@@ -118,7 +118,11 @@ async function syncAll({ force = true } = {}) {
       syncSummary.className = 'sync-summary is-error';
     } else {
       syncSummary.textContent = result.skipped
-        ? result.reason === 'recent-attempt' ? 'En totalsynk har nyligen körts. Statusen för varje register visas nedan.' : 'Alla register är redan nyligen synkade.'
+        ? result.reason === 'locked'
+          ? 'En annan Korpholmen-flik synkar redan. Statusen för varje register visas nedan.'
+          : result.reason === 'recent-attempt'
+            ? 'En totalsynk har nyligen körts. Statusen för varje register visas nedan.'
+            : 'Alla register är redan nyligen synkade.'
         : 'Alla register har senaste Dropbox-data på den här enheten.';
       syncSummary.className = 'sync-summary is-ok';
     }

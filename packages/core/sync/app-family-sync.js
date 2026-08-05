@@ -25,8 +25,11 @@ const legacyTokenKeys = app => app.id === 'matrikel' ? ['dropbox:refresh-token-v
 
 const deviceIdFor = (app, store) => resolveDeviceId({ store, key: app.deviceKey, prefix: app.devicePrefix });
 
-const withOriginLock = async (name, action) => {
-  if (globalThis.navigator?.locks?.request) return navigator.locks.request(name, action);
+const withOriginLock = async (name, action, { ifAvailable = false, unavailableValue = false } = {}) => {
+  if (globalThis.navigator?.locks?.request) {
+    if (!ifAvailable) return navigator.locks.request(name, action);
+    return navigator.locks.request(name, { ifAvailable: true }, lock => lock ? action() : unavailableValue);
+  }
   return action();
 };
 
@@ -93,8 +96,8 @@ export async function getAppFamilySyncStatuses({ sharedStore = new KorpholmenSha
   })));
 }
 
-export async function migrateLegacyCredentialsToShared({ sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS } = {}) {
-  return withOriginLock('korpholmen-dropbox-session', async () => {
+export async function migrateLegacyCredentialsToShared({ sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS, lock = withOriginLock } = {}) {
+  return lock('korpholmen-dropbox-session', async () => {
     if (await sharedStore.get(sharedDropboxDisconnectedKey)) return false;
     if (await sharedStore.get(sharedDropboxTokenKey)) return false;
     const candidates = storeFactory === defaultStoreFactory ? await appsWithExistingDatabases(appList) : appList;
@@ -116,11 +119,11 @@ export async function migrateLegacyCredentialsToShared({ sharedStore = new Korph
       }
     }
     return false;
-  });
+  }, { ifAvailable: true, unavailableValue: false });
 }
 
-export async function mirrorSharedDropboxCredential({ refreshToken, sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS } = {}) {
-  return withOriginLock('korpholmen-dropbox-session', async () => {
+export async function mirrorSharedDropboxCredential({ refreshToken, sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS, lock = withOriginLock } = {}) {
+  return lock('korpholmen-dropbox-session', async () => {
     if (await sharedStore.get(sharedDropboxDisconnectedKey)) return false;
     const token = refreshToken || await sharedStore.get(sharedDropboxTokenKey);
     if (!token) return false;
@@ -139,7 +142,7 @@ export async function mirrorSharedDropboxCredential({ refreshToken, sharedStore 
       await sharedStore.put(LEGACY_MIRROR_KEY, { apps: [...mirroredApps].sort(), updated_at: new Date().toISOString() });
     }
     return true;
-  });
+  }, { ifAvailable: true, unavailableValue: false });
 }
 
 const defaultStoreFactory = async app => {
@@ -213,7 +216,7 @@ export async function syncAppFamily({ accessToken, skipApp = null, force = false
     await Promise.all(workers);
     if (results.every(result => result.state === 'ok')) await sharedStore.put(FAMILY_SYNC_KEY, new Date().toISOString());
     return { skipped: false, results };
-  });
+  }, { ifAvailable: true, unavailableValue: { skipped: true, reason: 'locked', results: [] } });
 }
 
 export function scheduleAppFamilySync(options = {}) {
