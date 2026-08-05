@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import {
   DELETE_FIELD,
@@ -10,25 +11,31 @@ import {
   openSlaktlandskapDB,
   MemoryRemoteTransport,
   MemoryStore,
+  Materializer,
   ReadOnlyMaster,
   Repository,
   KorpholmenSharedStore,
   SharedDropboxSession,
   SyncEngine,
+  canonicalStringify,
   createRevisionCache,
+  decodeCheckpointPayload,
   debounce,
   disconnectDropboxEverywhere,
   isOfflineError,
   mergePersonReferences,
   migrateLegacyCredentialsToShared,
   mirrorSharedDropboxCredential,
+  packSnapshot,
   requestPersistentStorage,
   resolveArchiveEntity,
   resolveDeviceId,
   resolveCurrentOwners,
   revokeDropboxAccessToken,
   sharedDropboxDisconnectedKey,
+  sha256Hex,
   syncAppFamily,
+  unpackSnapshot,
 } from '../data-layer.js';
 
 let passed = 0;
@@ -270,6 +277,92 @@ await test('lyckad synk sparar automatiskt ett kompakt checkpoint', async () => 
   const snapshot = await store.getSnapshot(snapshotId);
   assert.equal(snapshot.snapshot_version, 2);
   assert.equal(snapshot.op_watermarks['sync-checkpoint'], 1);
+});
+
+await test('snapshot v3 packas förlustfritt och verifieras efter gzip', async () => {
+  const source = await new Repository({ store: new MemoryStore(), deviceId: 'snapshot-v3-source' }).init();
+  await source.setFields([
+    { entityType: 'person', entityId: 'p1', field: 'name', value: 'Åsa Ö' },
+    { entityType: 'person', entityId: 'p1', field: 'years', value: [1980, 2025] },
+  ]);
+  const snapshot = await source.saveSnapshot();
+  const packed = packSnapshot(snapshot);
+  assert.deepEqual(unpackSnapshot(packed), snapshot);
+  const payload = Buffer.from(canonicalStringify(packed));
+  const compressed = gzipSync(payload, { level: 9, mtime: 0 });
+  const manifest = {
+    checkpoint_version: 2,
+    app_id: 'klubbhistorik',
+    created_at: '2026-08-05T00:00:00.000Z',
+    ops_root: '/klubbhistorik/ops',
+    snapshot_format: 3,
+    compression: 'gzip',
+    compressed_sha256: await sha256Hex(compressed),
+    payload_sha256: await sha256Hex(payload),
+    state_sha256: await sha256Hex(canonicalStringify(snapshot)),
+    compressed_bytes: compressed.byteLength,
+    payload_bytes: payload.byteLength,
+    source_batch_count: 1,
+    source_operation_count: 2,
+  };
+  manifest.snapshot_path = `/klubbhistorik/snapshots/${manifest.compressed_sha256}.snapshot-v3.json.gz`;
+  assert.deepEqual(await decodeCheckpointPayload(manifest, compressed, { opsRoot: '/klubbhistorik/ops', verifyStateHash: true }), snapshot);
+});
+
+await test('Dropbox-transport hämtar manifest och komprimerad snapshot var för sig', async () => {
+  const source = await new Repository({ store: new MemoryStore(), deviceId: 'dropbox-snapshot-source' }).init();
+  await source.setField('person', 'p1', 'name', 'Dropbox Snapshot');
+  const snapshot = await source.saveSnapshot();
+  const payload = Buffer.from(canonicalStringify(packSnapshot(snapshot)));
+  const compressed = gzipSync(payload, { level: 9, mtime: 0 });
+  const compressedHash = await sha256Hex(compressed);
+  const manifest = {
+    checkpoint_version: 2,
+    app_id: 'klubbhistorik',
+    created_at: '2026-08-05T00:00:00.000Z',
+    ops_root: '/klubbhistorik/ops',
+    snapshot_format: 3,
+    compression: 'gzip',
+    snapshot_path: `/klubbhistorik/snapshots/${compressedHash}.snapshot-v3.json.gz`,
+    compressed_sha256: compressedHash,
+    payload_sha256: await sha256Hex(payload),
+    state_sha256: await sha256Hex(canonicalStringify(snapshot)),
+    compressed_bytes: compressed.byteLength,
+    payload_bytes: payload.byteLength,
+    source_batch_count: 1,
+    source_operation_count: 1,
+  };
+  const paths = [];
+  const transport = new DropboxTransport({
+    accessToken: 'test',
+    opsRoot: '/klubbhistorik/ops',
+    fetchImpl: async (_url, init) => {
+      const path = JSON.parse(init.headers['Dropbox-API-Arg']).path;
+      paths.push(path);
+      return path.endsWith('latest.json') ? new Response(JSON.stringify(manifest)) : new Response(compressed);
+    },
+  });
+  const checkpoint = await transport.getCheckpoint();
+  assert.deepEqual(paths, ['/klubbhistorik/checkpoints/latest.json', manifest.snapshot_path]);
+  assert.equal(new Materializer(checkpoint.snapshot).getEntity('person', 'p1').fields.name, 'Dropbox Snapshot');
+});
+
+await test('checkpointkrav stoppar tom Klubbhistorik innan full historik laddas ned', async () => {
+  const repository = await new Repository({ store: new MemoryStore(), deviceId: 'empty-klubbhistorik' }).init();
+  let listed = false;
+  const transport = {
+    id: 'checkpoint-required',
+    opsRoot: '/klubbhistorik/ops',
+    putBatch: async () => {},
+    getJson: async () => null,
+    getCheckpoint: async () => null,
+    listChanges: async () => { listed = true; return { entries: [], cursor: null, has_more: false }; },
+  };
+  await assert.rejects(
+    new SyncEngine({ repository, transport, requireCheckpointOnEmpty: true }).downloadRemote(),
+    /Privat snapshot saknas eller är skadad/,
+  );
+  assert.equal(listed, false);
 });
 
 await test('en ny enhet startar från fjärrcheckpoint och hämtar bara svansen', async () => {

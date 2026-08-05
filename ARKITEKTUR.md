@@ -262,16 +262,20 @@ Varje sakapp har egen IndexedDB-databas och Dropbox-namnrymd:
 /klubbhistorik/ops
 /kartdata/ops
 
-/<app>/checkpoints/latest.json   # härledd kompakt startpunkt, aldrig sakmaster
+/<app>/checkpoints/latest.json   # litet atomiskt manifest, aldrig sakmaster
+/<app>/snapshots/<sha256>.snapshot-v3.json.gz
 ```
 
 Operationsmapparna är den oföränderliga historiken och yttersta
 återställningskällan. En checkpoint är en reproducerbar materialisering av
 operationsloggens senaste kända tillstånd med vattenmärke per skrivande
-enhet. Den gör att en ny telefon kan läsa ett kompakt nuläge och bara hämta
-senare batcher. Den får ignoreras och byggas om från operationsloggarna om
-den saknas, är skadad eller har äldre vattenmärken. Checkpoints får därför
-aldrig användas för att radera eller skriva om historiska batcher.
+enhet. Manifestet publiceras sist och pekar på en innehållsadresserad,
+gzip-komprimerad snapshot vars storlek och SHA-256 verifieras före användning.
+Den gör att en ny telefon kan läsa ett kompakt nuläge och bara hämta senare
+batcher. De flesta appar kan ignorera och bygga om en saknad checkpoint från
+operationsloggen. En tom Klubbhistorik fallerar däremot säkert, eftersom dess
+fulla revisionslogg är för stor för webbens startväg. Checkpoints får aldrig
+användas för att radera eller skriva om historiska batcher.
 
 I appens IndexedDB får det dessutom finnas skrivskyddade snapshots av andra
 mastrar. De ligger i snapshot-/metadata-lagret, aldrig i appens `ops`-lager,

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertExactPublicationFiles } from '../verktyg/publication-guard.mjs';
+import { buildCheckpointForApp } from '../verktyg/sync-checkpoint-builder.mjs';
+import { createBatch, decodeCheckpointPayload, Materializer } from '../packages/core/data-layer.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APPS = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
@@ -83,15 +85,66 @@ await test('alla appar använder kompakta checkpoints, revisionscache och deboun
   const materializer = await readFile(resolve(ROOT, 'packages/core/domain/materializer.js'), 'utf8');
   const indexeddb = await readFile(resolve(ROOT, 'packages/core/storage/indexeddb.js'), 'utf8');
   const syncEngine = await readFile(resolve(ROOT, 'packages/core/sync/sync-engine.js'), 'utf8');
+  const familySync = await readFile(resolve(ROOT, 'packages/core/sync/app-family-sync.js'), 'utf8');
   assert.match(repository, /getOpsAfter/);
   assert.match(repository, /compactApplied:\s*true/);
   assert.match(materializer, /snapshot_version:\s*2/);
   assert.match(indexeddb, /by_device_seq/);
   assert.match(syncEngine, /repository\.saveSnapshot\(\)/);
+  assert.match(syncEngine, /requireCheckpointOnEmpty/);
+  assert.match(familySync, /id: 'klubbhistorik'.*requireCheckpointOnEmpty: true/);
+  const checkpointFormat = await readFile(resolve(ROOT, 'packages/core/sync/checkpoint-format.js'), 'utf8');
+  assert.match(checkpointFormat, /decodeCheckpointPayload/);
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     assert.match(source, /debounce/, `${app} saknar debounce`);
     assert.ok(source.includes('createRevisionCache') || app === 'matrikel' && source.includes('refreshedRepositoryRevision'), `${app} saknar revisionscache`);
+  }
+  const [clubSource, clubConfig, clubHtml, clubSeed] = await Promise.all([
+    readFile(resolve(ROOT, 'apps/klubbhistorik/src/app.js'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/klubbhistorik/src/config.js'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/klubbhistorik/index.html'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/klubbhistorik/verktyg/skriv-dropbox-startmaster.mjs'), 'utf8'),
+  ]);
+  assert.match(clubSource, /requireCheckpointOnEmpty:true/);
+  assert.doesNotMatch(clubSource, /bootstrapLocal/);
+  assert.doesNotMatch(clubConfig, /LOCAL_BOOTSTRAP_URLS/);
+  assert.doesNotMatch(clubHtml, /Aktivera pilotmaster/);
+  assert.match(clubSeed, /buildCheckpointForApp/);
+});
+
+await test('checkpointbygget skriver atomiskt manifest och innehållsadresserad gzip-snapshot', async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), 'korpholmen-checkpoint-'));
+  try {
+    const appRoot = resolve(directory, 'klubbhistorik');
+    await mkdir(resolve(appRoot, 'ops'), { recursive: true });
+    const operation = {
+      op_id: 'checkpoint-test:1',
+      device_id: 'checkpoint-test',
+      seq: 1,
+      entity_type: 'person',
+      entity_id: 'p1',
+      field: 'name',
+      value: 'Snapshotperson',
+      hlc: '1785888000000-000000-checkpoint-test',
+      schema_version: 1,
+    };
+    const batch = createBatch([operation]);
+    await writeFile(resolve(appRoot, 'ops/checkpoint-test-0000000001-0000000001.json'), JSON.stringify(batch));
+    const result = await buildCheckpointForApp({
+      outputRoot: directory,
+      app: { id: 'klubbhistorik', folder: 'klubbhistorik', opsRoot: '/klubbhistorik/ops' },
+      createdAt: '2026-08-05T00:00:00.000Z',
+    });
+    const manifest = JSON.parse(await readFile(resolve(appRoot, 'checkpoints/latest.json'), 'utf8'));
+    const compressed = await readFile(resolve(directory, manifest.snapshot_path.slice(1)));
+    const snapshot = await decodeCheckpointPayload(manifest, compressed, { opsRoot: '/klubbhistorik/ops', verifyStateHash: true });
+    assert.equal(new Materializer(snapshot).getEntity('person', 'p1').fields.name, 'Snapshotperson');
+    assert.equal(result.manifest.compressed_sha256, manifest.compressed_sha256);
+    assert.ok(manifest.compressed_bytes < manifest.payload_bytes);
+    assert.equal((await stat(resolve(directory, manifest.snapshot_path.slice(1)))).size, manifest.compressed_bytes);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

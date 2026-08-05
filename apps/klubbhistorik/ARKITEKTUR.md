@@ -208,18 +208,23 @@ båda ordagranna källraderna och en förklarande normaliseringsnot ligger kvar.
 
 ```mermaid
 flowchart TB
-    M["Privat reproducerbar startmaster"] --> I["IndexedDB: kbk-klubbhistorik"]
-    I <--> D["Dropbox App Folder: /klubbhistorik/ops"]
+    K["Privata källkopior och importer"] --> D["Oföränderlig logg: /klubbhistorik/ops"]
+    D --> M["Gzip-snapshot: /klubbhistorik/snapshots"]
+    M --> I["IndexedDB: kbk-klubbhistorik"]
+    D -->|"endast deltan efter vattenmärket"| I
+    I -->|"nya beslut"| D
     I --> UI["Offlinebar app"]
     S["Datafritt publiceringspaket"] --> UI
     W["Service worker"] --> S
-    W -. "cachar inte" .-> M
+    W -. "cachar inte privat data" .-> M
 ```
 
-Startmastern aktiveras bara från källappen på localhost. Den publika appen
-innehåller varken råa matrikelrader, personreferenser eller båtreferenser.
-Första uppladdningen delas i oföränderliga operationsbatcher. Senare beslut
-läggs till som nya operationer och synkas i den egna namnrymden.
+Den publika appen innehåller varken råa matrikelrader, personreferenser,
+båtreferenser eller källoriginal. En ny enhet hämtar ett litet manifest och
+en hashverifierad, komprimerad snapshot; därefter hämtas bara operationer efter
+snapshotens vattenmärken. Om snapshoten saknas eller är skadad stoppas en tom
+webbklient i stället för att ladda hela revisionshistoriken. Full återspelning
+görs endast av det lokala checkpointverktyget.
 
 ## Nu byggt och senare utbyggnad
 

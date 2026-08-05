@@ -77,6 +77,10 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
   Dropbox;
 - levande operationer — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
+- snabb privat startpunkt — `checkpoints/latest.json` pekar på en
+  innehållsadresserad `snapshots/*.snapshot-v3.json.gz`; den byggs automatiskt
+  efter seedning och innehåller materialiserat tillstånd, konfliktmetadata och
+  vattenmärken, aldrig originalbilder eller PDF:er.
 
 Båtreferenserna är privata snapshots av all strukturerad metadata i
 Båtregistret utom bilder. De används för begripliga matchningsetiketter och
@@ -93,7 +97,9 @@ npm run build:publish
 npm run seed:dropbox -- "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
-Startmastern kan endast aktiveras från källappen på localhost. GitHub Pages
-får aldrig den privata datan. Seed-kommandot skriver oföränderliga batcher
-till `/klubbhistorik/ops`, vägrar andra Dropbox-rötter och skriver aldrig över
-en befintlig batch med annat innehåll.
+GitHub Pages får aldrig den privata datan. Seed-kommandot skriver
+oföränderliga batcher till `/klubbhistorik/ops`, vägrar andra Dropbox-rötter,
+skriver aldrig över en befintlig batch med annat innehåll och bygger därefter
+en atomisk, komprimerad checkpoint från samtliga batcher i Dropbox-spegeln.
+Den tidigare webbläsarbootstrapen från en hårdkodad lista av stora
+korrigeringsfiler är avvecklad.

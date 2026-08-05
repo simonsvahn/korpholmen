@@ -530,27 +530,24 @@ await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
   assert.ok(seed.includes("'/klubbhistorik/ops'"));
   assert.ok(seed.includes("{flag:'wx'}"));
   assert.ok(seed.includes('Befintlig operationsbatch skiljer sig och skrivs inte över'));
+  assert.ok(seed.includes('buildCheckpointForApp'));
   assert.equal(JSON.parse(appPackage).scripts['seed:dropbox'],'node verktyg/skriv-dropbox-startmaster.mjs');
-  assert.ok(config.includes('LOCAL_BOOTSTRAP_URLS'));
-  assert.ok(config.includes('2026-08-03-ted-thunborg-dublett.json'));
-  assert.ok(config.includes('2026-08-03-en-sorteringsvariant-per-matrikel.json'));
-  assert.ok(config.includes('2026-08-03-en-matrikel-per-ar.json'));
-  assert.ok(config.includes('2026-08-03-matrikel-2010.json'));
-  assert.ok(config.includes('2026-08-03-en-matrikel-per-ar-v2.json'));
-  assert.ok(config.includes('2026-08-03-kalltrogen-layout-v3.json'));
-  assert.ok(config.includes('2026-08-04-grundarmatrikel-1940-tal.json'));
+  assert.ok(!config.includes('LOCAL_BOOTSTRAP_URLS'));
+  assert.ok(!app.includes('bootstrapLocal'));
+  assert.ok(app.includes('requireCheckpointOnEmpty:true'));
+  assert.ok(app.includes('komprimerade historiksnapshoten'));
   assert.ok(app.includes("release?.is_reconstruction?'Källunderlag':'Som källan skrevs'"));
   assert.ok(app.includes('Detta är inte en bevarad matrikel.'));
-  assert.ok(app.includes('Full källsäker master inläst lokalt'));
 });
 
 await test('publiceringsbygget är datafritt och länkat från appfamiljen',async()=>{
   const result=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
   assert.equal(result.status,0,result.stderr||result.stdout);
-  const [publishedApp,publishedCore,rootHtml]=await Promise.all([readFile(resolve(REPO,'klubbhistorik/src/app.js'),'utf8'),readFile(resolve(REPO,'klubbhistorik/core/data-layer.js'),'utf8'),readFile(resolve(REPO,'index.html'),'utf8')]);
+  const [publishedApp,publishedCore,publishedCheckpoint,rootHtml]=await Promise.all([readFile(resolve(REPO,'klubbhistorik/src/app.js'),'utf8'),readFile(resolve(REPO,'klubbhistorik/core/data-layer.js'),'utf8'),readFile(resolve(REPO,'klubbhistorik/core/sync/checkpoint-format.js'),'utf8'),readFile(resolve(REPO,'index.html'),'utf8')]);
   assert.ok(publishedApp.includes("../core/data-layer.js"));
   assert.ok(!publishedApp.includes('person-occurrence:matrikel-'));
   assert.ok(publishedCore.includes("./storage/indexeddb.js"));
+  assert.ok(publishedCheckpoint.includes('decodeCheckpointPayload'));
   assert.ok(rootHtml.includes('./klubbhistorik/'));
   assert.ok(rootHtml.includes('En installerad app'));
 });

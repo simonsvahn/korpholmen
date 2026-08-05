@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { batchPath, createBatch, materialize } from '../../../packages/core/data-layer.js';
+import { buildCheckpointForApp } from '../../../verktyg/sync-checkpoint-builder.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const PRIVATE=resolve(ROOT,'privat/migrering-2026-08-02');
@@ -53,6 +54,10 @@ for(const deviceOperations of byDevice.values()){
 }
 
 const state=materialize(allOperations);
+const checkpoint=await buildCheckpointForApp({
+  outputRoot:dropboxRoot,
+  app:{id:'klubbhistorik',folder:'klubbhistorik',opsRoot:'/klubbhistorik/ops'},
+});
 console.log(JSON.stringify({
   target:dropboxRoot,
   base_operations:document.operations.length,
@@ -61,5 +66,7 @@ console.log(JSON.stringify({
   releases:state.listEntities('matrikel-release').length,
   person_occurrences:state.listEntities('person-occurrence').length,
   boat_occurrences:state.listEntities('boat-occurrence').length,
+  checkpoint_bytes:checkpoint.manifest.compressed_bytes,
+  checkpoint_operations:checkpoint.manifest.source_operation_count,
   ...counters,
 },null,2));
