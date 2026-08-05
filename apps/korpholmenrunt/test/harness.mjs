@@ -34,11 +34,12 @@ const participantPlaceholders=list('race-participant-placeholder');
 const people=list('person-ref');
 const boats=list('boat-ref');
 const notes=list('source-note');
+const roots=list('race-root');
 
-await test('v2-startmastern använder nya och avgränsade device-id:n',()=>{
-  const retired=new Set(['migration-korpholmenrunt-2026-08-02','migration-korpholmenrunt-granskning-2026-08-02']);
-  assert.deepEqual(new Set(document.device_ids),new Set(['migration-korpholmenrunt-2026-08-04-v2','migration-korpholmenrunt-granskning-2026-08-04-v2']));
-  assert.equal(document.device_id,'migration-korpholmenrunt-2026-08-04-v2');
+await test('v3-startmastern använder nya och avgränsade device-id:n',()=>{
+  const retired=new Set(['migration-korpholmenrunt-2026-08-02','migration-korpholmenrunt-granskning-2026-08-02','migration-korpholmenrunt-2026-08-04-v2','migration-korpholmenrunt-granskning-2026-08-04-v2']);
+  assert.deepEqual(new Set(document.device_ids),new Set(['migration-korpholmenrunt-2026-08-05-v3','migration-korpholmenrunt-granskning-2026-08-05-v3']));
+  assert.equal(document.device_id,'migration-korpholmenrunt-2026-08-05-v3');
   assert.ok(document.operations.every(operation=>document.device_ids.includes(operation.device_id)));
   assert.ok(document.operations.every(operation=>!retired.has(operation.device_id)));
 });
@@ -57,6 +58,10 @@ await test('samtliga 363 källrader är bevarade som resultat eller källnoterin
   assert.equal(results.length+notes.length,document.counts.source_rows);
   assert.equal(new Set(results.map(item=>item.source_row_id)).size,results.length);
   assert.ok(results.every(item=>item.raw_row&&item.year&&item.class_name&&item.course_code&&item.time_raw));
+  assert.ok(results.every(item=>Array.isArray(item.participants_raw)&&item.participants_raw.length===3&&Array.isArray(item.participant_link_ids)));
+  assert.ok(links.every(item=>item.role==='tävlande'&&Number.isInteger(item.participant_order)&&Number.isInteger(item.participant_group)));
+  assert.equal(roots[0].schema_version,3);
+  assert.equal(roots[0].participant_model,'tävlande');
   assert.ok(results.every(item=>item.class_id&&item.class_match_status==='manuell'&&item.class_match_method===KLASSSTANDARD_METHOD));
   const dagen=results.find(item=>item.class_raw==='Dagen');assert.ok(dagen);assert.equal(dagen.class_name,'Rodd');assert.equal(dagen.class_id,'rodd');
   const paddel=results.find(item=>item.class_raw==='Paddel');assert.ok(paddel);assert.equal(paddel.boat_name_raw,'Anita');assert.equal(paddel.class_id,'kajak-2');
@@ -114,7 +119,7 @@ await test('osäkra träffar lämnas i granskningskö utan att källnamnet skriv
 });
 
 await test('analysdatabasen har främmande nycklar och index för topplistor',()=>{
-  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\nassert db.execute('select count(*) from participant_placeholder').fetchone()[0]==1\nassert db.execute(\"select count(*) from result_person where placeholder_id='race-participant-placeholder:med-flera' and confirmed=1\").fetchone()[0]==9\ncolumns={row[1] for row in db.execute('PRAGMA table_info(result)').fetchall()}\nassert {'class_raw','class_id','class_name','class_match_status','class_match_method'} <= columns\nperson_columns={row[1] for row in db.execute('PRAGMA table_info(result_person)').fetchall()}\nassert {'participant_kind','placeholder_id','source_raw_name','source_parent_field'} <= person_columns\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_id='kajak-2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
+  const script=`import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1])\nassert not db.execute('PRAGMA foreign_key_check').fetchall()\nassert db.execute('select count(*) from result').fetchone()[0]==357\nassert db.execute('select count(*) from participant_placeholder').fetchone()[0]==1\nassert db.execute(\"select count(*) from result_person where placeholder_id='race-participant-placeholder:med-flera' and confirmed=1\").fetchone()[0]==9\ncolumns={row[1] for row in db.execute('PRAGMA table_info(result)').fetchall()}\nassert {'participants_raw_json','class_raw','class_id','class_name','class_match_status','class_match_method'} <= columns\nassert not {'captain_raw','crew_1_raw','crew_2_raw'} & columns\nperson_columns={row[1] for row in db.execute('PRAGMA table_info(result_person)').fetchall()}\nassert {'participant_kind','placeholder_id','source_raw_name','participant_order','participant_group'} <= person_columns\nassert not {'source_field','source_parent_field'} & person_columns\nassert db.execute(\"select count(*) from result_person where role <> 'tävlande'\").fetchone()[0]==0\nplan=str(db.execute(\"EXPLAIN QUERY PLAN SELECT * FROM result WHERE year=2001 AND class_id='kajak-2' AND course_code='S'\").fetchall())\nassert 'idx_result_year_class_course' in plan\nprint(db.execute('select count(*) from result_person where person_id is not null').fetchone()[0])`;
   const query=spawnSync('python3',['-c',script,resolve(PRIVATE,'korpholmenrunt.sqlite')],{encoding:'utf8'});
   assert.equal(query.status,0,query.stderr||query.stdout);
 });
@@ -123,14 +128,15 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','crewRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
-  for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const control of ['edit-review-status','edit-review-issues','edit-participant-1','edit-participant-2','edit-participant-3','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
   assert.ok(app.includes('await repository.upsertFields(entries)'));
-  assert.ok(app.includes("['Tävlande 1',result.captain_raw]"));
-  assert.ok(app.includes("['Tävlande 2',result.crew_1_raw]"));
-  assert.ok(app.includes("['Tävlande 3',result.crew_2_raw]"));
+  assert.ok(app.includes('participantRawValues(result)'));
+  assert.ok(app.includes("role:'tävlande'"));
+  assert.ok(app.includes("field:'participant_link_ids'"));
+  for(const retired of ['captain_raw','crew_1_raw','crew_2_raw','person_link_ids','source_parent_field','data-inline-person-field'])assert.equal(app.includes(retired),false);
   assert.ok(app.includes("method:'valt i resultatdialogen'"));
   assert.ok(app.includes('participantRole(link)'));
   assert.ok(matchingStyles.includes('.tavlandegrupp'));

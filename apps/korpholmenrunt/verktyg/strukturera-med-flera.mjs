@@ -35,7 +35,7 @@ const links=list('race-person-link');
 const resultById=new Map(results.map(result=>[result.id,result]));
 const linksByResult=new Map();
 for(const link of links){if(!linksByResult.has(link.result_id))linksByResult.set(link.result_id,[]);linksByResult.get(link.result_id).push(link)}
-const sourceOrder=link=>Number.isInteger(link.participant_order)?link.participant_order:({kapten:0,'besattning-1':100,'besattning-2':200}[link.source_parent_field||link.source_field]??900);
+const sourceOrder=link=>Number.isInteger(link.participant_order)?link.participant_order:900;
 const targets=links.filter(link=>link.participant_kind!=='placeholder'&&MED_FLERA_RE.test(String(link.raw_name||'').trim()));
 
 const latestHlc=existingOps.map(operation=>operation.hlc).reduce((latest,value)=>!latest||compareHLC(value,latest)>0?value:latest,null);
@@ -77,7 +77,8 @@ for(const link of targets){
 
   if(!named){
     for(const [field,value] of Object.entries({
-      role:`Tävlande ${position+1}`,
+      role:'tävlande',
+      participant_group:Number.isInteger(link.participant_group)?link.participant_group:0,
       participant_order:position,
       raw_name:'Med flera',
       source_raw_name:sourceRaw,
@@ -90,19 +91,17 @@ for(const link of targets){
       confirmed:true,
     }))set('race-person-link',link.id,field,value);
     set('race-result',result.id,'participant_structure_status','strukturerad platshållare');
-    set('race-result',result.id,'participant_structure_updated_at','2026-08-04');
     migrated.push({result_id:result.id,source:sourceRaw,links:[link.id]});
     continue;
   }
 
-  const parentField=link.source_parent_field||link.source_field;
+  const participantGroup=Number.isInteger(link.participant_group)?link.participant_group:0;
   const personLinkId=`${link.id}-del-person`;
   const placeholderLinkId=`${link.id}-del-med-flera`;
   const personFields={
     result_id:result.id,
-    role:`Tävlande ${position+1}`,
-    source_field:`${parentField}-del-person-med-flera`,
-    source_parent_field:parentField,
+    role:'tävlande',
+    participant_group:participantGroup,
     participant_order:position,
     raw_name:named,
     source_raw_name:sourceRaw,
@@ -118,9 +117,8 @@ for(const link of targets){
   };
   const placeholderFields={
     result_id:result.id,
-    role:`Tävlande ${position+2}`,
-    source_field:`${parentField}-del-med-flera`,
-    source_parent_field:parentField,
+    role:'tävlande',
+    participant_group:participantGroup,
     participant_order:position+1,
     raw_name:'Med flera',
     source_raw_name:sourceRaw,
@@ -139,11 +137,10 @@ for(const link of targets){
   const finalIds=current.flatMap(item=>item.id===link.id?[personLinkId,placeholderLinkId]:[item.id]);
   finalIds.forEach((id,index)=>{
     set('race-person-link',id,'participant_order',index);
-    set('race-person-link',id,'role',`Tävlande ${index+1}`);
+    set('race-person-link',id,'role','tävlande');
   });
-  set('race-result',result.id,'person_link_ids',finalIds);
+  set('race-result',result.id,'participant_link_ids',finalIds);
   set('race-result',result.id,'participant_structure_status','strukturerad platshållare');
-  set('race-result',result.id,'participant_structure_updated_at','2026-08-04');
   del('race-person-link',link.id);
   migrated.push({result_id:result.id,source:sourceRaw,links:[personLinkId,placeholderLinkId]});
 }
