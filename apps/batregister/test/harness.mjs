@@ -194,6 +194,7 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(html.includes('stabil SLÄKT'));
   assert.ok(app.includes('putBlobImmutable'));
   assert.ok(app.includes("repository.deleteEntities"));
+  assert.equal((app.match(/repository\.upsertFields\(/g)||[]).length,3);
 });
 
 await test('anknytningsfiltret söker personer och bläddrar bland stabila grupper utan äldre etiketter', async()=>{

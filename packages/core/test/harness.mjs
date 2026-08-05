@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DELETE_FIELD,
   DropboxTransport,
   openSlaktlandskapDB,
   MemoryRemoteTransport,
@@ -68,6 +69,31 @@ await test('en lokal referensmaster kan startas från operationer utan att de ha
   assert.equal((await cache.getAllOps()).length, 0);
   const offlineReader = await new ReadOnlyMaster({ store: cache, cacheKey: 'kartdata' }).init();
   assert.equal(offlineReader.getEntity('place', 'korpholmen').fields.preferred_name, 'Korpholmen');
+});
+
+await test('tombstonade deterministiska länkar återställs atomiskt vid upsert', async () => {
+  const store = new MemoryStore();
+  const repository = await new Repository({ store, deviceId: 'upsert-test' }).init();
+  await repository.setFields([
+    { entityType: 'test-link', entityId: 'a--b', field: 'role', value: 'ägare' },
+    { entityType: 'test-link', entityId: 'a--b', field: 'confidence', value: 'importerad' },
+  ]);
+  await repository.deleteEntity('test-link', 'a--b');
+  await repository.setField('test-link', 'a--b', 'role', 'ordinarie set är fortfarande dold');
+  assert.equal(repository.getEntity('test-link', 'a--b'), null);
+
+  const operations = await repository.upsertFields([
+    { entityType: 'test-link', entityId: 'a--b', field: 'role', value: 'anknuten' },
+    { entityType: 'test-link', entityId: 'a--b', field: 'confidence', value: 'godkänd i appen' },
+  ]);
+  assert.equal(operations.length, 3);
+  assert.equal(operations[0].field, DELETE_FIELD);
+  assert.equal(operations[0].value, false);
+  assert.deepEqual(operations.slice(1).map(operation => operation.field), ['role', 'confidence']);
+  assert.deepEqual(repository.getEntity('test-link', 'a--b').fields, {
+    role: 'anknuten',
+    confidence: 'godkänd i appen',
+  });
 });
 
 await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fastighetsägare', async () => {

@@ -94,6 +94,39 @@ export class Repository {
     })));
   }
 
+  // Deterministiska länkar kan ha tombstonats tidigare. En ny användarhandling
+  // ska då återställa länken och skriva dess fält i samma lokala transaktion.
+  // Aktiva och helt nya entiteter får ingen onödig restore-operation.
+  upsertFields(entries) {
+    this.assertReady();
+    if (!Array.isArray(entries) || !entries.length) return Promise.resolve([]);
+    const factories = [];
+    const seen = new Set();
+    for (const entry of entries) {
+      const key = `${entry.entityType}\u0000${entry.entityId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const current = this.state.getEntity(entry.entityType, entry.entityId, { includeDeleted: true });
+      if (current?.deleted) factories.push((seq, hlc) => createRestoreOperation({
+        deviceId: this.deviceId,
+        seq,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        hlc
+      }));
+    }
+    factories.push(...entries.map(entry => (seq, hlc) => createSetOperation({
+      deviceId: this.deviceId,
+      seq,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      field: entry.field,
+      value: entry.value,
+      hlc
+    })));
+    return this.commitMany(factories);
+  }
+
   deleteEntity(entityType, entityId) {
     return this.commit((seq, hlc) => createDeleteOperation({
       deviceId: this.deviceId, seq, entityType, entityId, hlc

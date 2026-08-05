@@ -3,7 +3,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const RELEASE = '2026-08-05-korpholmen-pwa-4';
+const RELEASE = '2026-08-05-korpholmen-pwa-5';
 const APP_DIRECTORIES = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
 const ROOT_SHELL = ['index.html', 'styles.css', 'app-switcher.css', 'manifest.webmanifest', 'icons/korpholmen.svg', 'icons/korpholmen-180.png', 'icons/korpholmen-192.png', 'icons/korpholmen-512.png', 'src/app.js', 'src/app-family-bootstrap.js', 'src/config.js', 'sw.js'];
 

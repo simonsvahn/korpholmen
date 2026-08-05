@@ -606,7 +606,7 @@ async function addRelationLink() {
   if(kind==='person'){
     const person=matrikelPeople.find(item=>item.id===id); if(!person)return;
     const linkId=`${selectedBoatId}--${person.id}`;
-    await syncEdit(()=>repository.setFields([
+    await syncEdit(()=>repository.upsertFields([
       {entityType:'boat-person-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
       {entityType:'boat-person-link',entityId:linkId,field:'person_id',value:person.id},
       {entityType:'boat-person-link',entityId:linkId,field:'role',value:role},
@@ -618,7 +618,7 @@ async function addRelationLink() {
     const context=matrikelFamilyContext();
     const target=(kind===FAMILY_UNIT_TYPE?context.familyUnitById:context.kinGroupById).get(id);if(!target)return;
     const linkId=`${selectedBoatId}--group--${kind}--${id}`;
-    await syncEdit(()=>repository.setFields([
+    await syncEdit(()=>repository.upsertFields([
       {entityType:'boat-group-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
       {entityType:'boat-group-link',entityId:linkId,field:'target_type',value:kind},
       {entityType:'boat-group-link',entityId:linkId,field:'target_id',value:target.id},
@@ -632,7 +632,7 @@ async function addRelationLink() {
   if(kind==='legacy-family'){
     const family=familyRecords().find(item=>item.id===id); if(!family)return;
     const linkId=`${selectedBoatId}--family--${family.id}`;
-    await syncEdit(()=>repository.setFields([
+    await syncEdit(()=>repository.upsertFields([
       {entityType:'boat-family-link',entityId:linkId,field:'boat_id',value:selectedBoatId},
       {entityType:'boat-family-link',entityId:linkId,field:'family_id',value:family.id},
       {entityType:'boat-family-link',entityId:linkId,field:'family_name',value:family.name},
