@@ -212,6 +212,11 @@ export class Repository {
     return this.state.listEntities(type, options);
   }
 
+  getWatermarks() {
+    this.assertReady();
+    return Object.fromEntries([...this.state.opWatermarks.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async saveSnapshot(id = 'latest') {
     this.assertReady();
     const snapshot = this.state.exportSnapshot({ compactApplied: true });

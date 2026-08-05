@@ -13,9 +13,10 @@ const normalizePath = value => {
 };
 
 const parentPath = path => path.slice(0, path.lastIndexOf('/')) || '/';
+const childPath = (path, child) => path === '/' ? `/${child}` : `${path}/${child}`;
 
 export class DropboxTransport {
-  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false }) {
+  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false, requestTimeoutMs = 45_000 }) {
     if (!accessToken) throw new TypeError('Dropbox access token saknas');
     if (!fetchImpl) throw new TypeError('fetch saknas');
     this.accessToken = accessToken;
@@ -23,7 +24,26 @@ export class DropboxTransport {
     this.id = id;
     this.opsRoot = normalizePath(opsRoot).replace(/\/$/, '') || '/';
     this.readOnly = Boolean(readOnly);
+    if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 0) throw new TypeError('Ogiltig Dropbox-timeout');
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.checkpointPath = childPath(parentPath(this.opsRoot), 'checkpoints/latest.json');
     this.knownFolders = new Set(['/']);
+  }
+
+  async request(url, init, timeoutMs = this.requestTimeoutMs) {
+    if (!(timeoutMs > 0) || typeof globalThis.AbortController !== 'function') return this.fetch(url, init);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await this.fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted || error?.name === 'AbortError') {
+        throw new TransportError(`Dropbox svarade inte inom ${Math.ceil(timeoutMs / 1000)} sekunder`, { code: 'request_timeout' });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async parseError(response) {
@@ -42,7 +62,7 @@ export class DropboxTransport {
   }
 
   async rpc(route, body) {
-    const response = await this.fetch(`${API}${route}`, {
+    const response = await this.request(`${API}${route}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -68,7 +88,7 @@ export class DropboxTransport {
     if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte ladda upp data');
     const path = normalizePath(pathValue);
     await this.ensureFolder(parentPath(path));
-    const response = await this.fetch(`${CONTENT}/files/upload`, {
+    const response = await this.request(`${CONTENT}/files/upload`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -100,7 +120,7 @@ export class DropboxTransport {
 
   async getJson(pathValue) {
     const path = normalizePath(pathValue);
-    const response = await this.fetch(`${CONTENT}/files/download`, {
+    const response = await this.request(`${CONTENT}/files/download`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
     });
@@ -111,6 +131,20 @@ export class DropboxTransport {
   async putBatch(batch) {
     validateBatch(batch);
     return this.putImmutable(batchPath(batch.device_id, batch.from_seq, batch.to_seq, this.opsRoot), batch);
+  }
+
+  async getCheckpoint() {
+    try {
+      return await this.getJson(this.checkpointPath);
+    } catch (error) {
+      if (error instanceof TransportError && error.status === 409 && String(error.code).includes('path/not_found')) return null;
+      throw error;
+    }
+  }
+
+  async putCheckpoint(checkpoint) {
+    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte publicera checkpoints');
+    return this.putMutable(this.checkpointPath, checkpoint);
   }
 
   async listChanges(cursor = null) {
@@ -152,11 +186,11 @@ export class DropboxTransport {
 
   async waitForChanges(cursor, { timeoutMs = 30_000 } = {}) {
     const timeout = Math.max(30, Math.min(480, Math.ceil(timeoutMs / 1000)));
-    const response = await this.fetch(`${NOTIFY}/files/list_folder/longpoll`, {
+    const response = await this.request(`${NOTIFY}/files/list_folder/longpoll`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cursor, timeout })
-    });
+    }, Math.max(this.requestTimeoutMs, (timeout + 15) * 1000));
     if (!response.ok) return this.parseError(response);
     const result = await response.json();
     return { changes: Boolean(result.changes), backoff: result.backoff ?? null };
@@ -176,7 +210,7 @@ export class DropboxTransport {
   async uploadBytes(pathValue, body, mode = 'overwrite') {
     const path = normalizePath(pathValue);
     await this.ensureFolder(parentPath(path));
-    const response = await this.fetch(`${CONTENT}/files/upload`, {
+    const response = await this.request(`${CONTENT}/files/upload`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -191,7 +225,7 @@ export class DropboxTransport {
 
   async getBlob(pathValue) {
     const path = normalizePath(pathValue);
-    const response = await this.fetch(`${CONTENT}/files/download`, {
+    const response = await this.request(`${CONTENT}/files/download`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
     });

@@ -193,9 +193,10 @@ await test('webbappen har en ren tabell, läsbar tidslinje och hopfälld källfo
 await test('OAuth-navet känner till den tredje appen', async () => {
   const hub = await readFile(resolve(REPO, 'index.html'), 'utf8');
   const hubApp = await readFile(resolve(REPO, 'src/app.js'), 'utf8');
+  const bootstrap = await readFile(resolve(REPO, 'src/app-family-bootstrap.js'), 'utf8');
   assert.ok(hub.includes('./fastigheter/'));
   assert.ok(hubApp.includes('korpholmen:oauth-return'));
-  assert.ok(hubApp.includes('mirrorSharedDropboxCredential'));
+  assert.ok(bootstrap.includes('mirrorSharedDropboxCredential'));
   assert.ok((await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).includes("new URL('fastigheter/',redirectUri())") || (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).includes("new URL('fastigheter/', redirectUri())"));
 });
 await test('publiceringsbygget är datafritt', () => {

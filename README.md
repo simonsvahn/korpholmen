@@ -46,5 +46,11 @@ bakgrundssynken nya operationer till de övriga lokala mastrarna; bara den
 aktiva ägarappen laddar upp sina väntande ändringar. Båtregister lagrar även
 hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
 
+Varje Dropbox-namnrymd kan dessutom bära en reproducerbar
+`checkpoints/latest.json`. Checkpointen är en snabb startpunkt; de
+oföränderliga operationsbatcherna är fortsatt master och bevaras alltid.
+Bygg om checkpoints från en lokalt komplett Dropbox-spegel med
+`npm run build:checkpoints -- "/absolut/sökväg/till/Korpholmen"`.
+
 Bygg hela appfamiljen och det gemensamma release-manifestet med `npm run build`.
 Kontrollera därefter samtliga data- och PWA-kontrakt med `npm test`.

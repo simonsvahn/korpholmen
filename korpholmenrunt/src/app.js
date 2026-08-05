@@ -251,7 +251,7 @@ connectButton.addEventListener('click',()=>currentAccessToken().then(token=>toke
 bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
 app.addEventListener('input',event=>runInlineUpdate(event.target));
 app.addEventListener('change',event=>{if(event.target.id==='duel-a'){ui.duelA=event.target.value;render()}if(event.target.id==='duel-b'){ui.duelB=event.target.value;render()}runInlineUpdate(event.target,true)});
-window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));
+window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));window.addEventListener('korpholmen:dropbox-ready',()=>syncNow().catch(()=>{}));
 
 async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-runt'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='profiler';ui.profile=`person:${params.get('person')}`}if(params.has('boat')){ui.view='profiler';ui.profile=`boat:${params.get('boat')}`}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

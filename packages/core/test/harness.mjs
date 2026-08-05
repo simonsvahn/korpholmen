@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import {
   DELETE_FIELD,
   DropboxTransport,
+  batchPath,
+  createBatch,
   openSlaktlandskapDB,
   MemoryRemoteTransport,
   MemoryStore,
@@ -17,12 +19,14 @@ import {
   disconnectDropboxEverywhere,
   isOfflineError,
   mergePersonReferences,
+  mirrorSharedDropboxCredential,
   requestPersistentStorage,
   resolveArchiveEntity,
   resolveDeviceId,
   resolveCurrentOwners,
   revokeDropboxAccessToken,
   sharedDropboxDisconnectedKey,
+  syncAppFamily,
 } from '../data-layer.js';
 
 let passed = 0;
@@ -47,10 +51,95 @@ await test('en blockerad IndexedDB-uppgradering ger begriplig återkoppling i st
     },
   };
   await assert.rejects(
-    openSlaktlandskapDB({ indexedDB, onBlocked: () => { blocked += 1; }, blockedTimeoutMs: 5 }),
-    /En annan flik blockerar uppgraderingen/,
+    openSlaktlandskapDB({ indexedDB, onBlocked: () => { blocked += 1; }, openTimeoutMs: 5 }),
+    /lokala databasen kunde inte öppnas/,
   );
   assert.equal(blocked, 1);
+});
+
+await test('en tyst väntande IndexedDB-öppning får också en sluttid', async () => {
+  const indexedDB = { open: () => ({ result: null, error: null }) };
+  await assert.rejects(openSlaktlandskapDB({ indexedDB, openTimeoutMs: 5 }), /lokala databasen kunde inte öppnas/);
+});
+
+await test('en äldre flik släpper databasen automatiskt vid nästa versionsbyte', async () => {
+  let request;
+  let closed = 0;
+  const database = { close: () => { closed += 1; }, onversionchange: null };
+  const indexedDB = {
+    open() {
+      request = { result: database, error: null };
+      queueMicrotask(() => request.onsuccess());
+      return request;
+    },
+  };
+  const opened = await openSlaktlandskapDB({ indexedDB, openTimeoutMs: 50 });
+  opened.onversionchange();
+  assert.equal(closed, 1);
+});
+
+await test('automatisk totalsynk dubbelköas inte av flera flikar', async () => {
+  const values = new Map();
+  const sharedStore = {
+    get: async key => values.get(key) ?? null,
+    put: async (key, value) => values.set(key, value),
+  };
+  let lockTail = Promise.resolve();
+  const lock = (_name, action) => {
+    const result = lockTail.then(action);
+    lockTail = result.catch(() => {});
+    return result;
+  };
+  let pulls = 0;
+  const appList = [{ id: 'a' }, { id: 'b' }];
+  const pull = async ({ app }) => { pulls += 1; return { app: app.id, state: 'ok' }; };
+  const [first, second] = await Promise.all([
+    syncAppFamily({ accessToken: 'token', sharedStore, appList, pull, lock }),
+    syncAppFamily({ accessToken: 'token', sharedStore, appList, pull, lock }),
+  ]);
+  assert.equal(first.skipped, false);
+  assert.equal(second.skipped, true);
+  assert.equal(second.reason, 'fresh');
+  assert.equal(pulls, 2);
+});
+
+await test('ett synkfel utlöser inte en kö av omedelbara flerfliksomtag', async () => {
+  const values = new Map();
+  const sharedStore = {
+    get: async key => values.get(key) ?? null,
+    put: async (key, value) => values.set(key, value),
+  };
+  let pulls = 0;
+  const pull = async ({ app }) => { pulls += 1; return { app: app.id, state: 'error', message: 'nätfel' }; };
+  const first = await syncAppFamily({ accessToken: 'token', sharedStore, appList: [{ id: 'a' }], pull });
+  const second = await syncAppFamily({ accessToken: 'token', sharedStore, appList: [{ id: 'a' }], pull });
+  assert.equal(first.skipped, false);
+  assert.equal(second.skipped, true);
+  assert.equal(second.reason, 'recent-attempt');
+  assert.equal(pulls, 1);
+});
+
+await test('äldre tokenfält speglas bara en gång efter gemensam inloggning', async () => {
+  const values = new Map();
+  const sharedStore = {
+    get: async key => values.get(key) ?? null,
+    put: async (key, value) => values.set(key, value),
+  };
+  const written = [];
+  let opened = 0;
+  const storeFactory = async app => {
+    opened += 1;
+    return {
+      store: { putMeta: async (key, value) => written.push([app.id, key, value]) },
+      close: () => {},
+    };
+  };
+  const appList = [{ id: 'matrikel' }, { id: 'batregister' }];
+  assert.equal(await mirrorSharedDropboxCredential({ refreshToken: 'token', sharedStore, storeFactory, appList: [appList[0]] }), true);
+  assert.equal(await mirrorSharedDropboxCredential({ refreshToken: 'token', sharedStore, storeFactory, appList: [appList[0]] }), false);
+  assert.equal(await mirrorSharedDropboxCredential({ refreshToken: 'token', sharedStore, storeFactory, appList: [appList[1]] }), true);
+  assert.equal(opened, 2);
+  assert.equal(written.length, 3);
 });
 
 await test('en skrivskyddad master cachar främmande operationer utan att blanda dem med appens op-logg', async () => {
@@ -114,6 +203,85 @@ await test('lyckad synk sparar automatiskt ett kompakt checkpoint', async () => 
   const snapshot = await store.getSnapshot(snapshotId);
   assert.equal(snapshot.snapshot_version, 2);
   assert.equal(snapshot.op_watermarks['sync-checkpoint'], 1);
+});
+
+await test('en ny enhet startar från fjärrcheckpoint och hämtar bara svansen', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'source-device' }).init();
+  await source.setFields(Array.from({ length: 5 }, (_, index) => ({
+    entityType: 'person', entityId: `p${index + 1}`, field: 'name', value: `Person ${index + 1}`
+  })));
+  const snapshot = await source.saveSnapshot();
+  await source.setField('person', 'p6', 'name', 'Person 6');
+  const sourceOps = await sourceStore.getAllOps();
+  const oldBatch = createBatch(sourceOps.slice(0, 5));
+  const tailBatch = createBatch(sourceOps.slice(5));
+  const oldPath = batchPath(oldBatch.device_id, oldBatch.from_seq, oldBatch.to_seq, '/test/ops');
+  const tailPath = batchPath(tailBatch.device_id, tailBatch.from_seq, tailBatch.to_seq, '/test/ops');
+  const fetched = [];
+  const transport = {
+    id: 'checkpoint-test',
+    opsRoot: '/test/ops',
+    putBatch: async () => {},
+    getCheckpoint: async () => ({ checkpoint_version: 1, created_at: '2026-08-05T00:00:00.000Z', snapshot }),
+    listChanges: async () => ({ entries: [{ path: oldPath }, { path: tailPath }], cursor: 'cursor-1', has_more: false }),
+    getJson: async path => { fetched.push(path); return path === oldPath ? oldBatch : tailBatch; },
+  };
+  const targetStore = new MemoryStore();
+  const target = await new Repository({ store: targetStore, deviceId: 'target-device' }).init();
+  const result = await new SyncEngine({ repository: target, transport }).downloadRemote();
+  assert.equal(result.checkpointLoaded, true);
+  assert.equal(result.downloadedOps, 1);
+  assert.equal(result.skippedBatches, 1);
+  assert.deepEqual(fetched, [tailPath]);
+  assert.equal(target.listEntities('person').length, 6);
+});
+
+await test('stora Dropbox-sidor tillämpas i minnesbegränsade chunkar', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'chunk-source' }).init();
+  await source.setFields(Array.from({ length: 7 }, (_, index) => ({
+    entityType: 'row', entityId: `r${index + 1}`, field: 'value', value: index + 1
+  })));
+  const batches = (await sourceStore.getAllOps()).map(operation => createBatch([operation]));
+  const byPath = new Map(batches.map(batch => [
+    batchPath(batch.device_id, batch.from_seq, batch.to_seq, '/chunk/ops'),
+    batch,
+  ]));
+  const progress = [];
+  const transport = {
+    id: 'chunk-test',
+    opsRoot: '/chunk/ops',
+    putBatch: async () => {},
+    getCheckpoint: async () => null,
+    listChanges: async () => ({ entries: [...byPath.keys()].map(path => ({ path })), cursor: 'cursor', has_more: false }),
+    getJson: async path => byPath.get(path),
+  };
+  const target = await new Repository({ store: new MemoryStore(), deviceId: 'chunk-target' }).init();
+  const result = await new SyncEngine({ repository: target, transport, downloadConcurrency: 2, downloadChunkSize: 3 })
+    .downloadRemote({ onProgress: status => progress.push(status.pageProcessed) });
+  assert.equal(result.downloadedBatches, 7);
+  assert.deepEqual(progress, [3, 6, 7]);
+});
+
+await test('en återställd enhet hämtar även sina egna saknade fjärrbatcher', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'reused-device' }).init();
+  await source.setField('person', 'p1', 'name', 'Återhämtad');
+  const batch = createBatch(await sourceStore.getAllOps());
+  const path = batchPath(batch.device_id, batch.from_seq, batch.to_seq, '/recovery/ops');
+  const transport = {
+    id: 'recovery-test',
+    opsRoot: '/recovery/ops',
+    putBatch: async () => {},
+    getCheckpoint: async () => null,
+    listChanges: async () => ({ entries: [{ path }], cursor: 'cursor', has_more: false }),
+    getJson: async () => batch,
+  };
+  const restored = await new Repository({ store: new MemoryStore(), deviceId: 'reused-device' }).init();
+  const result = await new SyncEngine({ repository: restored, transport }).downloadRemote();
+  assert.equal(result.downloadedOps, 1);
+  assert.equal(restored.getEntity('person', 'p1').fields.name, 'Återhämtad');
 });
 
 await test('tombstonade deterministiska länkar återställs atomiskt vid upsert', async () => {
@@ -210,6 +378,23 @@ await test('Dokumentarkivets kopplade namn och båtlänkar löses från ägarmas
 await test('skrivskyddad Dropbox-transport avvisar uppladdning', async () => {
   const transport = new DropboxTransport({ accessToken: 'test', readOnly: true, fetchImpl: async () => { throw new Error('fetch ska inte anropas'); } });
   await assert.rejects(() => transport.putMutable('/x.json', {}), /Skrivskyddad/);
+});
+
+await test('hängande Dropbox-anrop avbryts med begriplig timeout', async () => {
+  const fetchImpl = async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    }, { once: true });
+  });
+  const transport = new DropboxTransport({
+    accessToken: 'test',
+    readOnly: true,
+    requestTimeoutMs: 5,
+    fetchImpl,
+  });
+  await assert.rejects(() => transport.listChanges(), /Dropbox svarade inte inom/);
 });
 
 await test('en gemensam Dropbox-session återanvänder och förnyar samma inloggning', async () => {

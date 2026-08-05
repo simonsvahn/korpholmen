@@ -16,8 +16,9 @@ const transactionDone = transaction => new Promise((resolve, reject) => {
 });
 
 export class KorpholmenSharedStore {
-  constructor({ indexedDB = globalThis.indexedDB } = {}) {
+  constructor({ indexedDB = globalThis.indexedDB, openTimeoutMs = 8_000 } = {}) {
     this.indexedDB = indexedDB;
+    this.openTimeoutMs = openTimeoutMs;
     this.databasePromise = null;
   }
 
@@ -26,12 +27,40 @@ export class KorpholmenSharedStore {
       if (!this.indexedDB?.open) throw new Error('IndexedDB saknas i denna miljö');
       this.databasePromise = new Promise((resolve, reject) => {
         const request = this.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+        let settled = false;
+        const timer = this.openTimeoutMs > 0 ? setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          this.databasePromise = null;
+          reject(new Error('Det gemensamma lokala sessionslagret kunde inte öppnas. Stäng äldre Korpholmen-flikar och försök igen.'));
+        }, this.openTimeoutMs) : null;
+        const finish = action => {
+          if (settled) return false;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          action();
+          return true;
+        };
         request.onupgradeneeded = () => {
           const database = request.result;
           if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME, { keyPath: 'key' });
         };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          if (!finish(() => {})) {
+            request.result?.close?.();
+            return;
+          }
+          request.result.onversionchange = () => {
+            request.result.close();
+            this.databasePromise = null;
+          };
+          resolve(request.result);
+        };
+        request.onerror = () => finish(() => {
+          this.databasePromise = null;
+          reject(request.error);
+        });
+        request.onblocked = () => { /* den generella öppningstimeouten ger återkoppling */ };
       });
     }
     return this.databasePromise;

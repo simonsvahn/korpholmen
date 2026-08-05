@@ -7,7 +7,6 @@ import {
   exchangeDropboxRefreshToken,
   getAppFamilySyncStatuses,
   migrateLegacyCredentialsToShared,
-  mirrorSharedDropboxCredential,
   registerKorpholmenServiceWorker,
   requestPersistentStorage,
   revokeDropboxAccessToken,
@@ -34,7 +33,12 @@ function renderAppStatus(id, status) {
   if (!node) return;
   node.className = 'app-card-status';
   if (!status) { node.textContent = 'Inte synkad på den här enheten'; return; }
-  if (status.state === 'syncing') { node.textContent = 'Synkar data…'; node.classList.add('is-syncing'); return; }
+  if (status.state === 'syncing') {
+    const batches = Number(status.downloaded_batches || 0);
+    node.textContent = batches ? `Synkar data… ${batches.toLocaleString('sv-SE')} batcher lästa` : status.checkpoint_loaded ? 'Läser kompakt master…' : 'Synkar data…';
+    node.classList.add('is-syncing');
+    return;
+  }
   if (status.state === 'error') { node.textContent = `Synkfel · ${status.message}`; node.classList.add('is-error'); return; }
   const additions = status.downloaded_ops ? ` · ${status.downloaded_ops.toLocaleString('sv-SE')} nya operationer` : ' · inga nya operationer';
   node.textContent = `Aktuell ${formatTime(status.synced_at)}${additions}`;
@@ -51,7 +55,6 @@ async function completeOAuthCallbackIfNeeded() {
   if (!url.searchParams.has('code') && !url.searchParams.has('error')) return false;
   const token = await completeDropboxOAuth();
   await session.acceptTokenResponse(token);
-  await mirrorSharedDropboxCredential({ refreshToken: await session.getRefreshToken() });
   for (const parameter of ['code', 'state', 'error', 'error_description']) url.searchParams.delete(parameter);
   history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
   const basePath = rootUrl().pathname;
@@ -114,7 +117,9 @@ async function syncAll({ force = true } = {}) {
       syncSummary.textContent = `${result.results.length - failed.length} av ${result.results.length} register synkades. ${failed.length} kräver åtgärd.`;
       syncSummary.className = 'sync-summary is-error';
     } else {
-      syncSummary.textContent = result.skipped ? 'Alla register är redan nyligen synkade.' : 'Alla register har senaste Dropbox-data på den här enheten.';
+      syncSummary.textContent = result.skipped
+        ? result.reason === 'recent-attempt' ? 'En totalsynk har nyligen körts. Statusen för varje register visas nedan.' : 'Alla register är redan nyligen synkade.'
+        : 'Alla register har senaste Dropbox-data på den här enheten.';
       syncSummary.className = 'sync-summary is-ok';
     }
   } catch (error) {
@@ -145,10 +150,10 @@ window.addEventListener('online', () => syncAll({ force: false }));
 async function init() {
   const serviceWorkerPromise = registerKorpholmenServiceWorker({ rootPage: true });
   const persistencePromise = requestPersistentStorage();
+  await Promise.all([renderStatuses(), loadRelease()]);
   if (await completeOAuthCallbackIfNeeded()) return;
   await migrateLegacyCredentialsToShared();
-  await mirrorSharedDropboxCredential({ refreshToken: await session.getRefreshToken() });
-  await Promise.all([renderStatuses(), loadRelease()]);
+  await renderStatuses();
   if (await session.hasCredential()) {
     syncButton.textContent = 'Synka allt';
     disconnectButton.hidden = false;

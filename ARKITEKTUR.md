@@ -261,7 +261,17 @@ Varje sakapp har egen IndexedDB-databas och Dropbox-namnrymd:
 /korpholmenrunt/ops
 /klubbhistorik/ops
 /kartdata/ops
+
+/<app>/checkpoints/latest.json   # härledd kompakt startpunkt, aldrig sakmaster
 ```
+
+Operationsmapparna är den oföränderliga historiken och yttersta
+återställningskällan. En checkpoint är en reproducerbar materialisering av
+operationsloggens senaste kända tillstånd med vattenmärke per skrivande
+enhet. Den gör att en ny telefon kan läsa ett kompakt nuläge och bara hämta
+senare batcher. Den får ignoreras och byggas om från operationsloggarna om
+den saknas, är skadad eller har äldre vattenmärken. Checkpoints får därför
+aldrig användas för att radera eller skriva om historiska batcher.
 
 I appens IndexedDB får det dessutom finnas skrivskyddade snapshots av andra
 mastrar. De ligger i snapshot-/metadata-lagret, aldrig i appens `ops`-lager,
@@ -274,9 +284,11 @@ datafritt appskal för alla sju appar. Vid övergång avregistreras äldre
 underappsregistreringar.
 
 Dropbox-inloggningen lagras i ett gemensamt lokalt sessionslager och speglas
-till de äldre appdatabasernas tokenfält under migreringen. OAuth återvänder
-alltid till Korpholmens rot och skickar därefter användaren tillbaka till den
-valda underappen. En inloggning gäller därmed hela den installerade appen.
+en gång till de äldre appdatabasernas tokenfält under migreringen. Varje ny
+flik får inte öppna alla sju databaser bara för att skriva samma token igen.
+OAuth återvänder alltid till Korpholmens rot och skickar därefter användaren
+tillbaka till den valda underappen. En inloggning gäller därmed hela den
+installerade appen.
 
 När Korpholmen eller en underapp öppnas får en låst bakgrundssynk hämta nya
 operationsbatcher till samtliga övriga appdatabaser. Bakgrundssynken är
@@ -285,6 +297,20 @@ eftersom exempelvis båtbilder måste publiceras före operationer som refererar
 till dem. Den aktiva appens vanliga synk ansvarar för uppladdning och därefter
 hämtning i sin egen namnrymd. Stora privata bildbestånd hämtas fortsatt av den
 berörda appen, inte av totalsynken.
+
+Färskhetskontrollen görs **innanför** flerflikslåset. Om tio flikar öppnas
+samtidigt får den första genomföra synken och de övriga ska därefter se den
+nya färskhetsmarkören och avstå. Nedladdning sker i små, idempotenta chunkar;
+Dropbox-cursorn flyttas först när hela listningssidan är behandlad. Därmed
+hålls minnet begränsat utan att ett avbrott kan skapa ett datahål. Nätanrop
+och databasöppning har sluttid, gamla databasanslutningar stängs vid
+versionsbyte och en avbruten status får inte visas som pågående för alltid.
+
+Bilder ligger utanför operationsloggen. Båtregistrets operationsdata bär
+bara strukturerade bildreferenser; originalfilerna ligger under
+`/batregister/bilder` och hämtas separat vid behov eller för uttryckligt
+offlineläge. Storleken på `ops` är därför inte ett mått på bildarkivets
+storlek.
 
 Publiceringsbyggen använder tillåtelselistor och ska stoppa om privat data har
 byggts in. Service workern får bara cacha det datafria appskalet.

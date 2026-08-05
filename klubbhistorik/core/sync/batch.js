@@ -7,6 +7,22 @@ export function batchPath(deviceId, fromSeq, toSeq, rootPath = '/ops') {
   return `${root}/${encodeURIComponent(deviceId)}-${String(fromSeq).padStart(10, '0')}-${String(toSeq).padStart(10, '0')}.json`;
 }
 
+export function parseBatchPath(pathValue, rootPath = '/ops') {
+  const path = String(pathValue || '');
+  const root = String(rootPath || '/ops').replace(/\/$/, '');
+  if (!path.startsWith(`${root}/`)) return null;
+  const filename = path.slice(root.length + 1);
+  const match = filename.match(/^(.+)-(\d{10})-(\d{10})\.json$/);
+  if (!match) return null;
+  let deviceId;
+  try { deviceId = decodeURIComponent(match[1]); }
+  catch { return null; }
+  const fromSeq = Number(match[2]);
+  const toSeq = Number(match[3]);
+  if (!deviceId || !Number.isSafeInteger(fromSeq) || !Number.isSafeInteger(toSeq) || fromSeq < 1 || toSeq < fromSeq) return null;
+  return { deviceId, fromSeq, toSeq };
+}
+
 export function createBatch(ops) {
   if (!Array.isArray(ops) || !ops.length) throw new TypeError('En op-batch får inte vara tom');
   const sorted = [...ops].sort((a, b) => a.seq - b.seq);
