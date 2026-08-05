@@ -594,6 +594,7 @@ appNode.addEventListener('click', event => {
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
 window.addEventListener('online', () => syncNow().catch(() => {}));
+window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
 document.addEventListener('visibilitychange', () => { if (store && document.visibilityState === 'visible') syncNow().catch(() => {}); });
 setInterval(() => { if (store && document.visibilityState === 'visible' && navigator.onLine !== false) syncNow().catch(() => {}); }, AUTO_SYNC_INTERVAL);

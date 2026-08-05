@@ -1,8 +1,16 @@
-import { createBatch, validateBatch } from './batch.js';
+import { Materializer } from '../domain/materializer.js';
+import { createBatch, parseBatchPath, validateBatch } from './batch.js';
 import { CursorResetError, TransportError } from './errors.js';
 
 const isBatchPath = path => /\/ops\/.+\.json$/.test(path);
 const defaultSleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+function checkpointSnapshot(checkpoint) {
+  if (!checkpoint || checkpoint.checkpoint_version !== 1 || !checkpoint.snapshot) throw new TypeError('Ogiltig synkcheckpoint');
+  // Konstruktionen validerar hela snapshoten innan den får påverka lokal data.
+  new Materializer(checkpoint.snapshot);
+  return checkpoint.snapshot;
+}
 
 async function mapConcurrent(values, limit, mapper) {
   const result = new Array(values.length);
@@ -32,6 +40,7 @@ export class SyncEngine {
     transport,
     batchSize = 250,
     downloadConcurrency = 6,
+    downloadChunkSize = 24,
     maxRateLimitRetries = 1,
     sleep = defaultSleep
   }) {
@@ -39,12 +48,14 @@ export class SyncEngine {
     if (!transport || typeof transport.putBatch !== 'function' || typeof transport.listChanges !== 'function' || typeof transport.getJson !== 'function') throw new TypeError('SyncEngine kräver transport');
     if (!Number.isSafeInteger(batchSize) || batchSize < 1) throw new TypeError('Ogiltig batchstorlek');
     if (!Number.isSafeInteger(downloadConcurrency) || downloadConcurrency < 1) throw new TypeError('Ogiltig samtidighetsgräns');
+    if (!Number.isSafeInteger(downloadChunkSize) || downloadChunkSize < downloadConcurrency) throw new TypeError('Ogiltig nedladdningschunk');
     if (!Number.isSafeInteger(maxRateLimitRetries) || maxRateLimitRetries < 0) throw new TypeError('Ogiltigt antal 429-omtag');
     if (typeof sleep !== 'function') throw new TypeError('SyncEngine kräver en väntfunktion');
     this.repository = repository;
     this.transport = transport;
     this.batchSize = batchSize;
     this.downloadConcurrency = downloadConcurrency;
+    this.downloadChunkSize = downloadChunkSize;
     this.maxRateLimitRetries = maxRateLimitRetries;
     this.sleep = sleep;
     this.keyPrefix = `sync:${transport.id || 'transport'}`;
@@ -101,10 +112,41 @@ export class SyncEngine {
     };
   }
 
-  async downloadRemote({ allowCursorReset = true } = {}) {
+  async loadRemoteCheckpoint({ onProgress } = {}) {
+    if (typeof this.transport.getCheckpoint !== 'function') return { loaded: false, reason: 'unsupported' };
+    const [cursor, latestSnapshotId, knownDeviceIds] = await Promise.all([
+      this.repository.store.getMeta(`${this.keyPrefix}:cursor`),
+      this.repository.store.getMeta('latest_snapshot'),
+      this.repository.store.getMeta('device_ids'),
+    ]);
+    if (cursor || latestSnapshotId || (Array.isArray(knownDeviceIds) && knownDeviceIds.length)) return { loaded: false, reason: 'local-state' };
+    const localOps = await this.repository.store.getAllOps();
+    if (localOps.length) return { loaded: false, reason: 'local-state' };
+    let checkpoint;
+    try {
+      checkpoint = await this.transport.getCheckpoint();
+      if (!checkpoint) return { loaded: false, reason: 'missing' };
+      const snapshot = checkpointSnapshot(checkpoint);
+      const snapshotId = `dropbox-checkpoint:${this.transport.id || 'transport'}`;
+      await this.repository.store.saveSnapshot(snapshotId, snapshot);
+      await this.repository.store.putMeta('device_ids', Object.keys(snapshot.op_watermarks || {}));
+      await this.repository.store.putMeta('latest_snapshot', snapshotId);
+      await this.repository.init();
+      await onProgress?.({ phase: 'checkpoint', checkpointLoaded: true, downloadedOps: 0, downloadedBatches: 0, skippedBatches: 0 });
+      return { loaded: true, createdAt: checkpoint.created_at || null };
+    } catch (error) {
+      // Checkpointen är en accelerator. Originalbatcherna är fortsatt master
+      // och ska kunna användas även om acceleratorn saknas eller är skadad.
+      return { loaded: false, reason: 'unavailable', error: error.message };
+    }
+  }
+
+  async downloadRemote({ allowCursorReset = true, onProgress } = {}) {
+    const checkpoint = await this.loadRemoteCheckpoint({ onProgress });
     let cursor = await this.repository.store.getMeta(`${this.keyPrefix}:cursor`);
     let downloadedOps = 0;
     let downloadedBatches = 0;
+    let skippedBatches = 0;
     let resetUsed = false;
     while (true) {
       let page;
@@ -118,26 +160,55 @@ export class SyncEngine {
         }
         throw error;
       }
-      const ownBatchPrefix = `${encodeURIComponent(this.repository.deviceId)}-`;
-      const entries = page.entries.filter(entry => isBatchPath(entry.path) && !String(entry.path).split('/').at(-1).startsWith(ownBatchPrefix));
-      const batches = await mapConcurrent(entries, this.downloadConcurrency, async entry => {
-        const batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
-        validateBatch(batch);
-        return batch;
+      const watermarks = this.repository.getWatermarks();
+      const entries = page.entries.filter(entry => {
+        if (!isBatchPath(entry.path)) return false;
+        const descriptor = parseBatchPath(entry.path, this.transport.opsRoot);
+        if (descriptor && descriptor.toSeq <= Number(watermarks[descriptor.deviceId] || 0)) {
+          skippedBatches += 1;
+          return false;
+        }
+        return true;
       });
-      // Tillämpning och cursorflytt sker först när hela sidan är säkert hämtad.
-      // Ett avbrott kan därför aldrig lämna en halvtillämpad sida med flyttad cursor.
-      for (const batch of batches) {
-        await this.repository.applyRemoteOps(batch.ops);
-        downloadedOps += batch.ops.length;
-        downloadedBatches += 1;
+      for (let offset = 0; offset < entries.length; offset += this.downloadChunkSize) {
+        const chunk = entries.slice(offset, offset + this.downloadChunkSize);
+        const batches = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
+          const batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
+          validateBatch(batch);
+          return batch;
+        });
+        // Operationer är idempotenta. Vi tillämpar en begränsad chunk i taget
+        // men flyttar inte Dropbox-cursorn förrän hela sidan är klar. Ett avbrott
+        // ger därför säker omhämtning utan att hundratals MB måste ligga i minnet.
+        for (const batch of batches) {
+          await this.repository.applyRemoteOps(batch.ops);
+          downloadedOps += batch.ops.length;
+          downloadedBatches += 1;
+        }
+        await onProgress?.({
+          phase: 'batches',
+          checkpointLoaded: checkpoint.loaded,
+          downloadedOps,
+          downloadedBatches,
+          skippedBatches,
+          pageBatches: entries.length,
+          pageProcessed: Math.min(offset + chunk.length, entries.length),
+        });
       }
       cursor = page.cursor;
       await this.repository.store.putMeta(`${this.keyPrefix}:cursor`, cursor);
       if (!page.has_more) break;
     }
     await this.repository.saveSnapshot();
-    return { downloadedOps, downloadedBatches, cursor, cursorReset: resetUsed };
+    return {
+      downloadedOps,
+      downloadedBatches,
+      skippedBatches,
+      cursor,
+      cursorReset: resetUsed,
+      checkpointLoaded: checkpoint.loaded,
+      checkpointError: checkpoint.error || null,
+    };
   }
 
   async syncOnce() {

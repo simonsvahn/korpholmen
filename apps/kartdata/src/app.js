@@ -387,7 +387,7 @@ connectButton.addEventListener('click', () => currentAccessToken().then(token =>
 bootstrapButton.addEventListener('click', () => bootstrapCleanV2({ force: true }).then(() => setStatus(`${entryRecords().length} rena dataposter inlästa lokalt · ägare läses från Fastigheter`, 'ok')).catch(error => setStatus(error.message, 'error')));
 $('#export-json').addEventListener('click', exportData);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDrawer(); });
-window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {}));
+window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {})); window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 
 async function init() {
   const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;

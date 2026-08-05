@@ -13,7 +13,7 @@ export { Repository } from './domain/repository.js';
 export { createRevisionCache, debounce, isOfflineError, requestPersistentStorage, resolveDeviceId } from './runtime-safety.js';
 export { MemoryStore } from './storage/memory.js';
 export { IndexedDBStore, openSlaktlandskapDB } from './storage/indexeddb.js';
-export { createBatch, batchPath, validateBatch } from './sync/batch.js';
+export { createBatch, batchPath, parseBatchPath, validateBatch } from './sync/batch.js';
 export { DropboxTransport } from './sync/dropbox-transport.js';
 export { MemoryRemoteTransport } from './sync/memory-transport.js';
 export { beginDropboxOAuth, completeDropboxOAuth } from './sync/oauth-flow.js';

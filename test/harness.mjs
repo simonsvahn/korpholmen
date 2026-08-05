@@ -46,7 +46,7 @@ await test('Dropbox-inloggningen och totalsynken 채r gemensamma men mastrarna f�
   assert.match(bootstrap, /migrateLegacyCredentialsToShared/);
   assert.match(bootstrap, /mirrorSharedDropboxCredential/);
   assert.match(bootstrap, /scheduleAppFamilySync/);
-  assert.match(familySync, /downloadRemote\(\)/, 'bakgrundssynken ska bara dra data och inte skriva andra appars v채ntande 채ndringar');
+  assert.match(familySync, /\.downloadRemote\(/, 'bakgrundssynken ska bara dra data och inte skriva andra appars v채ntande 채ndringar');
   assert.doesNotMatch(familySync, /\.syncOnce\(\)/);
   for (const path of ['/matrikel/ops', '/batregister/ops', '/fastigheter/ops', '/dokumentarkiv/ops', '/korpholmenrunt/ops', '/klubbhistorik/ops', '/kartdata/ops']) assert.ok(familySync.includes(path));
 });

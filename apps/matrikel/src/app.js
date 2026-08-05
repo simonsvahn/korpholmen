@@ -1494,6 +1494,7 @@ bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) =
 familyModelButton.addEventListener('click', () => applyFamilyModelLocal().catch(error => setEditStatus(error.message, 'error')));
 document.addEventListener('keydown', handleGlobalKeydown);
 window.addEventListener('online', () => syncNow().catch(() => {}));
+window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow().catch(() => {}); });
 

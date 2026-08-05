@@ -19,6 +19,7 @@ export async function openSlaktlandskapDB({
   name = 'slaktlandskap',
   onBlocked = () => {},
   blockedTimeoutMs = 8_000,
+  openTimeoutMs = blockedTimeoutMs,
 } = {}) {
   if (!indexedDB || typeof indexedDB.open !== 'function') throw new Error('IndexedDB saknas i denna miljö');
   const request = indexedDB.open(name, DB_VERSION);
@@ -32,34 +33,34 @@ export async function openSlaktlandskapDB({
   };
   return new Promise((resolve, reject) => {
     let settled = false;
-    let blockedTimer = null;
-    const clearBlockedTimer = () => {
-      if (blockedTimer) clearTimeout(blockedTimer);
-      blockedTimer = null;
+    let openTimer = null;
+    const clearOpenTimer = () => {
+      if (openTimer) clearTimeout(openTimer);
+      openTimer = null;
     };
+    if (openTimeoutMs > 0) openTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Den lokala databasen kunde inte öppnas. Stäng äldre Korpholmen-flikar och försök igen.'));
+    }, openTimeoutMs);
     request.onsuccess = () => {
       if (settled) {
         request.result?.close?.();
         return;
       }
       settled = true;
-      clearBlockedTimer();
+      clearOpenTimer();
+      request.result.onversionchange = () => request.result.close();
       resolve(request.result);
     };
     request.onerror = () => {
       if (settled) return;
       settled = true;
-      clearBlockedTimer();
+      clearOpenTimer();
       reject(request.error);
     };
     request.onblocked = () => {
       try { onBlocked(); } catch { /* status callbacks får inte stoppa databasöppningen */ }
-      if (settled || blockedTimer || !(blockedTimeoutMs > 0)) return;
-      blockedTimer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        reject(new Error('En annan flik blockerar uppgraderingen av den lokala databasen. Stäng äldre appflikar och försök igen.'));
-      }, blockedTimeoutMs);
     };
   });
 }

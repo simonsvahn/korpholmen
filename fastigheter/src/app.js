@@ -547,6 +547,7 @@ connectButton.addEventListener('click', () => currentAccessToken().then(token =>
 bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && selectedPropertyId) closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {}));
+window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 window.addEventListener('offline', () => syncNow().catch(() => {}));
 
 async function init() {

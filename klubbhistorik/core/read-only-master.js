@@ -1,6 +1,6 @@
 import { Materializer } from './domain/materializer.js';
 import { validateOperation } from './domain/operations.js';
-import { validateBatch } from './sync/batch.js';
+import { parseBatchPath, validateBatch } from './sync/batch.js';
 import { CursorResetError } from './sync/errors.js';
 
 const isBatchPath = path => /\/ops\/.+\.json$/.test(String(path || ''));
@@ -23,15 +23,17 @@ async function mapConcurrent(values, limit, mapper) {
 }
 
 export class ReadOnlyMaster {
-  constructor({ store, cacheKey, downloadConcurrency = 6 } = {}) {
+  constructor({ store, cacheKey, downloadConcurrency = 6, downloadChunkSize = 24 } = {}) {
     if (!store || typeof store.getMeta !== 'function' || typeof store.putMeta !== 'function' || typeof store.getSnapshot !== 'function' || typeof store.saveSnapshot !== 'function') {
       throw new TypeError('ReadOnlyMaster kräver ett lager med metadata och snapshots');
     }
     if (typeof cacheKey !== 'string' || !cacheKey.trim()) throw new TypeError('ReadOnlyMaster kräver cacheKey');
     if (!Number.isSafeInteger(downloadConcurrency) || downloadConcurrency < 1) throw new TypeError('Ogiltig samtidighetsgräns');
+    if (!Number.isSafeInteger(downloadChunkSize) || downloadChunkSize < downloadConcurrency) throw new TypeError('Ogiltig nedladdningschunk');
     this.store = store;
     this.cacheKey = cacheKey.trim();
     this.downloadConcurrency = downloadConcurrency;
+    this.downloadChunkSize = downloadChunkSize;
     this.snapshotKey = `read-only-master:${this.cacheKey}:snapshot`;
     this.cursorKey = `read-only-master:${this.cacheKey}:cursor`;
     this.statusKey = `read-only-master:${this.cacheKey}:status`;
@@ -88,11 +90,34 @@ export class ReadOnlyMaster {
     return { appliedOps: operations.length };
   }
 
-  async sync(transport, { allowCursorReset = true } = {}) {
+  async loadRemoteCheckpoint(transport) {
+    if (this.cursor || this.state.entities.size || typeof transport.getCheckpoint !== 'function') return false;
+    try {
+      const checkpoint = await transport.getCheckpoint();
+      if (!checkpoint || checkpoint.checkpoint_version !== 1 || !checkpoint.snapshot) return false;
+      this.state = new Materializer(checkpoint.snapshot);
+      await this.persist(null, {
+        source: transport.id || this.cacheKey,
+        synced_at: new Date().toISOString(),
+        downloaded_ops: 0,
+        downloaded_batches: 0,
+        checkpoint_loaded: true,
+      });
+      this.revision += 1;
+      return true;
+    } catch {
+      // Den kompakta läskopian är bara en accelerator. Vid fel läses de
+      // oföränderliga operationsbatcherna som tidigare.
+      return false;
+    }
+  }
+
+  async sync(transport, { allowCursorReset = true, onProgress } = {}) {
     this.assertReady();
     if (!transport || typeof transport.listChanges !== 'function' || typeof transport.getJson !== 'function') {
       throw new TypeError('ReadOnlyMaster kräver en lästransport');
     }
+    await this.loadRemoteCheckpoint(transport);
     let cursor = this.cursor;
     let downloadedOps = 0;
     let downloadedBatches = 0;
@@ -104,21 +129,32 @@ export class ReadOnlyMaster {
         if (error instanceof CursorResetError && allowCursorReset && !resetUsed) {
           this.state = new Materializer();
           cursor = null;
+          this.cursor = null;
           resetUsed = true;
+          await this.loadRemoteCheckpoint(transport);
           continue;
         }
         throw error;
       }
-      const entries = page.entries.filter(entry => isBatchPath(entry.path));
-      const batches = await mapConcurrent(entries, this.downloadConcurrency, async entry => {
-        const batch = await transport.getJson(entry.path);
-        validateBatch(batch);
-        return batch;
+      const watermarks = Object.fromEntries(this.state.opWatermarks.entries());
+      const entries = page.entries.filter(entry => {
+        if (!isBatchPath(entry.path)) return false;
+        const descriptor = parseBatchPath(entry.path, transport.opsRoot);
+        return !descriptor || descriptor.toSeq > Number(watermarks[descriptor.deviceId] || 0);
       });
-      for (const batch of batches) {
-        this.state.applyAll(batch.ops);
-        downloadedOps += batch.ops.length;
-        downloadedBatches += 1;
+      for (let offset = 0; offset < entries.length; offset += this.downloadChunkSize) {
+        const chunk = entries.slice(offset, offset + this.downloadChunkSize);
+        const batches = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
+          const batch = await transport.getJson(entry.path);
+          validateBatch(batch);
+          return batch;
+        });
+        for (const batch of batches) {
+          this.state.applyAll(batch.ops);
+          downloadedOps += batch.ops.length;
+          downloadedBatches += 1;
+        }
+        await onProgress?.({ downloadedOps, downloadedBatches, pageBatches: entries.length, pageProcessed: Math.min(offset + chunk.length, entries.length) });
       }
       cursor = page.cursor;
       await this.persist(cursor, {

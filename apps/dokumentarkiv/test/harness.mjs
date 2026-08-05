@@ -156,8 +156,9 @@ await test('OAuth-returen och appnavigeringen omfattar Dokumentarkivet',async()=
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
   const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   const rootApp=await readFile(resolve(REPO,'src/app.js'),'utf8');
+  const bootstrap=await readFile(resolve(REPO,'src/app-family-bootstrap.js'),'utf8');
   assert.ok(rootApp.includes('korpholmen:oauth-return'));
-  assert.ok(rootApp.includes('mirrorSharedDropboxCredential'));
+  assert.ok(bootstrap.includes('mirrorSharedDropboxCredential'));
   assert.ok(root.includes('href="./dokumentarkiv/"'));
   assert.equal(root.includes('href="./arkiv/"'),false);
   assert.ok(root.includes('Dokumentarkiv'));
