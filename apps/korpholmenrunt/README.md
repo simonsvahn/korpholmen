@@ -25,6 +25,10 @@ Den beslutade klassstandarden kan tillämpas på hela den levande mastern med
 ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
 `class_raw` orört så att varje normalisering går att kontrollera mot källan.
 
+Källuppgiften ”med flera” representeras som en strukturerad, terminal
+platshållare. Den betyder okända ytterligare tävlande och ska därför varken
+skapa en påhittad person eller ligga kvar som en fråga som aldrig kan avslutas.
+
 ## Privat master
 
 - `privat/kallkopior/Korpholmen runt konv.mdb` — bytebevarad källkopia.
@@ -38,13 +42,16 @@ ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
 
 ```sh
 npm run build:migration
+npm run migrate:med-flera
 npm test
 npm run build:publish
 node verktyg/standardisera-klasser.mjs "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
-På localhost kan den privata startmastern aktiveras och därefter laddas upp
-till Dropbox. Publiceringspaketet är datafritt och byggs till
+På localhost kan den privata startmastern aktiveras i en tom lokal databas och
+därefter laddas upp till Dropbox. V2-startmastern använder egna, versionerade
+device-id:n så att en ombyggnad aldrig återanvänder en publicerad
+operationsidentitet. Publiceringspaketet är datafritt och byggs till
 repo-rotens `korpholmenrunt/` för GitHub Pages.
 Klassmigreringen läser den materialiserade levande operationsströmmen och
 skriver endast nya, oföränderliga batcher. Den kan köras om utan att skapa
