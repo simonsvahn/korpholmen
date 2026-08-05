@@ -95,6 +95,20 @@ await test('alla appar använder kompakta checkpoints, revisionscache och deboun
   }
 });
 
+await test('Dokumentarkiv och Båtregister använder levande masterreferenser och djuplänkar', async () => {
+  const archive = await readFile(resolve(ROOT, 'apps/dokumentarkiv/src/app.js'), 'utf8');
+  const archiveBuilder = await readFile(resolve(ROOT, 'apps/dokumentarkiv/verktyg/bygg-startmaster.mjs'), 'utf8');
+  const boats = await readFile(resolve(ROOT, 'apps/batregister/src/app.js'), 'utf8');
+  assert.match(archive, /new ReadOnlyMaster\(\{ store, cacheKey: 'matrikel' \}\)/);
+  assert.match(archive, /new ReadOnlyMaster\(\{ store, cacheKey: 'batregister' \}\)/);
+  assert.match(archive, /resolveArchiveEntity/);
+  assert.match(archive, /dropbox-batregister-read/);
+  assert.match(archiveBuilder, /batregister\/\?boat=/);
+  assert.match(boats, /requestedBoatId/);
+  assert.match(boats, /groupLinkLabel/);
+  assert.match(boats, /canonicalGroupTarget/);
+});
+
 await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', async () => {
   const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
   assert.deepEqual(release.apps, APPS);

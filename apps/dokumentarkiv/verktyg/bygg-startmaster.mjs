@@ -401,7 +401,7 @@ for (const entity of entityRegistry.filter(item => usedEntityIds.has(item.id))) 
     map_y: Number.isFinite(entity.map_y) ? entity.map_y : null,
     url: entity.app === 'Matrikeln' && entity.external_id
       ? `../matrikel/?person=${encodeURIComponent(entity.external_id)}`
-      : entity.app === 'Båtregistret' ? '../batregister/'
+      : entity.app === 'Båtregistret' && entity.external_id ? `../batregister/?boat=${encodeURIComponent(entity.external_id)}`
         : entity.app === 'Fastigheter' && entity.external_id ? `../fastigheter/?property=${encodeURIComponent(entity.external_id)}` : null,
   };
   for (const [field, value] of Object.entries(fields)) set('archive-entity', entity.id, field, value);

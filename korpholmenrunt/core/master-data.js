@@ -45,6 +45,29 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
   return [...byId.values()];
 }
 
+export function resolveArchiveEntity(reference, { personMaster, boatMaster } = {}) {
+  if (!reference || reference.match_status !== 'kopplad' || !reference.external_id) return reference;
+  if (reference.entity_type === 'person') {
+    const person = personMaster?.initialized ? personMaster.getEntity('person', reference.external_id)?.fields : null;
+    return {
+      ...reference,
+      name: person?.display_name || reference.name,
+      url: `../matrikel/?person=${encodeURIComponent(reference.external_id)}`,
+      resolution: person ? 'canonical-master' : 'cached-reference',
+    };
+  }
+  if (reference.entity_type === 'båt') {
+    const boat = boatMaster?.initialized ? boatMaster.getEntity('boat', reference.external_id)?.fields : null;
+    return {
+      ...reference,
+      name: boat?.namn || reference.name,
+      url: `../batregister/?boat=${encodeURIComponent(reference.external_id)}`,
+      resolution: boat ? 'canonical-master' : 'cached-reference',
+    };
+  }
+  return reference;
+}
+
 export function resolvePropertyReferences(fastigheterMaster, fallbacks = []) {
   const canonical = rows(fastigheterMaster, 'property');
   if (!canonical.length) return [...fallbacks];

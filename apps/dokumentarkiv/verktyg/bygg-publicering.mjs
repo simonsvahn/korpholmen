@@ -26,7 +26,7 @@ for(const relative of CORE_FILES){
   await copyFile(source,target);
 }
 
-const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replace("../../../packages/core/data-layer.js","../core/data-layer.js");
+const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../../packages/core/','../core/');
 await mkdir(resolve(OUT,'src'),{recursive:true});
 await writeFile(resolve(OUT,'src/app.js'),app);
 await assertExactPublicationFiles(OUT,[...FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);

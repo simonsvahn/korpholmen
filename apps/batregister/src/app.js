@@ -84,6 +84,7 @@ let matrikelContextRevision = 0;
 const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelContextRevision}`);
 
 const requestedPersonId = new URL(location.href).searchParams.get('person') || '';
+const requestedBoatId = new URL(location.href).searchParams.get('boat') || '';
 const ui = {
   search: '',
   type: '',
@@ -288,7 +289,14 @@ function familyMembers(family) {
   return [...ids].map(id => matrikelPeople.find(person => person.id === id)).filter(Boolean).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'));
 }
 function linkedFamilyNames(boatId) { return familyLinksForBoat(boatId).map(link => link.family_name).filter(Boolean); }
-function linkedGroupNames(boatId) { return groupLinksForBoat(boatId).map(link => link.target_name).filter(Boolean); }
+function canonicalGroupTarget(link, context = matrikelFamilyContext()) {
+  return (link.target_type === FAMILY_UNIT_TYPE ? context.familyUnitById : context.kinGroupById).get(link.target_id) || null;
+}
+function groupLinkLabel(link, context = matrikelFamilyContext()) {
+  const target = canonicalGroupTarget(link, context);
+  return target ? displayReference(target) : [link.target_code, link.target_name || link.target_id].filter(Boolean).join(' · ');
+}
+function linkedGroupNames(boatId) { const context = matrikelFamilyContext(); return groupLinksForBoat(boatId).map(link => groupLinkLabel(link, context)).filter(Boolean); }
 function linkedNames(boatId) {
   return [...linksForBoat(boatId).map(personNameForLink), ...linkedFamilyNames(boatId), ...linkedGroupNames(boatId)].filter(Boolean);
 }
@@ -359,7 +367,7 @@ function card(boat) {
     <span class="boat-copy"><h3>${escapeHtml(boat.namn || 'Namn okänt')}</h3>
       <p>${escapeHtml([boat.modell, boat.ar].filter(Boolean).join(' · ') || 'Modell och år saknas')}</p>
       <p>${escapeHtml(boat.agare || 'Ägare/anknytning saknas')}</p>
-      <span class="chips">${boat.typ ? `<span class="chip">${escapeHtml(boat.typ)}</span>` : ''}${boat.slakt ? `<span class="chip">${escapeHtml(boat.slakt)}</span>` : ''}${groupLinks.map(link=>`<span class="chip family-chip">${escapeHtml(link.target_code || '')} · ${escapeHtml(link.target_name)}</span>`).join('')}${familyLinks.map(link=>`<span class="chip family-chip">${escapeHtml(link.family_name)}</span>`).join('')}${boat.island_connection ? `<span class="chip context-chip">${escapeHtml(boat.island_connection)}</span>` : ''}${boat.namnstatus === 'dopnamn' ? '<span class="chip warn">Endast dopnamn</span>' : ''}</span>
+      <span class="chips">${boat.typ ? `<span class="chip">${escapeHtml(boat.typ)}</span>` : ''}${boat.slakt ? `<span class="chip">${escapeHtml(boat.slakt)}</span>` : ''}${groupLinks.map(link=>`<span class="chip family-chip">${escapeHtml(groupLinkLabel(link))}</span>`).join('')}${familyLinks.map(link=>`<span class="chip family-chip">${escapeHtml(link.family_name)}</span>`).join('')}${boat.island_connection ? `<span class="chip context-chip">${escapeHtml(boat.island_connection)}</span>` : ''}${boat.namnstatus === 'dopnamn' ? '<span class="chip warn">Endast dopnamn</span>' : ''}</span>
     </span></button>`;
 }
 
@@ -546,7 +554,7 @@ function renderDrawer(id) {
     <section class="drawer-section"><h3>Kopplingar till Matrikeln</h3><p class="section-help">Koppla till person när en bestämd ägare eller brukare är känd. FAMILJ och SLÄKT används när båten hör till en större gemenskap. Ärftlig synlighet visas som »via« och är inte personligt ägande.</p>
       <div class="link-list">
         ${links.map(link=>`<div class="link-row"><span><a href="../matrikel/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(personNameForLink(link))}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
-        ${groupLinks.map(link=>{const members=targetMemberDetails({type:link.target_type,id:link.target_id},context);const inherited=members.filter(member=>member.generation>1).length;return `<div class="link-row family-row"><span><a href="../matrikel/?group=${encodeURIComponent(link.target_id)}"><b>${escapeHtml(link.target_code || '')} · ${escapeHtml(link.target_name || link.target_id)}</b></a><br><small>${escapeHtml(targetTypeLabel(link.target_type))} · ${escapeHtml(link.role || '')} · ${members.length} personer${inherited?` · ${inherited} visas via gruppen`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-group-link">Ta bort</button></div>`}).join('')}
+        ${groupLinks.map(link=>{const target=canonicalGroupTarget(link,context);const targetId=target?.id||link.target_id;const targetType=target?.entity_type||link.target_type;const members=targetMemberDetails({type:targetType,id:targetId},context);const inherited=members.filter(member=>member.generation>1).length;return `<div class="link-row family-row"><span><a href="../matrikel/?group=${encodeURIComponent(targetId)}"><b>${escapeHtml(groupLinkLabel(link,context))}</b></a><br><small>${escapeHtml(targetTypeLabel(targetType))} · ${escapeHtml(link.role || '')} · ${members.length} personer${inherited?` · ${inherited} visas via gruppen`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-group-link">Ta bort</button></div>`}).join('')}
         ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familjegren · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
         ${links.length || familyLinks.length || groupLinks.length ? '' : '<p>Ingen person, familj eller släkt är kopplad ännu.</p>'}
       </div>
@@ -798,5 +806,5 @@ $('#clear-all-filters').addEventListener('click',()=>{clearFilter('all');closeOp
 $('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeDrawer();closeConnectionSearch();closeOptionsPanels()}});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;if(requestedBoatId&&boatRecords().some(boat=>boat.id===requestedBoatId))selectedBoatId=requestedBoatId;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});
