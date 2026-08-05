@@ -7,8 +7,10 @@ import {
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../core/data-layer.js';
 import { mergePersonReferences } from '../core/master-data.js';
@@ -45,7 +47,6 @@ const peopleMap=()=>new Map(people().map(item=>[item.external_id,item]));
 const boatsMap=()=>new Map(boats().map(item=>[item.external_id,item]));
 const participantPlaceholdersMap=()=>new Map(participantPlaceholders().map(item=>[item.id,item]));
 const linksByResult=()=>{const map=new Map();for(const link of personLinks()){if(!map.has(link.result_id))map.set(link.result_id,[]);map.get(link.result_id).push(link)}return map};
-const isOfflineError=error=>navigator.onLine===false||error instanceof TypeError||/failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message||error));
 const validTime=result=>Number.isInteger(result.duration_seconds)&&result.duration_seconds>=0;
 const reviewPending=result=>['utkast','oklar','granskning krävs'].includes(result.review_status);
 const rankEligible=result=>validTime(result)&&(result.time_status||'tolkad')==='tolkad'&&!reviewPending(result);
@@ -53,7 +54,7 @@ const timeLabel=result=>result.time_raw||'—';
 const courseLabel=code=>code?`${code}-banan`:'Okänd bana';
 
 function setStatus(text,tone=''){statusNode.textContent=text;statusNode.className=tone?`status-${tone}`:''}
-function deviceId(){const key='korpholmen:runt-device-id';let id=localStorage.getItem(key);if(!id){id=`runt-web-${crypto.randomUUID()}`;localStorage.setItem(key,id)}return id}
+const deviceId=()=>resolveDeviceId({store,key:'korpholmen:runt-device-id',prefix:'runt-web-'});
 function redirectUri(){return new URL(isSourceTree?'../../':'../',location.href).href}
 const className=klassnamn;
 const classChoices=()=>KLASSER.map(klass=>klass.name);
@@ -243,5 +244,5 @@ app.addEventListener('input',event=>runInlineUpdate(event.target));
 app.addEventListener('change',event=>{if(event.target.id==='duel-a'){ui.duelA=event.target.value;render()}if(event.target.id==='duel-b'){ui.duelB=event.target.value;render()}runInlineUpdate(event.target,true)});
 window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-runt'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='profiler';ui.profile=`person:${params.get('person')}`}if(params.has('boat')){ui.view='profiler';ui.profile=`boat:${params.get('boat')}`}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-runt'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='profiler';ui.profile=`person:${params.get('person')}`}if(params.has('boat')){ui.view='profiler';ui.profile=`boat:${params.get('boat')}`}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

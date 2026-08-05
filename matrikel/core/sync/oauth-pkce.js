@@ -72,3 +72,18 @@ export async function exchangeDropboxRefreshToken({ clientId, refreshToken, fetc
   if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || `Dropbox tokenförnyelse misslyckades (${response.status})`);
   return payload;
 }
+
+export async function revokeDropboxAccessToken({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
+  if (!accessToken) throw new TypeError('Dropbox access token saknas för revoke');
+  if (!fetchImpl) throw new Error('fetch saknas');
+  const response = await fetchImpl.call(globalThis, 'https://api.dropboxapi.com/2/auth/token/revoke', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: 'null'
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(text || `Dropbox revoke misslyckades (${response.status})`);
+  }
+  return true;
+}

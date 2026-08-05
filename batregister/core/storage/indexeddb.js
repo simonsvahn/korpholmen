@@ -184,6 +184,12 @@ export class IndexedDBStore {
     return row ? cloneJson(row.value) : null;
   }
 
+  async deleteMeta(key) {
+    const transaction = this.db.transaction('meta', 'readwrite');
+    transaction.objectStore('meta').delete(String(key));
+    await transactionDone(transaction);
+  }
+
   async saveSnapshot(id, snapshot) {
     canonicalStringify(snapshot);
     const transaction = this.db.transaction('snapshots', 'readwrite');

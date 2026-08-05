@@ -7,8 +7,10 @@ import {
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
@@ -91,7 +93,6 @@ const escapeHtml = value => String(value ?? '').replaceAll('&','&amp;').replaceA
 const unique = values => [...new Set(values.filter(Boolean))];
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
 const slug = value => normalize(value).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'bat';
-const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
 
 async function mapConcurrent(values, limit, mapper) {
   let next = 0;
@@ -108,12 +109,7 @@ function setStatus(text, tone = '') {
   statusNode.className = tone ? `status-${tone}` : '';
 }
 
-function deviceId() {
-  const key = 'korpholmen:batregister-device-id';
-  let id = localStorage.getItem(key);
-  if (!id) { id = `bat-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); }
-  return id;
-}
+const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:batregister-device-id', prefix: 'bat-web-' });
 
 function redirectUri() {
   return new URL(isSourceTree ? '../../' : '../', location.href).href;
@@ -712,7 +708,6 @@ async function syncNow() {
     const images=await uploadBootstrapImages(transport);const bootstrap=await uploadBootstrapOps(transport);const queuedImages=await uploadPendingImages(transport);const result=await new SyncEngine({repository,transport}).syncOnce();
     const cached=await cacheAllBoatImages(transport);render();
     await loadMatrikelPeople(token).catch(error=>console.warn('Matrikelns familjekontext kunde inte hämtas',error));
-    if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
     setStatus(`Synkad · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · ${cached.total} bilder offline${images+queuedImages?` · ${images+queuedImages} bilder upp`:''}`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});
   return syncPromise;
 }
@@ -796,5 +791,5 @@ $('#clear-all-filters').addEventListener('click',()=>{clearFilter('all');closeOp
 $('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeDrawer();closeConnectionSearch();closeOptionsPanels()}});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

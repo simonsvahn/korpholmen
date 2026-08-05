@@ -12,8 +12,14 @@ import {
   Repository,
   SharedDropboxSession,
   SyncEngine,
+  disconnectDropboxEverywhere,
+  isOfflineError,
   mergePersonReferences,
+  requestPersistentStorage,
+  resolveDeviceId,
   resolveCurrentOwners,
+  revokeDropboxAccessToken,
+  sharedDropboxDisconnectedKey,
 } from '../data-layer.js';
 
 let passed = 0;
@@ -147,6 +153,115 @@ await test('en gemensam Dropbox-session återanvänder och förnyar samma inlogg
   now = 32_000;
   assert.equal(await session.getAccessToken(), 'access-2');
   assert.equal(exchanges, 1);
+});
+
+await test('enhetsidentiteten överlever om localStorage rensas men roteras om IndexedDB har försvunnit', async () => {
+  const storageValues = new Map([['device-key', 'legacy-device']]);
+  const storage = {
+    getItem: key => storageValues.get(key) ?? null,
+    setItem: (key, value) => storageValues.set(key, value),
+  };
+  const freshStore = new MemoryStore();
+  const freshId = await resolveDeviceId({
+    store: freshStore,
+    key: 'device-key',
+    prefix: 'device-',
+    storage,
+    crypto: { randomUUID: () => 'fresh' },
+  });
+  assert.equal(freshId, 'device-fresh');
+  assert.equal(storageValues.get('device-key'), 'device-fresh');
+
+  storageValues.delete('device-key');
+  assert.equal(await resolveDeviceId({ store: freshStore, key: 'device-key', prefix: 'device-', storage }), 'device-fresh');
+  assert.equal(storageValues.get('device-key'), 'device-fresh');
+});
+
+await test('en äldre enhetsidentitet återanvänds bara när dess operationer finns kvar', async () => {
+  const store = new MemoryStore();
+  const repository = await new Repository({ store, deviceId: 'legacy-device' }).init();
+  await repository.setField('person', 'p1', 'name', 'Test');
+  const storage = { getItem: () => 'legacy-device', setItem: () => {} };
+  assert.equal(await resolveDeviceId({ store, key: 'device-key', prefix: 'device-', storage }), 'legacy-device');
+});
+
+await test('offlineklassningen döljer inte vanliga TypeError-programfel', async () => {
+  assert.equal(isOfflineError(new TypeError('programfel'), { online: true }), false);
+  assert.equal(isOfflineError(new TypeError('Failed to fetch'), { online: true }), true);
+  assert.equal(isOfflineError(new Error('godtyckligt fel'), { online: false }), true);
+});
+
+await test('beständig webblagring efterfrågas en gång när stödet finns', async () => {
+  let requests = 0;
+  const result = await requestPersistentStorage({ storage: {
+    persisted: async () => false,
+    persist: async () => { requests += 1; return true; },
+  } });
+  assert.deepEqual(result, { supported: true, persisted: true, requested: true });
+  assert.equal(requests, 1);
+});
+
+await test('Dropbox-token spärras med den officiella revoke-slutpunkten', async () => {
+  let request;
+  const revoked = await revokeDropboxAccessToken({
+    accessToken: 'access-token',
+    fetchImpl: async (url, options) => { request = { url, options }; return { ok: true }; },
+  });
+  assert.equal(revoked, true);
+  assert.equal(request.url, 'https://api.dropboxapi.com/2/auth/token/revoke');
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.headers.Authorization, 'Bearer access-token');
+  assert.equal(request.options.body, 'null');
+});
+
+await test('frånkoppling spärrar återimport och rensar samtliga äldre tokenkopior', async () => {
+  const sharedValues = new Map();
+  const sharedStore = {
+    get: async key => sharedValues.get(key) ?? null,
+    put: async (key, value) => sharedValues.set(key, value),
+    delete: async key => sharedValues.delete(key),
+  };
+  const session = new SharedDropboxSession({
+    clientId: 'client',
+    sharedStore,
+    exchangeRefreshToken: async () => { throw new Error('ska inte förnya'); },
+  });
+  await session.acceptTokenResponse({ access_token: 'access-token', refresh_token: 'refresh-token', expires_in: 3600 });
+  const legacyStores = new Map();
+  const storeFactory = async app => {
+    const values = new Map([['dropbox:refresh-token', 'legacy-token']]);
+    if (app.id === 'matrikel') values.set('dropbox:refresh-token-v1', 'legacy-token-v1');
+    legacyStores.set(app.id, values);
+    return {
+      store: {
+        getMeta: async key => values.get(key) ?? null,
+        deleteMeta: async key => values.delete(key),
+      },
+      close: () => {},
+    };
+  };
+  let remotelyRevoked = null;
+  const result = await disconnectDropboxEverywhere({
+    session,
+    revokeAccessToken: async ({ accessToken }) => { remotelyRevoked = accessToken; },
+    storeFactory,
+  });
+  assert.equal(remotelyRevoked, 'access-token');
+  assert.equal(result.revoked, true);
+  assert.equal(result.cleared, 7);
+  assert.deepEqual(result.failures, []);
+  assert.equal(await session.hasCredential(), false);
+  assert.ok(sharedValues.get(sharedDropboxDisconnectedKey));
+  for (const values of legacyStores.values()) {
+    assert.equal(values.has('dropbox:refresh-token'), false);
+    assert.equal(values.has('dropbox:refresh-token-v1'), false);
+  }
+
+  const staleStore = { getMeta: async () => 'stale-refresh-token' };
+  assert.equal(await session.migrateLegacyStore(staleStore), false);
+  await session.acceptTokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
+  assert.equal(await session.hasCredential(), true);
+  assert.equal(sharedValues.has(sharedDropboxDisconnectedKey), false);
 });
 
 await test('nya mastermoduler importeras direkt så att äldre appcache förblir kompatibel', async () => {

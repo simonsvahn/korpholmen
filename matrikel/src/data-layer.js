@@ -10,6 +10,7 @@ export {
 } from './domain/operations.js?v=2026-08-01-10';
 export { Materializer, materialize } from './domain/materializer.js?v=2026-08-01-10';
 export { Repository } from './domain/repository.js?v=2026-08-01-10';
+export { isOfflineError, resolveDeviceId } from '../core/runtime-safety.js';
 export { MemoryStore } from './storage/memory.js?v=2026-08-01-10';
 export { IndexedDBStore, openSlaktlandskapDB } from './storage/indexeddb.js?v=2026-08-01-10';
 export { createBatch, batchPath, validateBatch } from './sync/batch.js?v=2026-08-01-10';

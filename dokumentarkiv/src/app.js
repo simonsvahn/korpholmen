@@ -7,8 +7,10 @@ import {
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../core/data-layer.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
@@ -47,7 +49,6 @@ const documentRecords = () => recordList('document').sort((a, b) => String(a.doc
 const entityRecords = () => recordList('archive-entity').sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 const entityMap = () => new Map(entityRecords().map(entity => [entity.id, entity]));
 const summaryRecord = () => recordList('archive-summary')[0] || {};
-const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
 function setStatus(text, tone = '') {
@@ -55,12 +56,7 @@ function setStatus(text, tone = '') {
   statusNode.className = tone ? `status-${tone}` : '';
 }
 
-function deviceId() {
-  const key = 'korpholmen:dokumentarkiv-device-id';
-  let id = localStorage.getItem(key);
-  if (!id) { id = `dokumentarkiv-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); }
-  return id;
-}
+const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:dokumentarkiv-device-id', prefix: 'dokumentarkiv-web-' });
 
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
 function dateLabel(date) {
@@ -589,7 +585,7 @@ async function init() {
   const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB({ name: 'korpholmen-dokumentarkiv' });
   store = new IndexedDBStore(db);
-  repository = await new Repository({ store, deviceId: deviceId() }).init();
+  repository = await new Repository({ store, deviceId: await deviceId() }).init();
   await refreshHistory();
   await loadCachedContentImages();
   bootstrapButton.hidden = !isSourceTree;

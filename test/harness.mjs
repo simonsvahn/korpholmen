@@ -51,6 +51,33 @@ await test('Dropbox-inloggningen och totalsynken är gemensamma men mastrarna f�
   for (const path of ['/matrikel/ops', '/batregister/ops', '/fastigheter/ops', '/dokumentarkiv/ops', '/korpholmenrunt/ops', '/klubbhistorik/ops', '/kartdata/ops']) assert.ok(familySync.includes(path));
 });
 
+await test('lagring, offlinefel och Dropbox-frånkoppling hanteras gemensamt', async () => {
+  const rootHtml = await readFile(resolve(ROOT, 'index.html'), 'utf8');
+  const rootApp = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  const bootstrap = await readFile(resolve(ROOT, 'src/app-family-bootstrap.js'), 'utf8');
+  const runtimeSafety = await readFile(resolve(ROOT, 'packages/core/runtime-safety.js'), 'utf8');
+  const familySync = await readFile(resolve(ROOT, 'packages/core/sync/app-family-sync.js'), 'utf8');
+  assert.match(rootHtml, /id="disconnect-dropbox"/);
+  assert.match(rootApp, /disconnectDropboxEverywhere/);
+  assert.match(rootApp, /revokeDropboxAccessToken/);
+  assert.match(rootApp, /requestPersistentStorage/);
+  assert.match(bootstrap, /requestPersistentStorage/);
+  assert.match(runtimeSafety, /device-identity:/);
+  assert.match(runtimeSafety, /failed to fetch/);
+  assert.doesNotMatch(runtimeSafety, /instanceof TypeError/);
+  assert.match(familySync, /sharedDropboxDisconnectedKey/);
+  assert.match(familySync, /clearLegacyCredentialStores/);
+  for (const app of APPS) {
+    const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
+    const builder = await readFile(resolve(ROOT, 'apps', app, 'verktyg/bygg-publicering.mjs'), 'utf8');
+    assert.match(source, /resolveDeviceId/, `${app} saknar säker enhetsidentitet`);
+    assert.match(source, /deviceId:\s*await deviceId\(\)/, `${app} väntar inte in enhetsidentiteten`);
+    assert.match(source, /isOfflineError/, `${app} saknar gemensam offlineklassning`);
+    assert.doesNotMatch(source, /instanceof TypeError/, `${app} döljer programfel som offlinefel`);
+    assert.match(builder, /runtime-safety\.js/, `${app} publicerar inte runtime-safety`);
+  }
+});
+
 await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', async () => {
   const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
   assert.deepEqual(release.apps, APPS);

@@ -2,6 +2,7 @@ const DATABASE_NAME = 'korpholmen-shared-v1';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'state';
 const DROPBOX_TOKEN_KEY = 'dropbox:refresh-token';
+const DROPBOX_DISCONNECTED_KEY = 'dropbox:disconnected-at';
 
 const requestResult = request => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
@@ -72,10 +73,12 @@ export class SharedDropboxSession {
   }
 
   async hasCredential() {
+    if (await this.sharedStore.get(DROPBOX_DISCONNECTED_KEY)) return false;
     return Boolean(await this.sharedStore.get(DROPBOX_TOKEN_KEY));
   }
 
   async getRefreshToken() {
+    if (await this.sharedStore.get(DROPBOX_DISCONNECTED_KEY)) return null;
     return this.sharedStore.get(DROPBOX_TOKEN_KEY);
   }
 
@@ -83,11 +86,15 @@ export class SharedDropboxSession {
     if (!token?.access_token) throw new Error('Dropbox returnerade ingen access token');
     this.accessToken = token.access_token;
     this.accessTokenExpiresAt = this.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000;
-    if (token.refresh_token) await this.sharedStore.put(DROPBOX_TOKEN_KEY, token.refresh_token);
+    if (token.refresh_token) {
+      await this.sharedStore.put(DROPBOX_TOKEN_KEY, token.refresh_token);
+      await this.sharedStore.delete(DROPBOX_DISCONNECTED_KEY);
+    }
     return this.accessToken;
   }
 
   async migrateLegacyStore(store, tokenKeys = ['dropbox:refresh-token', 'dropbox:refresh-token-v1']) {
+    if (await this.sharedStore.get(DROPBOX_DISCONNECTED_KEY)) return false;
     if (await this.hasCredential()) return false;
     if (!store?.getMeta) return false;
     for (const key of tokenKeys) {
@@ -102,6 +109,7 @@ export class SharedDropboxSession {
   async getAccessToken({ online = true } = {}) {
     if (this.accessToken && this.now() < this.accessTokenExpiresAt) return this.accessToken;
     if (!online) return null;
+    if (await this.sharedStore.get(DROPBOX_DISCONNECTED_KEY)) return null;
     const refreshToken = await this.sharedStore.get(DROPBOX_TOKEN_KEY);
     if (!refreshToken) return null;
     const token = await this.exchangeRefreshToken({ clientId: this.clientId, refreshToken });
@@ -113,8 +121,10 @@ export class SharedDropboxSession {
   async disconnect() {
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
+    await this.sharedStore.put(DROPBOX_DISCONNECTED_KEY, new Date(this.now()).toISOString());
     await this.sharedStore.delete(DROPBOX_TOKEN_KEY);
   }
 }
 
 export const sharedDropboxTokenKey = DROPBOX_TOKEN_KEY;
+export const sharedDropboxDisconnectedKey = DROPBOX_DISCONNECTED_KEY;

@@ -6,8 +6,10 @@ import {
   beginDropboxOAuth,
   completeDropboxOAuth,
   createBatch,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from './data-layer.js?v=2026-08-02-3';
 import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-10';
@@ -126,7 +128,6 @@ const escapeHtml = (value) => String(value ?? '')
 const escapeAttribute = escapeHtml;
 const unique = (items) => [...new Set(items)];
 const slug = (value) => normalizeText(value).replace(/\s+/g, '-') || 'grupp';
-const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
 
 async function registerServiceWorker() {
   try {
@@ -151,15 +152,7 @@ function redirectUri() {
   return new URL(isSourceTree ? '../../' : '../', location.href).href;
 }
 
-function deviceId() {
-  const key = 'slaktlandskap:device-id';
-  let value = localStorage.getItem(key);
-  if (!value) {
-    value = `slakt-web-${crypto.randomUUID()}`;
-    localStorage.setItem(key, value);
-  }
-  return value;
-}
+const deviceId = () => resolveDeviceId({ store, key: 'slaktlandskap:device-id', prefix: 'slakt-web-' });
 
 function personRecords() {
   return repository.listEntities('person')
@@ -1231,7 +1224,6 @@ async function syncNow() {
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
-    if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     render();
     familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
     if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
@@ -1466,7 +1458,7 @@ async function init() {
   const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB();
   store = new IndexedDBStore(db);
-  repository = await new Repository({ store, deviceId: deviceId() }).init();
+  repository = await new Repository({ store, deviceId: await deviceId() }).init();
   bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
   familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || personRecords().length === 0;
   connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';

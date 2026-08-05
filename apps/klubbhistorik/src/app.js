@@ -7,8 +7,10 @@ import {
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { mergePersonReferences } from '../../../packages/core/master-data.js';
@@ -44,9 +46,8 @@ const releaseMap=()=>new Map(releases().map(item=>[item.id,item]));
 const statusLabel=status=>({active:'Aktiv',passive:'Passiv',junior:'Junior',corresponding:'Korresponderande',listed:'Listad',founder:'Grundare (rekonstruktion)'}[status]||status||'Okänd');
 const boatCategoryLabel=category=>({registered:'Inregistrerat fartyg','registered-passive':'Fartyg vid passivavsnitt','registered-junior':'Fartyg vid junioravsnitt','registered-corresponding':'Fartyg vid korresponderande','deregistered-or-renamed':'Avregistrerat eller namnändrat'}[category]||category||'Fartyg');
 const matchLabel=status=>({kopplad:'Kopplad',godkand:'Godkänd',foreslagen:'Föreslagen',saknas:'Saknas',manuell:'Manuell'}[status]||status||'Okänd');
-const isOfflineError=error=>navigator.onLine===false||error instanceof TypeError||/failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message||error));
 function setStatus(text,tone=''){statusNode.textContent=text;statusNode.className=tone?`status-${tone}`:''}
-function deviceId(){const key='korpholmen:klubbhistorik-device-id';let id=localStorage.getItem(key);if(!id){id=`klubbhistorik-web-${crypto.randomUUID()}`;localStorage.setItem(key,id)}return id}
+const deviceId=()=>resolveDeviceId({store,key:'korpholmen:klubbhistorik-device-id',prefix:'klubbhistorik-web-'});
 function redirectUri(){return new URL(isSourceTree?'../../':'../',location.href).href}
 
 function duplicateGroups(){
@@ -207,5 +208,5 @@ bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setSt
 app.addEventListener('change',event=>{if(event.target.id==='change-from'){ui.from=event.target.value;render()}if(event.target.id==='change-to'){ui.to=event.target.value;render()}if(event.target.matches('[data-boat-select]')){const preview=document.querySelector(`[data-boat-preview="${CSS.escape(event.target.dataset.boatSelect)}"]`);if(preview)preview.innerHTML=boatReferenceHtml(boatMap().get(event.target.value))}});
 window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));
 
-async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'kbk-klubbhistorik'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='personer';ui.personId=params.get('person')}if(params.has('release')){ui.view='utgava';ui.releaseId=params.get('release')}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
+async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'kbk-klubbhistorik'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();bootstrapButton.hidden=!isSourceTree;const params=new URLSearchParams(location.search);if(params.has('person')){ui.view='personer';ui.personId=params.get('person')}if(params.has('release')){ui.view='utgava';ui.releaseId=params.get('release')}render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

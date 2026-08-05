@@ -31,7 +31,7 @@ const FILES = [
   'src/sync/oauth-pkce.js',
   'src/sync/sync-engine.js'
 ];
-const CORE_FILES = ['data-layer.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
+const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative);
@@ -59,7 +59,8 @@ for (const relative of CORE_FILES) {
 const dataLayer = (await readFile(resolve(ROOT, 'src/data-layer.js'), 'utf8'))
   .replaceAll('../../../packages/core/sync/shared-dropbox-session.js', '../core/sync/shared-dropbox-session.js')
   .replaceAll('../../../packages/core/sync/app-family-sync.js', '../core/sync/app-family-sync.js')
-  .replaceAll('../../../packages/core/pwa/korpholmen-service-worker.js', '../core/pwa/korpholmen-service-worker.js');
+  .replaceAll('../../../packages/core/pwa/korpholmen-service-worker.js', '../core/pwa/korpholmen-service-worker.js')
+  .replaceAll('../../../packages/core/runtime-safety.js', '../core/runtime-safety.js');
 await writeFile(resolve(OUT, 'src/data-layer.js'), dataLayer);
 
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))
