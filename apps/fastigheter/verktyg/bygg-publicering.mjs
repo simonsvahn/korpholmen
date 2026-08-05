@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
+import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../fastigheter');
@@ -16,7 +16,7 @@ const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../
 await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'src/app.js'),app);
 await assertExactPublicationFiles(OUT,[...FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);
 const bundle=(await Promise.all([...FILES.map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),(async()=>app)()])).join('\n');
-const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-02/initial-ops.json'),'utf8'));
-const privateNames=privateData.operations.filter(operation=>operation.entity_type==='party'&&operation.field==='name').map(operation=>operation.value).filter(Boolean);
+const privateData=await readOptionalPrivateJson(resolve(ROOT,'privat/migrering-2026-08-02/initial-ops.json'));
+const privateNames=(privateData?.operations||[]).filter(operation=>operation.entity_type==='party'&&operation.field==='name').map(operation=>operation.value).filter(Boolean);
 if(privateNames.some(name=>bundle.includes(JSON.stringify(name)))||bundle.includes('"operations_version"'))throw new Error('Privat fastighetsdata har läckt in i publiceringspaketet');
 console.log(`Datafri Fastighetshistorik byggd: ${FILES.length+CORE_FILES.length+1} filer.`);

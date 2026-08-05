@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
+import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../klubbhistorik');
@@ -16,7 +16,7 @@ const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../
 await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'src/app.js'),app);
 await assertExactPublicationFiles(OUT,[...FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);
 const bundle=(await Promise.all([...FILES.map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),Promise.resolve(app)])).join('\n');
-const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-02/initial-ops.json'),'utf8'));
-const privateValues=privateData.operations.filter(operation=>['raw_text','person_name_raw','boat_name_raw','source_line_raw'].includes(operation.field)).map(operation=>String(operation.value||'')).filter(value=>value.length>=7);
+const privateData=await readOptionalPrivateJson(resolve(ROOT,'privat/migrering-2026-08-02/initial-ops.json'));
+const privateValues=(privateData?.operations||[]).filter(operation=>['raw_text','person_name_raw','boat_name_raw','source_line_raw'].includes(operation.field)).map(operation=>String(operation.value||'')).filter(value=>value.length>=7);
 if(privateValues.some(value=>bundle.includes(JSON.stringify(value)))||bundle.includes('"operations_version"')||bundle.includes('"person-occurrence:matrikel-'))throw new Error('Privata Klubbhistorik-data har läckt in i publiceringspaketet.');
 console.log(`Datafri Klubbhistorik byggd: ${FILES.length+CORE_FILES.length+1} filer.`);

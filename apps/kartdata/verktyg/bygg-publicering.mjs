@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
+import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../kartdata');
@@ -28,8 +28,8 @@ const bundle = (await Promise.all([
   ...CORE_FILES.map(file => readFile(resolve(OUT, 'core', file), 'utf8')),
   (async () => app)(),
 ])).join('\n');
-const privateData = JSON.parse(await readFile(resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2/clean-v2-ops.json'), 'utf8'));
-const forbiddenNames = privateData.operations
+const privateData = await readOptionalPrivateJson(resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2/clean-v2-ops.json'));
+const forbiddenNames = (privateData?.operations || [])
   .filter(operation => operation.entity_type === 'data-entry' && operation.field === 'name' && String(operation.value || '').length >= 6)
   .map(operation => operation.value)
   .filter(value => !/Korpholmen|Sviholmen|Svanö|Lövskär|Stugholmen|Skarpholmen/i.test(value));
