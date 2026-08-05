@@ -287,10 +287,12 @@ export function visiblePersonIds(people, graph, filters) {
     if (filters.onlyUnlinked && (graph.all.get(person.id) || []).length) return false;
     if (selectedGenerations.size && !selectedGenerations.has(String(generationFor(person) ?? 'okand'))) return false;
     if (filters.yearOn) {
-      const birth = Number(String(person.birth ?? '').slice(0, 4));
-      const death = Number(String(person.death ?? '').slice(0, 4));
-      if (Number.isFinite(birth) && birth > filters.year) return false;
-      if (Number.isFinite(death) && death < filters.year) return false;
+      const birthMatch = String(person.birth ?? '').match(/^\s*(\d{4})/);
+      const deathMatch = String(person.death ?? '').match(/^\s*(\d{4})/);
+      const birth = birthMatch ? Number(birthMatch[1]) : null;
+      const death = deathMatch ? Number(deathMatch[1]) : null;
+      if (birth !== null && birth > filters.year) return false;
+      if (death !== null && death < filters.year) return false;
     }
     return true;
   }).map((person) => person.id));

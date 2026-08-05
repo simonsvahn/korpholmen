@@ -23,6 +23,7 @@ import {
   isUncertain,
   itemSortYear,
   roleLabel,
+  sameClaimIdentity,
   sourcePeriod,
 } from './timeline-model.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, KARTDATA_BOOTSTRAP_URL, LOCAL_BOOTSTRAP_URLS } from './config.js';
@@ -288,8 +289,7 @@ function renderPropertyTimeline(propertyId) {
   let chain = buildClaimChain(holdingClaimsFor(propertyId));
   if (chain.length && claimMatchesCurrent(chain.at(-1), current)) chain = chain.slice(0, -1);
   const predecessors = predecessorCards(propertyId);
-  const predecessorYears = new Set(predecessors.map(item => item.sort_year).filter(Boolean));
-  chain = chain.filter(claim => !predecessorYears.has(itemSortYear(claim)));
+  chain = chain.filter(claim => !predecessors.some(predecessor => sameClaimIdentity(predecessor, claim)));
   const markers = timelineMarkers(propertyId);
   const entries = [];
   let markerIndex = 0;

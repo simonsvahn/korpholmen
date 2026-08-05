@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
-import { buildClaimChain, currentClaimMatchesNames, roleLabel, sourcePeriod } from '../src/timeline-model.js';
+import { buildClaimChain, currentClaimMatchesNames, roleLabel, sameClaimIdentity, sourcePeriod } from '../src/timeline-model.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
@@ -137,6 +137,16 @@ await test('tidslinjens kedjeordning kan visa nästa uppgift utan att skriva ett
   assert.equal(roleLabel('boende/brukare', 'Alice'), 'Boende');
   assert.equal(currentClaimMatchesNames({ holder_text: 'Charlotta Svahn' }, ['Anna Helena Charlotta Svahn']), true);
   assert.equal(currentClaimMatchesNames({ holder_text: 'Lena, Kerstin och Åsa Dalaryd' }, ['Kerstin Eva Dalaryd', 'Lena Maria Dalaryd', 'Åsa Gunvor Birgitta Dalaryd']), true);
+  assert.equal(currentClaimMatchesNames({ holder_text: 'Erik Andersson' }, ['Anna Andersson']), false);
+  assert.equal(currentClaimMatchesNames({ holder_text: 'Anna Andersson' }, ['Anna Andersson']), true);
+  assert.equal(sameClaimIdentity(
+    { holder_text: 'Erik Andersson', sort_year: 1950, source_ids: ['A'] },
+    { holder_text: 'Anna Andersson', start_year: 1950, source_ids: ['B'] },
+  ), false);
+  assert.equal(sameClaimIdentity(
+    { holder_text: 'Anna Andersson', party_id: 'party-anna', sort_year: 1950 },
+    { holder_text: 'A. Andersson', party_id: 'party-anna', start_year: 1950 },
+  ), true);
   const decadeChain = buildClaimChain([
     { id: 'c', order: 1, holder_text: 'C', role: 'hyresgäst', start_year_min: 1940, start_year_max: 1949, start_precision: 'decennium' },
     { id: 'd', order: 2, holder_text: 'D', role: 'hyresgäst', start_year_min: 1960, start_year_max: 1969, start_precision: 'decennium' },

@@ -119,9 +119,36 @@ export function buildClaimChain(claims = []) {
 }
 
 export function currentClaimMatchesNames(claim, names = []) {
-  const haystack = clean(claim?.holder_text).toLocaleLowerCase('sv');
+  const tokens = value => clean(value)
+    .toLocaleLowerCase('sv')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const holderTokens = tokens(claim?.holder_text);
+  const holderSet = new Set(holderTokens);
+  const haystack = holderTokens.join(' ');
   if (!names.length) return false;
-  if (names.every(name => haystack.includes(clean(name).toLocaleLowerCase('sv')))) return true;
-  const surnames = [...new Set(names.map(name => clean(name).split(/\s+/).at(-1)?.toLocaleLowerCase('sv')).filter(Boolean))];
-  return surnames.length > 0 && surnames.every(name => haystack.includes(name));
+  return names.every(name => {
+    const nameTokens = tokens(name);
+    if (!nameTokens.length) return false;
+    if (haystack.includes(nameTokens.join(' '))) return true;
+    if (nameTokens.length < 2) return false;
+    const surname = nameTokens.at(-1);
+    const givenNames = nameTokens.slice(0, -1);
+    return holderSet.has(surname) && givenNames.some(givenName => holderSet.has(givenName));
+  });
+}
+
+export function sameClaimIdentity(left, right) {
+  const leftYear = itemSortYear(left) || yearNumber(left?.sort_year);
+  const rightYear = itemSortYear(right) || yearNumber(right?.sort_year);
+  if (!leftYear || leftYear !== rightYear) return false;
+  if (left?.party_id && right?.party_id) return left.party_id === right.party_id;
+  const leftHolder = clean(left?.holder_text).toLocaleLowerCase('sv');
+  const rightHolder = clean(right?.holder_text).toLocaleLowerCase('sv');
+  if (!leftHolder || leftHolder !== rightHolder) return false;
+  const leftSources = new Set(Array.isArray(left?.source_ids) ? left.source_ids : []);
+  const rightSources = Array.isArray(right?.source_ids) ? right.source_ids : [];
+  return rightSources.some(sourceId => leftSources.has(sourceId));
 }
