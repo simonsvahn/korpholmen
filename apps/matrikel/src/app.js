@@ -141,8 +141,38 @@ async function registerServiceWorker() {
 }
 
 function setStatus(text, tone = '') {
+  delete statusNode.dataset.undoAction;
   statusNode.textContent = text;
   statusNode.dataset.tone = tone;
+}
+
+function offerUndo(message, restoreEntries, restoredMessage) {
+  const actionId = crypto.randomUUID();
+  setStatus(message, 'warning');
+  statusNode.dataset.undoAction = actionId;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'undo-action';
+  button.textContent = 'Ångra';
+  button.addEventListener('click', async () => {
+    if (statusNode.dataset.undoAction !== actionId) return;
+    button.disabled = true;
+    setStatus('Återställer…');
+    try {
+      await repository.restoreEntities(restoreEntries);
+      render();
+      try { await syncNow(); } catch (_) { /* Lokalt återställd. */ }
+      setStatus(restoredMessage, 'ok');
+    } catch (error) {
+      setStatus(`Kunde inte återställa · ${error.message}`, 'error');
+    }
+  }, { once: true });
+  statusNode.append(' · ', button);
+  window.setTimeout(() => {
+    if (statusNode.dataset.undoAction === actionId) {
+      setStatus(`${message} · återställningshistoriken är bevarad`, 'ok');
+    }
+  }, 15_000);
 }
 
 function setEditStatus(text, tone = '') {
@@ -972,9 +1002,11 @@ async function deleteGroup() {
   const selected = ui.selectedGroup;
   const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
   if (!group || !window.confirm(`Ta bort ${displayReference(group)}? Personer och personrelationer påverkas inte.`)) return;
-  await syncEdit(() => repository.deleteEntity(selected.entityType, selected.id));
+  const restoreEntries = [{ entityType: selected.entityType, entityId: selected.id }];
+  if (!await syncEdit(() => repository.deleteEntity(selected.entityType, selected.id))) return;
   ui.selectedGroup = null;
   closeDrawer(false);
+  offerUndo(`${displayReference(group)} borttagen`, restoreEntries, `${displayReference(group)} återställd`);
 }
 
 async function applyFamilyModelLocal() {
@@ -1033,10 +1065,12 @@ async function syncEdit(action) {
       console.error(syncError);
       setEditStatus('Sparad lokalt · Dropbox-synken misslyckades och försöker igen senare.', 'warning');
     }
+    return true;
   } catch (error) {
     console.error(error);
     setEditStatus(`Kunde inte spara · ${error.message}`, 'error');
     render();
+    return false;
   }
 }
 
@@ -1068,7 +1102,8 @@ async function deletePropertyLink(id) {
   if (!link) return;
   const person = graph.byId.get(link.person_id)?.display_name || link.person_id;
   if (!window.confirm(`Ta bort fastighetskopplingen mellan ${person} och ${link.property_id}?`)) return;
-  await syncEdit(() => repository.deleteEntity('property-link', id));
+  const restoreEntries = [{ entityType: 'property-link', entityId: id }];
+  if (await syncEdit(() => repository.deleteEntity('property-link', id))) offerUndo('Fastighetskopplingen borttagen', restoreEntries, 'Fastighetskopplingen återställd');
 }
 
 async function addRelation() {
@@ -1123,7 +1158,8 @@ async function deleteRelation(id) {
   const from = graph.byId.get(relation.from_person_id)?.display_name || relation.from_person_id;
   const to = graph.byId.get(relation.to_person_id)?.display_name || relation.to_person_id;
   if (!window.confirm(`Ta bort relationen mellan ${from} och ${to}? Ändringen sparas med återställningsbar historik.`)) return;
-  await syncEdit(() => repository.deleteEntity('relation', id));
+  const restoreEntries = [{ entityType: 'relation', entityId: id }];
+  if (await syncEdit(() => repository.deleteEntity('relation', id))) offerUndo('Relationen borttagen', restoreEntries, 'Relationen återställd');
 }
 
 async function deletePerson() {
@@ -1132,13 +1168,15 @@ async function deletePerson() {
   const related = currentRelations.filter((relation) => relation.from_person_id === person.id || relation.to_person_id === person.id);
   const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id);
   if (!window.confirm(`Ta bort ${person.display_name}, personens ${related.length} relationer och ${propertyLinks.length} fastighetskopplingar? Borttagningen sparas som återställningsbar historik.`)) return;
-  await syncEdit(() => repository.deleteEntities([
+  const restoreEntries = [
     ...related.map((relation) => ({ entityType: 'relation', entityId: relation.id })),
     ...propertyLinks.map((link) => ({ entityType: 'property-link', entityId: link.id })),
     { entityType: 'person', entityId: person.id },
-  ]));
+  ];
+  if (!await syncEdit(() => repository.deleteEntities(restoreEntries))) return;
   ui.selectedPersonId = null;
   closeDrawer(false);
+  offerUndo(`${person.display_name} borttagen`, restoreEntries, `${person.display_name} återställd`);
 }
 
 async function completeOAuthCallback() {

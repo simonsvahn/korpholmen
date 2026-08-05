@@ -110,8 +110,38 @@ async function mapConcurrent(values, limit, mapper) {
 }
 
 function setStatus(text, tone = '') {
+  delete statusNode.dataset.undoAction;
   statusNode.textContent = text;
   statusNode.className = tone ? `status-${tone}` : '';
+}
+
+function offerUndo(message, restoreEntries, restoredMessage) {
+  const actionId = crypto.randomUUID();
+  setStatus(message, 'warning');
+  statusNode.dataset.undoAction = actionId;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'undo-action';
+  button.textContent = 'Ångra';
+  button.addEventListener('click', async () => {
+    if (statusNode.dataset.undoAction !== actionId) return;
+    button.disabled = true;
+    setStatus('Återställer…');
+    try {
+      await repository.restoreEntities(restoreEntries);
+      render();
+      try { await syncNow(); } catch (_) { /* Lokalt återställd; synken försöker igen senare. */ }
+      setStatus(restoredMessage, 'ok');
+    } catch (error) {
+      setStatus(`Kunde inte återställa · ${error.message}`, 'error');
+    }
+  }, { once: true });
+  statusNode.append(' · ', button);
+  window.setTimeout(() => {
+    if (statusNode.dataset.undoAction === actionId) {
+      setStatus(`${message} · återställningshistoriken är bevarad`, 'ok');
+    }
+  }, 15_000);
 }
 
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:batregister-device-id', prefix: 'bat-web-' });
@@ -602,8 +632,10 @@ async function deleteBoat() {
   const familyLinks=familyLinksForBoat(boat.id);
   const groupLinks=groupLinksForBoat(boat.id);
   if(!confirm(`Ta bort ${boat.namn} och ${links.length+familyLinks.length+groupLinks.length} kopplingar? Historiken finns kvar som tombstones.`))return;
-  await syncEdit(()=>repository.deleteEntities([...links.map(link=>({entityType:'boat-person-link',entityId:link.id})),...familyLinks.map(link=>({entityType:'boat-family-link',entityId:link.id})),...groupLinks.map(link=>({entityType:'boat-group-link',entityId:link.id})),{entityType:'boat',entityId:boat.id}]));
+  const restoreEntries=[...links.map(link=>({entityType:'boat-person-link',entityId:link.id})),...familyLinks.map(link=>({entityType:'boat-family-link',entityId:link.id})),...groupLinks.map(link=>({entityType:'boat-group-link',entityId:link.id})),{entityType:'boat',entityId:boat.id}];
+  await syncEdit(()=>repository.deleteEntities(restoreEntries));
   closeDrawer();
+  offerUndo(`${boat.namn} borttagen`,restoreEntries,`${boat.namn} återställd`);
 }
 
 async function addRelationLink() {
@@ -648,7 +680,11 @@ async function addRelationLink() {
   }
 }
 
-async function deleteLink(type,id) { await syncEdit(()=>repository.deleteEntity(type,id)); }
+async function deleteLink(type,id) {
+  const restoreEntries=[{entityType:type,entityId:id}];
+  await syncEdit(()=>repository.deleteEntity(type,id));
+  offerUndo('Kopplingen borttagen',restoreEntries,'Kopplingen återställd');
+}
 
 async function uploadImage(file) {
   if (!file || !selectedBoatId) return;

@@ -109,6 +109,24 @@ await test('Dokumentarkiv och Båtregister använder levande masterreferenser oc
   assert.match(boats, /canonicalGroupTarget/);
 });
 
+await test('borttagningar kan ångras och granskningsköer har ett källbevarande slutbeslut', async () => {
+  for (const app of ['matrikel', 'batregister', 'kartdata']) {
+    const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
+    const styles = await readFile(resolve(ROOT, 'apps', app, 'styles.css'), 'utf8');
+    assert.match(source, /function offerUndo/);
+    assert.match(source, /repository\.restoreEntities\(restoreEntries\)/);
+    assert.match(source, /15_000/);
+    assert.match(styles, /\.undo-action/);
+  }
+  for (const app of ['korpholmenrunt', 'klubbhistorik']) {
+    const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
+    assert.match(source, /review_decision/);
+    assert.match(source, /bevarad okopplad/);
+    assert.match(source, /Bevara utan koppling/);
+    assert.match(source, /reviewed_at/);
+  }
+});
+
 await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', async () => {
   const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
   assert.deepEqual(release.apps, APPS);

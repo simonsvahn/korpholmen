@@ -141,6 +141,28 @@ await test('tombstonade deterministiska länkar återställs atomiskt vid upsert
   });
 });
 
+await test('en sammansatt borttagning kan ångras atomiskt utan att fält eller historik förloras', async () => {
+  const store = new MemoryStore();
+  const repository = await new Repository({ store, deviceId: 'undo-test' }).init();
+  await repository.setFields([
+    { entityType: 'boat', entityId: 'b1', field: 'name', value: 'Fadersfriden' },
+    { entityType: 'boat-person-link', entityId: 'b1--p1', field: 'boat_id', value: 'b1' },
+    { entityType: 'boat-person-link', entityId: 'b1--p1', field: 'person_id', value: 'p1' },
+  ]);
+  const restoreEntries = [
+    { entityType: 'boat-person-link', entityId: 'b1--p1' },
+    { entityType: 'boat', entityId: 'b1' },
+  ];
+  await repository.deleteEntities(restoreEntries);
+  assert.equal(repository.getEntity('boat', 'b1'), null);
+  assert.equal(repository.getEntity('boat-person-link', 'b1--p1'), null);
+  const operations = await repository.restoreEntities(restoreEntries);
+  assert.equal(operations.length, 2);
+  assert.equal(repository.getEntity('boat', 'b1').fields.name, 'Fadersfriden');
+  assert.equal(repository.getEntity('boat-person-link', 'b1--p1').fields.person_id, 'p1');
+  assert.ok((await store.getAllOps()).length >= 7, 'både borttagning och återställning ska finnas kvar i historiken');
+});
+
 await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fastighetsägare', async () => {
   const personRemote = new MemoryRemoteTransport({ id: 'matrikel' });
   const propertyRemote = new MemoryRemoteTransport({ id: 'fastigheter' });
