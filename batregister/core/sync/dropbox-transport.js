@@ -1,5 +1,6 @@
 import { canonicalStringify, cloneJson } from '../domain/canonical.js';
 import { batchPath, validateBatch } from './batch.js';
+import { decodeCheckpointPayload } from './checkpoint-format.js';
 import { CursorResetError, TransportError } from './errors.js';
 
 const API = 'https://api.dropboxapi.com/2';
@@ -135,7 +136,12 @@ export class DropboxTransport {
 
   async getCheckpoint() {
     try {
-      return await this.getJson(this.checkpointPath);
+      const checkpoint = await this.getJson(this.checkpointPath);
+      if (checkpoint?.checkpoint_version === 1) return checkpoint;
+      if (checkpoint?.checkpoint_version !== 2) throw new TypeError('Dropbox-checkpointen har ett okänt format');
+      const compressed = await this.getBytes(checkpoint.snapshot_path);
+      const snapshot = await decodeCheckpointPayload(checkpoint, compressed, { opsRoot: this.opsRoot });
+      return { ...checkpoint, snapshot };
     } catch (error) {
       if (error instanceof TransportError && error.status === 409 && String(error.code).includes('path/not_found')) return null;
       throw error;
@@ -231,5 +237,15 @@ export class DropboxTransport {
     });
     if (!response.ok) return this.parseError(response);
     return response.blob();
+  }
+
+  async getBytes(pathValue) {
+    const path = normalizePath(pathValue);
+    const response = await this.request(`${CONTENT}/files/download`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
+    });
+    if (!response.ok) return this.parseError(response);
+    return new Uint8Array(await response.arrayBuffer());
   }
 }

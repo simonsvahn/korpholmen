@@ -46,9 +46,12 @@ bakgrundssynken nya operationer till de övriga lokala mastrarna; bara den
 aktiva ägarappen laddar upp sina väntande ändringar. Båtregister lagrar även
 hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
 
-Varje Dropbox-namnrymd kan dessutom bära en reproducerbar
-`checkpoints/latest.json`. Checkpointen är en snabb startpunkt; de
-oföränderliga operationsbatcherna är fortsatt master och bevaras alltid.
+Varje Dropbox-namnrymd kan dessutom bära ett litet
+`checkpoints/latest.json` som pekar på en innehållsadresserad, gzip-komprimerad
+snapshot i `snapshots/`. Snapshoten verifieras med SHA-256 och är en snabb
+startpunkt; de oföränderliga operationsbatcherna är fortsatt revisionsmaster
+och bevaras alltid. En tom Klubbhistorik kräver en giltig snapshot och faller
+inte tillbaka till att hämta hela operationsloggen.
 Bygg om checkpoints från en lokalt komplett Dropbox-spegel med
 `npm run build:checkpoints -- "/absolut/sökväg/till/Korpholmen"`.
 

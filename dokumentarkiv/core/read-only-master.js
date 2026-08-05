@@ -94,7 +94,7 @@ export class ReadOnlyMaster {
     if (this.cursor || this.state.entities.size || typeof transport.getCheckpoint !== 'function') return false;
     try {
       const checkpoint = await transport.getCheckpoint();
-      if (!checkpoint || checkpoint.checkpoint_version !== 1 || !checkpoint.snapshot) return false;
+      if (!checkpoint || ![1, 2].includes(checkpoint.checkpoint_version) || !checkpoint.snapshot) return false;
       this.state = new Materializer(checkpoint.snapshot);
       await this.persist(null, {
         source: transport.id || this.cacheKey,

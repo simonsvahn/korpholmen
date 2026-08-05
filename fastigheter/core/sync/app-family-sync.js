@@ -11,7 +11,7 @@ export const KORPHOLMEN_APPS = Object.freeze([
   { id: 'fastigheter', label: 'Fastigheter', database: 'korpholmen-fastigheter', deviceKey: 'korpholmen:fastigheter-device-id', devicePrefix: 'fastigheter-web-', transportId: 'dropbox-fastigheter', opsRoot: '/fastigheter/ops' },
   { id: 'dokumentarkiv', label: 'Dokumentarkiv', database: 'korpholmen-dokumentarkiv', deviceKey: 'korpholmen:dokumentarkiv-device-id', devicePrefix: 'dokumentarkiv-web-', transportId: 'dropbox-dokumentarkiv', opsRoot: '/dokumentarkiv/ops' },
   { id: 'korpholmenrunt', label: 'Korpholmen runt', database: 'korpholmen-runt', deviceKey: 'korpholmen:runt-device-id', devicePrefix: 'runt-web-', transportId: 'dropbox-korpholmenrunt', opsRoot: '/korpholmenrunt/ops' },
-  { id: 'klubbhistorik', label: 'Klubbhistorik', database: 'kbk-klubbhistorik', deviceKey: 'korpholmen:klubbhistorik-device-id', devicePrefix: 'klubbhistorik-web-', transportId: 'dropbox-klubbhistorik', opsRoot: '/klubbhistorik/ops' },
+  { id: 'klubbhistorik', label: 'Klubbhistorik', database: 'kbk-klubbhistorik', deviceKey: 'korpholmen:klubbhistorik-device-id', devicePrefix: 'klubbhistorik-web-', transportId: 'dropbox-klubbhistorik', opsRoot: '/klubbhistorik/ops', requireCheckpointOnEmpty: true },
   { id: 'kartdata', label: 'Kartdata', database: 'korpholmen-kartdata-v2', deviceKey: 'korpholmen:kartdata-device-id', devicePrefix: 'kartdata-web-', transportId: 'dropbox-kartdata', opsRoot: '/kartdata/ops' },
 ]);
 
@@ -58,7 +58,7 @@ async function pullApp({ app, accessToken, sharedStore, onProgress }) {
     const store = new IndexedDBStore(database);
     const repository = await new Repository({ store, deviceId: await deviceIdFor(app, store) }).init();
     const transport = new DropboxTransport({ accessToken, id: app.transportId, opsRoot: app.opsRoot, readOnly: true });
-    const result = await new SyncEngine({ repository, transport }).downloadRemote({
+    const result = await new SyncEngine({ repository, transport, requireCheckpointOnEmpty: app.requireCheckpointOnEmpty }).downloadRemote({
       onProgress: async progress => {
         const status = {
           state: 'syncing',

@@ -6,7 +6,7 @@ const isBatchPath = path => /\/ops\/.+\.json$/.test(path);
 const defaultSleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 function checkpointSnapshot(checkpoint) {
-  if (!checkpoint || checkpoint.checkpoint_version !== 1 || !checkpoint.snapshot) throw new TypeError('Ogiltig synkcheckpoint');
+  if (!checkpoint || ![1, 2].includes(checkpoint.checkpoint_version) || !checkpoint.snapshot) throw new TypeError('Ogiltig synkcheckpoint');
   // Konstruktionen validerar hela snapshoten innan den får påverka lokal data.
   new Materializer(checkpoint.snapshot);
   return checkpoint.snapshot;
@@ -41,6 +41,7 @@ export class SyncEngine {
     batchSize = 250,
     downloadConcurrency = 6,
     downloadChunkSize = 24,
+    requireCheckpointOnEmpty = false,
     maxRateLimitRetries = 1,
     sleep = defaultSleep
   }) {
@@ -56,6 +57,7 @@ export class SyncEngine {
     this.batchSize = batchSize;
     this.downloadConcurrency = downloadConcurrency;
     this.downloadChunkSize = downloadChunkSize;
+    this.requireCheckpointOnEmpty = Boolean(requireCheckpointOnEmpty);
     this.maxRateLimitRetries = maxRateLimitRetries;
     this.sleep = sleep;
     this.keyPrefix = `sync:${transport.id || 'transport'}`;
@@ -143,6 +145,10 @@ export class SyncEngine {
 
   async downloadRemote({ allowCursorReset = true, onProgress } = {}) {
     const checkpoint = await this.loadRemoteCheckpoint({ onProgress });
+    if (this.requireCheckpointOnEmpty && ['missing', 'unavailable', 'unsupported'].includes(checkpoint.reason)) {
+      const detail = checkpoint.error ? `: ${checkpoint.error}` : '';
+      throw new Error(`Privat snapshot saknas eller är skadad${detail}`);
+    }
     let cursor = await this.repository.store.getMeta(`${this.keyPrefix}:cursor`);
     let downloadedOps = 0;
     let downloadedBatches = 0;

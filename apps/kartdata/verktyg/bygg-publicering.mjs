@@ -7,7 +7,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../kartdata');
 const CORE = resolve(ROOT, '../../packages/core');
 const FILES = ['index.html', 'styles.css', 'manifest.webmanifest', 'sw.js', 'icons/icon.svg', 'src/config.js', 'src/model.js'];
-const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
+const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative); if (!(await stat(source)).isFile()) throw new Error(`Publiceringsfil saknas: ${relative}`);

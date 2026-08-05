@@ -1,8 +1,5 @@
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
-import { canonicalStringify } from '../packages/core/domain/canonical.js';
-import { Materializer } from '../packages/core/domain/materializer.js';
-import { validateBatch } from '../packages/core/sync/batch.js';
+import { isAbsolute, resolve } from 'node:path';
+import { buildCheckpointForApp } from './sync-checkpoint-builder.mjs';
 
 const APPS = Object.freeze([
   { id: 'matrikel', folder: 'matrikel', opsRoot: '/matrikel/ops' },
@@ -22,29 +19,6 @@ if (!isAbsolute(outputRoot) || outputRoot === '/' || !outputRoot.endsWith('/Korp
 }
 
 for (const app of APPS) {
-  const opsDirectory = join(outputRoot, app.folder, 'ops');
-  const files = (await readdir(opsDirectory)).filter(file => file.endsWith('.json')).sort();
-  const materializer = new Materializer();
-  let operationCount = 0;
-  for (const file of files) {
-    const batch = JSON.parse(await readFile(join(opsDirectory, file), 'utf8'));
-    validateBatch(batch);
-    materializer.applyAll(batch.ops);
-    operationCount += batch.ops.length;
-  }
-  const checkpoint = {
-    checkpoint_version: 1,
-    created_at: new Date().toISOString(),
-    ops_root: app.opsRoot,
-    source_batch_count: files.length,
-    source_operation_count: operationCount,
-    snapshot: materializer.exportSnapshot({ compactApplied: true }),
-  };
-  const checkpointDirectory = join(outputRoot, app.folder, 'checkpoints');
-  const target = join(checkpointDirectory, 'latest.json');
-  const temporary = join(checkpointDirectory, `latest.json.tmp-${process.pid}`);
-  await mkdir(checkpointDirectory, { recursive: true });
-  await writeFile(temporary, `${canonicalStringify(checkpoint)}\n`, 'utf8');
-  await rename(temporary, target);
-  console.log(`${app.id}: ${files.length} batcher, ${operationCount} operationer → ${target}`);
+  const result = await buildCheckpointForApp({ outputRoot, app });
+  console.log(`${app.id}: ${result.manifest.source_batch_count} batcher, ${result.manifest.source_operation_count} operationer → ${result.manifest.compressed_bytes} byte checkpoint`);
 }
