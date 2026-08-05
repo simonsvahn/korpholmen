@@ -72,7 +72,18 @@ const legacyPersonRefs = () => recordList('person-ref');
 const legacyExternalParties = () => recordList('external-party');
 const placeRelations = () => recordList('place-relation');
 const oldPropertyLinks = () => recordList('object-property-link');
-function setStatus(text, tone = '') { statusNode.textContent = text; statusNode.className = tone ? `status-${tone}` : ''; }
+function setStatus(text, tone = '') { delete statusNode.dataset.undoAction; statusNode.textContent = text; statusNode.className = tone ? `status-${tone}` : ''; }
+function offerUndo(message, restoreEntries, restoredMessage) {
+  const actionId = crypto.randomUUID(); setStatus(message, 'warning'); statusNode.dataset.undoAction = actionId;
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'undo-action'; button.textContent = 'Ångra';
+  button.addEventListener('click', async () => {
+    if (statusNode.dataset.undoAction !== actionId) return; button.disabled = true; setStatus('Återställer…');
+    try { await repository.restoreEntities(restoreEntries); render(); try { await syncNow(); } catch (_) { /* Lokalt återställd. */ } setStatus(restoredMessage, 'ok'); }
+    catch (error) { setStatus(`Kunde inte återställa · ${error.message}`, 'error'); }
+  }, { once: true });
+  statusNode.append(' · ', button);
+  window.setTimeout(() => { if (statusNode.dataset.undoAction === actionId) setStatus(`${message} · återställningshistoriken är bevarad`, 'ok'); }, 15_000);
+}
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:kartdata-device-id', prefix: 'kartdata-web-' });
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
 function option(value, selected, label) { return `<option value="${escapeAttribute(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`; }
@@ -238,7 +249,10 @@ function renderIslandDrawer() {
   drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">${island ? escapeHtml(`place:${island.id}`) : 'Ny ö'}</p><h2>${escapeHtml(island?.preferred_name || 'Ö')}</h2></header><section class="drawer-section data-panel"><h3>Data</h3><form id="island-form" class="review-form"><label class="span-2">Namn<input name="preferred_name" value="${escapeAttribute(island?.preferred_name || '')}" required></label><label>Stabilt ID<input name="island_id" value="${escapeAttribute(island?.id || '')}" ${island ? 'readonly' : ''} placeholder="skapas från namnet"></label><label>Granskningsstatus<select name="review_status">${REVIEW_STATUSES.map(value => option(value, island?.review_status || 'ogranskad', reviewStatusLabel(value))).join('')}</select></label><label class="span-2">Officiellt namn<input name="official_name" value="${escapeAttribute(official)}"></label><label>Andra namn<textarea name="alias_names" rows="5">${escapeHtml(aliases)}</textarea></label><label>Historiska namn<textarea name="historical_names" rows="5">${escapeHtml(historical)}</textarea></label><label>Gäller från<input name="valid_from" value="${escapeAttribute(island?.valid_from || '')}"></label><label>Gäller till<input name="valid_to" value="${escapeAttribute(island?.valid_to || '')}"></label><div class="form-actions span-2"><button type="submit" class="primary">Spara ön</button></div></form>${island ? `<div class="danger-zone"><div><strong>Ta bort ön</strong><small>Dataposterna behålls men deras strukturerade ökoppling tas bort.</small></div><button type="button" class="delete-button" data-action="delete-island">Ta bort ön</button></div>` : ''}</section>`;
 }
 
-async function syncEdit(action, message) { await action(); render(); closeDrawer(); setStatus(`${message} · sparat lokalt`, 'ok'); await syncNow(); }
+async function syncEdit(action, message) {
+  await action(); render(); closeDrawer(); setStatus(`${message} · sparat lokalt`, 'ok');
+  try { await syncNow(); } catch (_) { setStatus(`${message} · sparat lokalt · synk försöker igen senare`, 'warning'); }
+}
 async function replaceEntryLinks(entryId, islandId, propertyIds) {
   const oldIslands = islandLinks().filter(link => link.entry_id === entryId);
   const oldProperties = entryPropertyLinks().filter(link => link.entry_id === entryId);
@@ -269,7 +283,9 @@ async function saveEntry(form) {
 async function deleteEntry() {
   const entry = entryRecords().find(item => item.id === selectedEntryId); if (!entry) return;
   if (!confirm(`Ta bort ${entry.name} ur den aktiva datan?`)) return;
-  await syncEdit(async () => { const refs = [{ entityType: 'data-entry', entityId: entry.id }, ...islandLinks().filter(link => link.entry_id === entry.id).map(link => ({ entityType: 'data-entry-island-link', entityId: link.id })), ...entryPropertyLinks().filter(link => link.entry_id === entry.id).map(link => ({ entityType: 'data-entry-property-link', entityId: link.id }))]; await repository.deleteEntities(refs); }, `${entry.name} borttagen`);
+  const refs = [{ entityType: 'data-entry', entityId: entry.id }, ...islandLinks().filter(link => link.entry_id === entry.id).map(link => ({ entityType: 'data-entry-island-link', entityId: link.id })), ...entryPropertyLinks().filter(link => link.entry_id === entry.id).map(link => ({ entityType: 'data-entry-property-link', entityId: link.id }))];
+  await syncEdit(() => repository.deleteEntities(refs), `${entry.name} borttagen`);
+  offerUndo(`${entry.name} borttagen`, refs, `${entry.name} återställd`);
 }
 async function saveIsland(form) {
   const data = new FormData(form); const name = String(data.get('preferred_name') || '').trim(); if (!name) throw new Error('Namn saknas');
@@ -300,6 +316,7 @@ async function deleteIsland() {
   if (!confirm(`Ta bort ön ${island.preferred_name}? Dataposterna blir kvar utan ökoppling.`)) return;
   const refs = islandDeletionRefs({ id: island.id, names: nameRecords(), islandLinks: islandLinks(), relations: placeRelations(), propertyLinks: oldPropertyLinks() });
   await syncEdit(() => repository.deleteEntities(refs), `${island.preferred_name} borttagen`);
+  offerUndo(`${island.preferred_name} borttagen`, refs, `${island.preferred_name} återställd`);
 }
 
 function exportData() {
