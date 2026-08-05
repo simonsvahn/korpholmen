@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertExactPublicationFiles } from '../verktyg/publication-guard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APPS = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
@@ -60,6 +62,60 @@ await test('publicerade appmoduler pekar bara inom GitHub Pages-paketet', async 
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, app, 'src/app.js'), 'utf8');
     assert.equal(source.includes('../../../packages/core/'), false, `${app} har en modulväg som lämnar GitHub Pages-projektet`);
+  }
+});
+
+await test('en releasesanning styr service worker, manifest och HTML-cachebrytare', async () => {
+  const config = JSON.parse(await readFile(resolve(ROOT, 'verktyg/release.json'), 'utf8'));
+  const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
+  const worker = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
+  assert.equal(release.release, config.release);
+  assert.equal(release.generated_at, config.generated_at);
+  assert.ok(worker.includes(`const RELEASE = '${config.release}'`));
+  assert.ok(!worker.includes('__KORPHOLMEN_RELEASE__'));
+  for (const path of [resolve(ROOT, 'index.html'), ...APPS.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')])]) {
+    const html = await readFile(path, 'utf8');
+    const versions = [...html.matchAll(/\?v=([^"'\s<>&]+)/g)].map(match => match[1]);
+    assert.ok(versions.length, `${path} saknar versionsbundna skalfiler`);
+    assert.ok(versions.every(version => version === config.release), `${path} avviker från releasesanningen`);
+  }
+});
+
+await test('offlinepaketet har riktiga appfallbacks, querymatchning och inga OG-bilder', async () => {
+  const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
+  const worker = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
+  const client = await readFile(resolve(ROOT, 'packages/core/pwa/korpholmen-service-worker.js'), 'utf8');
+  assert.ok(worker.includes("caches.match(request, { ignoreSearch: true })"));
+  assert.ok(worker.includes('const appIndex = await caches.match'));
+  assert.ok(worker.includes('containsOAuthResponse'));
+  assert.ok(worker.includes('Promise.allSettled'));
+  assert.ok(client.includes('reloadOnUpdate = false'));
+  assert.ok(release.shell_files.every(path => !/\/og\.png$/i.test(path)));
+  for (const app of APPS) assert.ok(release.shell_files.includes(`./${app}/index.html`));
+  for (const path of release.shell_files) {
+    const localPath = resolve(ROOT, path.replace(/^\.\//, '').split('?')[0]);
+    assert.equal((await stat(localPath)).isFile(), true, `${path} saknas på disk`);
+  }
+});
+
+await test('alla publiceringsbyggare vägrar oväntade filer och arbetsmaterial är ignorerat', async () => {
+  for (const app of APPS) {
+    const source = await readFile(resolve(ROOT, 'apps', app, 'verktyg/bygg-publicering.mjs'), 'utf8');
+    assert.ok(source.includes('assertExactPublicationFiles'), `${app} saknar exakt-fil-vakten`);
+  }
+  const gitignore = await readFile(resolve(ROOT, '.gitignore'), 'utf8');
+  assert.match(gitignore, /^arbetsmaterial\/$/m);
+
+  const directory = await mkdtemp(resolve(tmpdir(), 'korpholmen-publication-guard-'));
+  try {
+    await mkdir(resolve(directory, 'src'));
+    await writeFile(resolve(directory, 'index.html'), '<!doctype html>');
+    await writeFile(resolve(directory, 'src/app.js'), 'export {};');
+    await assertExactPublicationFiles(directory, ['index.html', 'src/app.js']);
+    await writeFile(resolve(directory, 'privat.json'), '{}');
+    await assert.rejects(assertExactPublicationFiles(directory, ['index.html', 'src/app.js']), /oväntade filer: privat\.json/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

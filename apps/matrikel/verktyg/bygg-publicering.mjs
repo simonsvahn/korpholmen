@@ -1,6 +1,7 @@
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../matrikel');
@@ -31,16 +32,6 @@ const FILES = [
   'src/sync/sync-engine.js'
 ];
 const CORE_FILES = ['data-layer.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
-
-async function listFiles(directory, prefix = '') {
-  const result = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) result.push(...await listFiles(resolve(directory, entry.name), relative));
-    else if (entry.isFile()) result.push(relative);
-  }
-  return result.sort();
-}
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative);
@@ -76,12 +67,8 @@ const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))
 await mkdir(resolve(OUT, 'src'), { recursive: true });
 await writeFile(resolve(OUT, 'src/app.js'), app);
 
-const actual = await listFiles(OUT);
 const expected = [...FILES, 'src/app.js', ...CORE_FILES.map(file => `core/${file}`)].sort();
-const unexpected = actual.filter(file => !expected.includes(file));
-if (unexpected.length) throw new Error(`Vägrar publicera med oväntade filer: ${unexpected.join(', ')}`);
-const missing = expected.filter(file => !actual.includes(file));
-if (missing.length) throw new Error(`Publiceringspaketet saknar: ${missing.join(', ')}`);
+const actual = await assertExactPublicationFiles(OUT, expected);
 
 const textBundle = (await Promise.all(actual
   .filter(file => /\.(?:html|css|js|webmanifest|svg)$/.test(file))
