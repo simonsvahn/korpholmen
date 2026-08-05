@@ -17,6 +17,6 @@ await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'sr
 await assertExactPublicationFiles(OUT,[...FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);
 const bundle=(await Promise.all([...FILES.filter(file=>!file.endsWith('.png')).map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),Promise.resolve(app)])).join('\n');
 const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-02/initial-ops.json'),'utf8'));
-const privateValues=privateData.operations.filter(operation=>['boat_name_raw','captain_raw','crew_1_raw','crew_2_raw'].includes(operation.field)).map(operation=>String(operation.value||'')).filter(value=>value.length>=4);
+const privateValues=privateData.operations.filter(operation=>['boat_name_raw','participants_raw'].includes(operation.field)).flatMap(operation=>Array.isArray(operation.value)?operation.value:[operation.value]).map(value=>String(value||'')).filter(value=>value.length>=4);
 if(privateValues.some(value=>bundle.includes(JSON.stringify(value)))||bundle.includes('"operations_version"')||bundle.includes('"raw_row"'))throw new Error('Privata resultatdata har läckt in i publiceringspaketet');
 console.log(`Datafritt Korpholmen runt byggt: ${FILES.length+CORE_FILES.length+1} filer.`);

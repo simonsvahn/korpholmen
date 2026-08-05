@@ -12,6 +12,9 @@ kompletteras utan att ursprungsuppgiften skrivs över.
 Appen länkar båtar till Båtregistrets stabila ID och deltagare till Matrikelns
 person-ID. Endast entydiga träffar kopplas automatiskt. Möjliga och olösta
 träffar visas i appens granskningskö och kan avgöras manuellt.
+Alla personer i ett resultat har samma roll, **tävlande**. Källans eventuella
+kolumnindelning används inte som kapten-/besättningsdata; originalraden finns
+fortfarande kvar för källkontroll.
 Det aktuella personnamnet läses skrivskyddat från Matrikel. Resultatets rånamn
 ligger kvar i tävlingsmastern och ändras inte när personen byter namn.
 
@@ -42,6 +45,7 @@ skapa en påhittad person eller ligga kvar som en fråga som aldrig kan avslutas
 
 ```sh
 npm run build:migration
+npm run migrate:tavlande -- --dry-run
 npm run migrate:med-flera
 npm test
 npm run build:publish
@@ -49,7 +53,7 @@ node verktyg/standardisera-klasser.mjs "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
 På localhost kan den privata startmastern aktiveras i en tom lokal databas och
-därefter laddas upp till Dropbox. V2-startmastern använder egna, versionerade
+därefter laddas upp till Dropbox. V3-startmastern använder egna, versionerade
 device-id:n så att en ombyggnad aldrig återanvänder en publicerad
 operationsidentitet. Publiceringspaketet är datafritt och byggs till
 repo-rotens `korpholmenrunt/` för GitHub Pages.

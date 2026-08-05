@@ -11,8 +11,8 @@ const SOURCE=resolve(ROOT,'privat/kallkopior/Korpholmen runt konv.mdb');
 const OUT=resolve(ROOT,'privat/migrering-2026-08-02');
 const PEOPLE=resolve(REPO,'apps/matrikel/privat/migrering-2026-08-01/approved-excel-import.json');
 const BOATS=resolve(REPO,'apps/batregister/privat/kallkopior/byggkit/batregister.json');
-const DEVICE='migration-korpholmenrunt-2026-08-04-v2';
-const REVIEW_DEVICE='migration-korpholmenrunt-granskning-2026-08-04-v2';
+const DEVICE='migration-korpholmenrunt-2026-08-05-v3';
+const REVIEW_DEVICE='migration-korpholmenrunt-granskning-2026-08-05-v3';
 const CLOCK_MS=Date.UTC(2026,7,2,20,0,0);
 const MED_FLERA_ID='race-participant-placeholder:med-flera';
 
@@ -102,15 +102,16 @@ for(const row of rows){
   const id=`race-result:mdb-${String(row.ID).padStart(4,'0')}`;
   const time=parseTime(row.tid);
   const boat=boatMatch(row.fartyg);
-  const personLinkIds=[];
+  const participantLinkIds=[];
+  const participantsRaw=[row.Kapten||'',row['Besättning 1']||'',row['Besättning 2']||''];
   let participantOrder=0;
   let structuredParticipants=false;
-  for(const [field,role,raw] of [['kapten','Kapten',row.Kapten],['besattning-1','Besättning 1',row['Besättning 1']],['besattning-2','Besättning 2',row['Besättning 2']]]){
+  for(const [participantGroup,raw] of participantsRaw.entries()){
     if(!meaningful(raw))continue;
     const sourceRaw=String(raw).trim();
     const parts=participantParts(sourceRaw);
     structuredParticipants ||= parts.some(part=>part.kind==='placeholder');
-    const baseLinkId=`race-person-link:mdb-${String(row.ID).padStart(4,'0')}-${field}`;
+    const baseLinkId=`race-person-link:mdb-${String(row.ID).padStart(4,'0')}-participant-${participantGroup+1}`;
     for(const part of parts){
       const compound=parts.length>1;
       const suffix=part.kind==='placeholder'?'med-flera':'person';
@@ -118,8 +119,8 @@ for(const row of rows){
       const match=part.kind==='person'?personMatch(part.raw_name):null;
       const shared={
         result_id:id,
-        role:`Tävlande ${participantOrder+1}`,
-        source_field:compound?`${field}-del-${suffix}`:field,
+        role:'tävlande',
+        participant_group:participantGroup,
         participant_order:participantOrder,
         raw_name:part.raw_name,
         participant_kind:part.kind,
@@ -132,17 +133,16 @@ for(const row of rows){
       };
       if(part.kind==='placeholder'||compound)shared.source_raw_name=sourceRaw;
       if(compound){
-        shared.source_parent_field=field;
         shared.split_from_link_id=baseLinkId;
         shared.split_root_link_id=baseLinkId;
       }
-      personLinkIds.push(linkId);
+      participantLinkIds.push(linkId);
       links.push({id:linkId,fields:shared});
       participantOrder+=1;
     }
   }
   const klass=standardklass(row.Klass);
-  results.push({id,fields:{source_row_id:row.ID,source_id:'race-source:mdb',year:Number(row['År']),boat_name_raw:row.fartyg||'',boat_id:boat.boat_id,boat_match_status:boat.status,boat_match_method:boat.method,boat_candidate_ids:boat.candidates,captain_raw:row.Kapten||'',crew_1_raw:row['Besättning 1']||'',crew_2_raw:row['Besättning 2']||'',class_raw:row.Klass||'',class_id:klass?.id??null,class_name:klassnamn(row.Klass),class_match_status:klass?'manuell':'saknas',class_match_method:klass?KLASSSTANDARD_METHOD:'ingen standardträff',course_code:row.Bana||'',time_raw:row.tid||'',duration_seconds:time.duration_seconds,time_status:time.time_status,person_link_ids:personLinkIds,participant_structure_status:structuredParticipants?'strukturerad platshållare':null,notes:'',raw_row:row}});
+  results.push({id,fields:{source_row_id:row.ID,source_id:'race-source:mdb',year:Number(row['År']),boat_name_raw:row.fartyg||'',boat_id:boat.boat_id,boat_match_status:boat.status,boat_match_method:boat.method,boat_candidate_ids:boat.candidates,participants_raw:participantsRaw,class_raw:row.Klass||'',class_id:klass?.id??null,class_name:klassnamn(row.Klass),class_match_status:klass?'manuell':'saknas',class_match_method:klass?KLASSSTANDARD_METHOD:'ingen standardträff',course_code:row.Bana||'',time_raw:row.tid||'',duration_seconds:time.duration_seconds,time_status:time.time_status,participant_link_ids:participantLinkIds,participant_structure_status:structuredParticipants?'strukturerad platshållare':null,notes:'',raw_row:row}});
 }
 
 const editions=[...new Set(results.map(item=>item.fields.year))].sort((a,b)=>a-b).map(year=>{
@@ -161,7 +161,7 @@ for(const link of links)add('race-person-link',link);
 for(const note of notes)add('source-note',note);
 for(const person of peopleData)add('person-ref',{id:`person-ref:${person.id}`,fields:{external_id:person.id,display_name:person.display_name,island:person.island||'',living:person.living||'',url:`../matrikel/?person=${encodeURIComponent(person.id)}`}});
 for(const boat of boatData)add('boat-ref',{id:`boat-ref:${boat.id}`,fields:{external_id:boat.id,name:boat.namn,type:boat.typ||'',period:boat.period||'',owner_text:boat.agare||'',url:`../batregister/?boat=${encodeURIComponent(boat.id)}`}});
-add('race-root',{id:'race-root:korpholmenrunt',fields:{schema_version:2,migration_id:'korpholmenrunt-2026-08-02-v2-med-flera',source_sha256:sourceHash,source_rows:rows.length,result_count:results.length,edition_count:editions.length,person_reference_count:peopleData.length,boat_reference_count:boatData.length,participant_placeholder_count:1}});
+add('race-root',{id:'race-root:korpholmenrunt',fields:{schema_version:3,migration_id:'korpholmenrunt-2026-08-05-v3-tavlande',participant_model:'tävlande',source_sha256:sourceHash,source_rows:rows.length,result_count:results.length,edition_count:editions.length,person_reference_count:peopleData.length,boat_reference_count:boatData.length,participant_placeholder_count:1}});
 
 // Ett unikt förnamn är användbart som kandidat men inte ett verifierat historiskt
 // identitetsbelägg. Policyn läggs som en separat, spårbar operationsserie så att
@@ -177,6 +177,6 @@ for(const link of links.filter(item=>item.fields.match_method==='entydigt förna
 
 const counts={source_rows:rows.length,results:results.length,editions:editions.length,person_links:links.length,person_links_connected:links.filter(item=>item.fields.match_status==='kopplad').length,person_links_suggested:links.filter(item=>item.fields.match_status==='föreslagen').length,participant_placeholders:links.filter(item=>item.fields.participant_kind==='placeholder').length,boats_connected:results.filter(item=>item.fields.boat_match_status==='kopplad').length,source_notes:notes.length,people:peopleData.length,boats:boatData.length,operations:operations.length};
 await mkdir(OUT,{recursive:true});
-await writeFile(resolve(OUT,'initial-ops.json'),`${JSON.stringify({operations_version:1,migration_id:'korpholmenrunt-2026-08-02-v2-med-flera',device_id:DEVICE,device_ids:[DEVICE,REVIEW_DEVICE],source_sha256:sourceHash,counts,operations},null,2)}\n`);
+await writeFile(resolve(OUT,'initial-ops.json'),`${JSON.stringify({operations_version:1,migration_id:'korpholmenrunt-2026-08-05-v3-tavlande',device_id:DEVICE,device_ids:[DEVICE,REVIEW_DEVICE],source_sha256:sourceHash,counts,operations},null,2)}\n`);
 await writeFile(resolve(OUT,'matchningsrapport.json'),`${JSON.stringify({generated_on:'2026-08-04',counts,unresolved_boats:results.filter(item=>item.fields.boat_match_status!=='kopplad').map(item=>({result_id:item.id,year:item.fields.year,raw:item.fields.boat_name_raw,status:item.fields.boat_match_status,candidates:item.fields.boat_candidate_ids})),unresolved_people:links.filter(item=>!item.fields.confirmed).map(item=>({link_id:item.id,raw:item.fields.raw_name,role:item.fields.role,status:item.fields.match_status,candidates:item.fields.candidate_ids}))},null,2)}\n`);
-console.log(`Korpholmen runt-master byggd: ${results.length} resultat, ${editions.length} år, ${links.length} deltagarroller, ${operations.length} operationer.`);
+console.log(`Korpholmen runt-master byggd: ${results.length} resultat, ${editions.length} år, ${links.length} tävlande, ${operations.length} operationer.`);

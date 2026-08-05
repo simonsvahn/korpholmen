@@ -5,7 +5,7 @@
 | `race-source` | Källfil, kontrollsumma, tabell och importtid. |
 | `race-edition` | Ett registrerat tävlingsår och dess sammanfattning. |
 | `race-result` | En källrad/resultatpost med råvärden och normaliserade analysfält. |
-| `race-person-link` | En deltagarroll och dess koppling till Matrikelns person-ID. |
+| `race-person-link` | En tävlande och dess koppling till Matrikelns person-ID. Alla länkar har samma roll: `tävlande`. |
 | `race-participant-placeholder` | Ett beslutat terminalt deltagarobjekt, exempelvis ”Med flera”, när ytterligare identiteter inte kan fastställas. |
 | `person-ref` | Lokal referenskatalog över Matrikelns stabila personer. |
 | `boat-ref` | Lokal referenskatalog över Båtregistrets stabila båtar. |
@@ -13,7 +13,10 @@
 
 ## Källtrohet
 
-`*_raw` är ordagranna värden från Access-tabellen och ändras aldrig tyst.
+`boat_name_raw`, `class_raw` och `participants_raw` bevarar källans värden och
+ändras aldrig tyst. `participants_raw` är en ordnad lista över de deltagarnamn
+som källraden innehåller. Den innebär ingen uppdelning i kapten och besättning.
+Access-radens ursprungliga kolumner finns dessutom oförändrade i `raw_row`.
 Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden kan
 tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
 `60+` och `80,95` bevaras men flaggas för granskning.
@@ -43,6 +46,11 @@ Ett unikt förnamn får ett kandidat-ID så att materialet kan utforskas, men
 markeras alltid som obekräftat och ligger kvar i granskningskön. Sammansatta
 eller oklara källfält bevaras som en enda råuppgift tills de delas genom en
 granskningsoperation.
+
+Alla `race-person-link` har rollen `tävlande`. `participant_order` styr endast
+visningsordningen och `participant_group` anger vilket råvärde länken kommer
+från, så att en sammansatt namnrad kan delas utan att källstrukturen går
+förlorad. Fälten uttrycker aldrig kapten, besättning eller rang.
 
 Källformen `m fl` eller `med flera` blir ett separat
 `race-participant-placeholder`. Platshållaren är ett avslutat beslut om okända
