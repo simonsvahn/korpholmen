@@ -130,6 +130,25 @@ await test('ett upptaget flerflikslås blockerar varken start eller köar en ext
   assert.equal(synced.reason, 'locked');
 });
 
+await test('äldre tokenmigrering har en gemensam kort sluttid över alla databaser', async () => {
+  const sharedStore = { get: async () => null, put: async () => {} };
+  const attempted = [];
+  const times = [0, 0, 2_500];
+  const result = await migrateLegacyCredentialsToShared({
+    sharedStore,
+    appList: [{ id: 'matrikel' }, { id: 'batregister' }],
+    storeFactory: async (app, options) => {
+      attempted.push([app.id, options.openTimeoutMs]);
+      throw new Error('blockerad');
+    },
+    lock: async (_name, action) => action(),
+    migrationTimeoutMs: 2_000,
+    now: () => times.shift() ?? 2_500,
+  });
+  assert.equal(result, false);
+  assert.deepEqual(attempted, [['matrikel', 2_000]]);
+});
+
 await test('ett synkfel utlöser inte en kö av omedelbara flerfliksomtag', async () => {
   const values = new Map();
   const sharedStore = {

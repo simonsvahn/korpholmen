@@ -96,15 +96,18 @@ export async function getAppFamilySyncStatuses({ sharedStore = new KorpholmenSha
   })));
 }
 
-export async function migrateLegacyCredentialsToShared({ sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS, lock = withOriginLock } = {}) {
+export async function migrateLegacyCredentialsToShared({ sharedStore = new KorpholmenSharedStore(), storeFactory = defaultStoreFactory, appList = KORPHOLMEN_APPS, lock = withOriginLock, migrationTimeoutMs = 2_000, now = () => Date.now() } = {}) {
   return lock('korpholmen-dropbox-session', async () => {
     if (await sharedStore.get(sharedDropboxDisconnectedKey)) return false;
     if (await sharedStore.get(sharedDropboxTokenKey)) return false;
     const candidates = storeFactory === defaultStoreFactory ? await appsWithExistingDatabases(appList) : appList;
+    const deadline = now() + Math.max(0, migrationTimeoutMs);
     for (const app of candidates) {
+      const remainingMs = deadline - now();
+      if (remainingMs <= 0) return false;
       let handle;
       try {
-        handle = await storeFactory(app);
+        handle = await storeFactory(app, { openTimeoutMs: remainingMs });
         for (const key of legacyTokenKeys(app)) {
           const refreshToken = await handle.store.getMeta(key);
           if (!refreshToken) continue;
@@ -145,8 +148,8 @@ export async function mirrorSharedDropboxCredential({ refreshToken, sharedStore 
   }, { ifAvailable: true, unavailableValue: false });
 }
 
-const defaultStoreFactory = async app => {
-  const database = await openSlaktlandskapDB({ name: app.database });
+const defaultStoreFactory = async (app, { openTimeoutMs } = {}) => {
+  const database = await openSlaktlandskapDB({ name: app.database, openTimeoutMs });
   return { store: new IndexedDBStore(database), close: () => database.close() };
 };
 
