@@ -7,7 +7,7 @@ import {
   normalizeFamilyText,
   searchableFamilyTargets,
   targetMemberDetails,
-} from '../../../packages/core/family-context.js';
+} from '../../../packages/core/family-context.js?v=2026-08-05-paket-3';
 
 export const connectionTargetValue = target => `${target.type}:${target.id}`;
 

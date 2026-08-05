@@ -142,17 +142,19 @@ function mergeMembership(result, candidate) {
   const current = result.get(candidate.person_id);
   if (!current) {
     result.set(candidate.person_id, candidate);
-    return;
+    return true;
   }
   const candidateHasGeneration = Number.isInteger(candidate.generation);
   const currentHasGeneration = Number.isInteger(current.generation);
   if (candidateHasGeneration && (!currentHasGeneration || candidate.generation < current.generation)) {
     result.set(candidate.person_id, candidate);
-    return;
+    return true;
   }
   if (candidate.generation === current.generation && candidate.confirmed && !current.confirmed) {
     result.set(candidate.person_id, candidate);
+    return true;
   }
+  return false;
 }
 
 function seedPeople(result, ids, context, confirmed, role = 'uttrycklig medlem', generation = 1) {
@@ -169,6 +171,7 @@ function generationSortValue(value) {
 function descendants(anchorIds, context, groupConfirmed, maxDepth = Infinity) {
   const result = new Map();
   const queue = [];
+  const expanded = new Map();
   for (const personId of anchorIds || []) {
     if (!context.peopleById.has(personId)) continue;
     const item = { person_id: personId, generation: 1, confirmed: groupConfirmed, role: 'ankarperson' };
@@ -177,6 +180,11 @@ function descendants(anchorIds, context, groupConfirmed, maxDepth = Infinity) {
   }
   while (queue.length) {
     const current = queue.shift();
+    const previousExpansion = expanded.get(current.person_id);
+    if (previousExpansion
+      && previousExpansion.generation <= current.generation
+      && (previousExpansion.confirmed || !current.confirmed)) continue;
+    expanded.set(current.person_id, { generation: current.generation, confirmed: current.confirmed });
     if (current.generation >= maxDepth) continue;
     for (const edge of context.childrenByParent.get(current.person_id) || []) {
       const candidate = {
@@ -185,12 +193,25 @@ function descendants(anchorIds, context, groupConfirmed, maxDepth = Infinity) {
         confirmed: current.confirmed && relationIsConfirmed(edge.relation),
         role: 'efterkommande',
       };
-      const previous = result.get(candidate.person_id);
-      mergeMembership(result, candidate);
-      if (!previous || candidate.generation < previous.generation || (candidate.confirmed && !previous.confirmed)) queue.push(candidate);
+      if (mergeMembership(result, candidate)) queue.push(result.get(candidate.person_id));
     }
   }
   return result;
+}
+
+export function wouldCreateParentChildCycle(parentId, childId, context) {
+  if (!parentId || !childId) return false;
+  if (parentId === childId) return true;
+  const queue = [childId];
+  const visited = new Set();
+  while (queue.length) {
+    const personId = queue.shift();
+    if (visited.has(personId)) continue;
+    visited.add(personId);
+    if (personId === parentId) return true;
+    for (const edge of context?.childrenByParent?.get(personId) || []) queue.push(edge.person_id);
+  }
+  return false;
 }
 
 export function familyUnitMemberDetails(group, context) {
