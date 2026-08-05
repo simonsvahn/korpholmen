@@ -466,6 +466,8 @@ await test('Dropbox-namnrymden placerar Matrikeln i matrikel/ops', async () => {
   assert.ok(appSource.includes("id: 'dropbox-matrikel-v2'"));
   assert.ok(appSource.includes("opsRoot: MATRIKEL_OPS_ROOT"));
   assert.ok(appSource.includes("opsRoot: LEGACY_OPS_ROOT"));
+  assert.ok(appSource.includes("migration:legacy-ops-to-matrikel-v1"));
+  assert.ok(appSource.includes('LEGACY_MIGRATION_META'));
 });
 
 await test('Dropbox-knappen synkar befintlig anslutning och tom master rapporteras ärligt', async () => {

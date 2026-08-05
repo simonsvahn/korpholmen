@@ -9,9 +9,10 @@ const normalizePath = value => {
 };
 
 export class MemoryRemoteTransport {
-  constructor({ id = 'memory', pageSize = 100 } = {}) {
+  constructor({ id = 'memory', pageSize = 100, opsRoot = '/ops' } = {}) {
     this.id = id;
     this.pageSize = pageSize;
+    this.opsRoot = opsRoot;
     this.files = new Map();
     this.changes = [];
     this.revision = 0;
@@ -74,7 +75,7 @@ export class MemoryRemoteTransport {
 
   async putBatch(batch) {
     validateBatch(batch);
-    return this.putImmutable(batchPath(batch.device_id, batch.from_seq, batch.to_seq), batch);
+    return this.putImmutable(batchPath(batch.device_id, batch.from_seq, batch.to_seq, this.opsRoot), batch);
   }
 
   async listChanges(cursor = null, { limit = this.pageSize } = {}) {

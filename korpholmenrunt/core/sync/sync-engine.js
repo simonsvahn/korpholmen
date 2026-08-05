@@ -1,5 +1,5 @@
 import { Materializer } from '../domain/materializer.js';
-import { createBatch, parseBatchPath, validateBatch } from './batch.js';
+import { DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS, createBatch, parseBatchPath, validateBatchEnvelope } from './batch.js';
 import { CursorResetError, TransportError } from './errors.js';
 
 const isBatchPath = path => /\/ops\/.+\.json$/.test(path);
@@ -43,6 +43,8 @@ export class SyncEngine {
     downloadChunkSize = 24,
     requireCheckpointOnEmpty = false,
     maxRateLimitRetries = 1,
+    maxFutureClockDriftMs = DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS,
+    now = () => Date.now(),
     sleep = defaultSleep
   }) {
     if (!repository?.initialized) throw new TypeError('SyncEngine kräver initierad Repository');
@@ -51,6 +53,8 @@ export class SyncEngine {
     if (!Number.isSafeInteger(downloadConcurrency) || downloadConcurrency < 1) throw new TypeError('Ogiltig samtidighetsgräns');
     if (!Number.isSafeInteger(downloadChunkSize) || downloadChunkSize < downloadConcurrency) throw new TypeError('Ogiltig nedladdningschunk');
     if (!Number.isSafeInteger(maxRateLimitRetries) || maxRateLimitRetries < 0) throw new TypeError('Ogiltigt antal 429-omtag');
+    if (!Number.isSafeInteger(maxFutureClockDriftMs) || maxFutureClockDriftMs < 0) throw new TypeError('Ogiltig framtidsgräns för HLC');
+    if (typeof now !== 'function') throw new TypeError('SyncEngine kräver en klockfunktion');
     if (typeof sleep !== 'function') throw new TypeError('SyncEngine kräver en väntfunktion');
     this.repository = repository;
     this.transport = transport;
@@ -59,9 +63,30 @@ export class SyncEngine {
     this.downloadChunkSize = downloadChunkSize;
     this.requireCheckpointOnEmpty = Boolean(requireCheckpointOnEmpty);
     this.maxRateLimitRetries = maxRateLimitRetries;
+    this.maxFutureClockDriftMs = maxFutureClockDriftMs;
+    this.now = now;
     this.sleep = sleep;
     this.keyPrefix = `sync:${transport.id || 'transport'}`;
     this.uploadedSeqKey = `${this.keyPrefix}:uploaded_seq:${repository.deviceId}`;
+  }
+
+  validateRemoteBatch(entry, batch) {
+    return validateBatchEnvelope(entry, batch, {
+      rootPath: this.transport.opsRoot,
+      now: Number(this.now()),
+      maxFutureClockDriftMs: this.maxFutureClockDriftMs,
+    });
+  }
+
+  async quarantineBatch(entry, error) {
+    const record = {
+      path: entry.path,
+      rev: entry.rev || null,
+      reason: error?.message || 'Ogiltig batch',
+      quarantined_at: new Date(Number(this.now())).toISOString(),
+    };
+    await this.repository.store.putMeta(`${this.keyPrefix}:quarantine:${encodeURIComponent(entry.path)}`, record);
+    return record;
   }
 
   async withRateLimitRetry(operation) {
@@ -153,6 +178,7 @@ export class SyncEngine {
     let downloadedOps = 0;
     let downloadedBatches = 0;
     let skippedBatches = 0;
+    const quarantinedBatches = [];
     let resetUsed = false;
     while (true) {
       let page;
@@ -178,11 +204,23 @@ export class SyncEngine {
       });
       for (let offset = 0; offset < entries.length; offset += this.downloadChunkSize) {
         const chunk = entries.slice(offset, offset + this.downloadChunkSize);
-        const batches = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
-          const batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
-          validateBatch(batch);
-          return batch;
+        const downloaded = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
+          let batch;
+          try {
+            batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
+          } catch (error) {
+            if (!(error instanceof TransportError) || error.code !== 'invalid_json') throw error;
+            return { quarantine: await this.quarantineBatch(entry, error) };
+          }
+          try {
+            this.validateRemoteBatch(entry, batch);
+            return { batch };
+          } catch (error) {
+            return { quarantine: await this.quarantineBatch(entry, error) };
+          }
         });
+        const batches = downloaded.filter(item => item.batch).map(item => item.batch);
+        quarantinedBatches.push(...downloaded.filter(item => item.quarantine).map(item => item.quarantine));
         // Operationer är idempotenta. Vi tillämpar en begränsad chunk i taget
         // men flyttar inte Dropbox-cursorn förrän hela sidan är klar. Ett avbrott
         // ger därför säker omhämtning utan att hundratals MB måste ligga i minnet.
@@ -197,6 +235,7 @@ export class SyncEngine {
           downloadedOps,
           downloadedBatches,
           skippedBatches,
+          quarantinedBatches: quarantinedBatches.length,
           pageBatches: entries.length,
           pageProcessed: Math.min(offset + chunk.length, entries.length),
         });
@@ -210,6 +249,7 @@ export class SyncEngine {
       downloadedOps,
       downloadedBatches,
       skippedBatches,
+      quarantinedBatches,
       cursor,
       cursorReset: resetUsed,
       checkpointLoaded: checkpoint.loaded,

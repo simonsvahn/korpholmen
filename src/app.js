@@ -40,6 +40,11 @@ function renderAppStatus(id, status) {
     return;
   }
   if (status.state === 'error') { node.textContent = `Synkfel · ${status.message}`; node.classList.add('is-error'); return; }
+  if (status.state === 'warning') {
+    node.textContent = `Synkad med varning · ${Number(status.quarantined_batches || 0).toLocaleString('sv-SE')} skadade batcher isolerade`;
+    node.classList.add('is-error');
+    return;
+  }
   const additions = status.downloaded_ops ? ` · ${status.downloaded_ops.toLocaleString('sv-SE')} nya operationer` : ' · inga nya operationer';
   node.textContent = `Aktuell ${formatTime(status.synced_at)}${additions}`;
   node.classList.add('is-ok');
@@ -113,8 +118,12 @@ async function syncAll({ force = true } = {}) {
     });
     await renderStatuses();
     const failed = result.results.filter(item => item.state === 'error');
+    const warned = result.results.filter(item => item.state === 'warning');
     if (failed.length) {
       syncSummary.textContent = `${result.results.length - failed.length} av ${result.results.length} register synkades. ${failed.length} kräver åtgärd.`;
+      syncSummary.className = 'sync-summary is-error';
+    } else if (warned.length) {
+      syncSummary.textContent = `Alla register kunde synkas, men ${warned.length} har en isolerad batch som behöver granskas.`;
       syncSummary.className = 'sync-summary is-error';
     } else {
       syncSummary.textContent = result.skipped

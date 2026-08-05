@@ -79,6 +79,7 @@ const activeFiltersNode = $('#active-filters');
 const isSourceTree = location.pathname.includes('/apps/matrikel/');
 const TOKEN_META = 'dropbox:refresh-token-v1';
 const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
+const LEGACY_MIGRATION_META = 'migration:legacy-ops-to-matrikel-v1';
 const FAMILY_MODEL_META = 'migration:familjemodell-2026-08-02';
 const MATRIKEL_OPS_ROOT = '/matrikel/ops';
 const LEGACY_OPS_ROOT = '/ops';
@@ -1217,6 +1218,7 @@ async function uploadBootstrapIfNeeded(transport) {
 }
 
 async function migrateLateLegacyBatches(primaryTransport, token) {
+  if ((await store.getMeta(LEGACY_MIGRATION_META))?.completed_at) return 0;
   const legacyTransport = new DropboxTransport({
     accessToken: token,
     id: 'dropbox-matrikel-legacy-read',
@@ -1239,6 +1241,10 @@ async function migrateLateLegacyBatches(primaryTransport, token) {
     const missingLegacyFolder = error?.status === 409 && String(error?.code || '').includes('not_found');
     if (!missingLegacyFolder) throw error;
   }
+  await store.putMeta(LEGACY_MIGRATION_META, {
+    completed_at: new Date().toISOString(),
+    migrated_operations: migratedOps,
+  });
   return migratedOps;
 }
 

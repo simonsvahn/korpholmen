@@ -1,5 +1,8 @@
 import { cloneJson } from '../domain/canonical.js';
+import { parseHLC } from '../domain/hlc.js';
 import { validateOperation } from '../domain/operations.js';
+
+export const DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS = 24 * 60 * 60 * 1000;
 
 export function batchPath(deviceId, fromSeq, toSeq, rootPath = '/ops') {
   const root = String(rootPath || '/ops').replace(/\/$/, '');
@@ -47,5 +50,27 @@ export function validateBatch(batch) {
   if (!batch || batch.batch_version !== 1 || typeof batch.device_id !== 'string' || !Array.isArray(batch.ops) || !batch.ops.length) throw new TypeError('Ogiltig op-batch');
   const normalized = createBatch(batch.ops);
   if (normalized.device_id !== batch.device_id || normalized.from_seq !== batch.from_seq || normalized.to_seq !== batch.to_seq) throw new Error('Batchens metadata matchar inte operationerna');
+  return batch;
+}
+
+export function validateBatchEnvelope(entry, batch, {
+  rootPath = '/ops',
+  now = Date.now(),
+  maxFutureClockDriftMs = DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS,
+} = {}) {
+  validateBatch(batch);
+  const descriptor = parseBatchPath(entry?.path, rootPath);
+  if (!descriptor
+    || descriptor.deviceId !== batch.device_id
+    || descriptor.fromSeq !== batch.from_seq
+    || descriptor.toSeq !== batch.to_seq) {
+    throw new TypeError('Batchens sökväg matchar inte innehållet');
+  }
+  if (!Number.isSafeInteger(now) || now < 0) throw new TypeError('Klockan gav en ogiltig tid');
+  if (!Number.isSafeInteger(maxFutureClockDriftMs) || maxFutureClockDriftMs < 0) throw new TypeError('Ogiltig framtidsgräns för HLC');
+  const latestAllowed = now + maxFutureClockDriftMs;
+  if (batch.ops.some(operation => parseHLC(operation.hlc).wallTime > latestAllowed)) {
+    throw new TypeError('Batchens HLC ligger orimligt långt fram i tiden');
+  }
   return batch;
 }

@@ -444,6 +444,64 @@ await test('en återställd enhet hämtar även sina egna saknade fjärrbatcher'
   assert.equal(restored.getEntity('person', 'p1').fields.name, 'Återhämtad');
 });
 
+await test('ogiltiga och orimligt framtidsdaterade batcher isoleras utan att stoppa sidan', async () => {
+  const now = Date.UTC(2026, 7, 5, 12, 0, 0);
+  const makeBatch = async (deviceId, wallTime, name) => {
+    const store = new MemoryStore();
+    const repository = await new Repository({ store, deviceId, now: () => wallTime }).init();
+    await repository.setField('person', deviceId, 'name', name);
+    return createBatch(await store.getAllOps());
+  };
+  const good = await makeBatch('good-device', now, 'Giltig');
+  const malformed = { ...await makeBatch('bad-device', now, 'Felaktig'), batch_version: 2 };
+  const future = await makeBatch('future-device', now + 2 * 24 * 60 * 60 * 1000, 'Framtid');
+  const root = '/guard/ops';
+  const batches = [good, malformed, future];
+  const paths = batches.map(batch => batchPath(batch.device_id, batch.from_seq, batch.to_seq, root));
+  const byPath = new Map(paths.map((path, index) => [path, batches[index]]));
+  const transport = {
+    id: 'quarantine-test',
+    opsRoot: root,
+    putBatch: async () => {},
+    getCheckpoint: async () => null,
+    listChanges: async () => ({ entries: paths.map((path, index) => ({ path, rev: `rev-${index}` })), cursor: 'safe-cursor', has_more: false }),
+    getJson: async path => byPath.get(path),
+  };
+  const targetStore = new MemoryStore();
+  const target = await new Repository({ store: targetStore, deviceId: 'target', now: () => now }).init();
+  const result = await new SyncEngine({ repository: target, transport, now: () => now }).downloadRemote();
+  assert.equal(result.downloadedBatches, 1);
+  assert.equal(result.quarantinedBatches.length, 2);
+  assert.equal(target.getEntity('person', 'good-device').fields.name, 'Giltig');
+  assert.equal(target.getEntity('person', 'bad-device'), null);
+  assert.equal(target.getEntity('person', 'future-device'), null);
+  assert.equal(await targetStore.getMeta('sync:quarantine-test:cursor'), 'safe-cursor');
+  assert.match(result.quarantinedBatches.find(item => item.path === paths[2]).reason, /fram i tiden/);
+});
+
+await test('skrivskyddade referensmastrar passerar också en isolerad batch', async () => {
+  const now = Date.UTC(2026, 7, 5, 12, 0, 0);
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'reference-source', now: () => now }).init();
+  await source.setField('person', 'valid-reference', 'name', 'Giltig referens');
+  const valid = createBatch(await sourceStore.getAllOps());
+  const invalid = { ...valid, device_id: 'wrong-device' };
+  const root = '/reference/ops';
+  const validPath = batchPath(valid.device_id, valid.from_seq, valid.to_seq, root);
+  const invalidPath = batchPath('wrong-device', invalid.from_seq, invalid.to_seq, root);
+  const transport = {
+    id: 'reference-test',
+    opsRoot: root,
+    listChanges: async () => ({ entries: [{ path: invalidPath }, { path: validPath }], cursor: 'reference-cursor', has_more: false }),
+    getJson: async path => path === validPath ? valid : invalid,
+  };
+  const reader = await new ReadOnlyMaster({ store: new MemoryStore(), cacheKey: 'reference-test', now: () => now }).init();
+  const result = await reader.sync(transport);
+  assert.equal(result.downloadedBatches, 1);
+  assert.equal(result.quarantinedBatches.length, 1);
+  assert.equal(reader.getEntity('person', 'valid-reference').fields.name, 'Giltig referens');
+});
+
 await test('tombstonade deterministiska länkar återställs atomiskt vid upsert', async () => {
   const store = new MemoryStore();
   const repository = await new Repository({ store, deviceId: 'upsert-test' }).init();
@@ -555,6 +613,21 @@ await test('hängande Dropbox-anrop avbryts med begriplig timeout', async () => 
     fetchImpl,
   });
   await assert.rejects(() => transport.listChanges(), /Dropbox svarade inte inom/);
+});
+
+await test('Dropbox-huvuden är ASCII-säkra även för svenska filnamn', async () => {
+  let apiArgument = null;
+  const transport = new DropboxTransport({
+    accessToken: 'test',
+    requestTimeoutMs: 0,
+    fetchImpl: async (_url, options) => {
+      apiArgument = options.headers['Dropbox-API-Arg'];
+      return { ok: true, json: async () => ({ ok: true }) };
+    },
+  });
+  await transport.getJson('/bilder/Åland/ö.json');
+  assert.ok([...apiArgument].every(character => character.charCodeAt(0) <= 0x7f));
+  assert.equal(JSON.parse(apiArgument).path, '/bilder/Åland/ö.json');
 });
 
 await test('en gemensam Dropbox-session återanvänder och förnyar samma inloggning', async () => {

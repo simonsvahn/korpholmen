@@ -15,6 +15,8 @@ const normalizePath = value => {
 
 const parentPath = path => path.slice(0, path.lastIndexOf('/')) || '/';
 const childPath = (path, child) => path === '/' ? `/${child}` : `${path}/${child}`;
+export const dropboxApiArg = value => JSON.stringify(value)
+  .replace(/[\u007f-\uffff]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 export class DropboxTransport {
   constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false, requestTimeoutMs = 45_000 }) {
@@ -94,7 +96,7 @@ export class DropboxTransport {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': JSON.stringify({ path, mode, autorename: false, mute: true, strict_conflict: true })
+        'Dropbox-API-Arg': dropboxApiArg({ path, mode, autorename: false, mute: true, strict_conflict: true })
       },
       body: JSON.stringify(value)
     });
@@ -123,10 +125,14 @@ export class DropboxTransport {
     const path = normalizePath(pathValue);
     const response = await this.request(`${CONTENT}/files/download`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': dropboxApiArg({ path }) }
     });
     if (!response.ok) return this.parseError(response);
-    return cloneJson(await response.json());
+    try {
+      return cloneJson(await response.json());
+    } catch (error) {
+      throw new TransportError(`Dropbox-filen innehåller ogiltig JSON: ${path}`, { code: 'invalid_json' });
+    }
   }
 
   async putBatch(batch) {
@@ -221,7 +227,7 @@ export class DropboxTransport {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': JSON.stringify({ path, mode, autorename: false, mute: true, strict_conflict: true })
+        'Dropbox-API-Arg': dropboxApiArg({ path, mode, autorename: false, mute: true, strict_conflict: true })
       },
       body
     });
@@ -233,7 +239,7 @@ export class DropboxTransport {
     const path = normalizePath(pathValue);
     const response = await this.request(`${CONTENT}/files/download`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': dropboxApiArg({ path }) }
     });
     if (!response.ok) return this.parseError(response);
     return response.blob();
