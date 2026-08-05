@@ -5,6 +5,7 @@ import {
   migrateLegacyCredentialsToShared,
   mirrorSharedDropboxCredential,
   registerKorpholmenServiceWorker,
+  requestPersistentStorage,
   scheduleAppFamilySync,
 } from '../packages/core/data-layer.js';
 import { DROPBOX_CLIENT_ID } from './config.js';
@@ -14,7 +15,7 @@ const activeApp = KORPHOLMEN_APPS.find(app => location.pathname.includes(`/${app
 const session = new SharedDropboxSession({ clientId: DROPBOX_CLIENT_ID, exchangeRefreshToken: exchangeDropboxRefreshToken });
 
 async function start() {
-  await registerKorpholmenServiceWorker({ sourceTree });
+  await Promise.all([registerKorpholmenServiceWorker({ sourceTree }), requestPersistentStorage()]);
   await migrateLegacyCredentialsToShared();
   const refreshToken = await session.getRefreshToken();
   if (!refreshToken) return;

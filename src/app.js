@@ -3,16 +3,20 @@ import {
   SharedDropboxSession,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  disconnectDropboxEverywhere,
   exchangeDropboxRefreshToken,
   getAppFamilySyncStatuses,
   migrateLegacyCredentialsToShared,
   mirrorSharedDropboxCredential,
   registerKorpholmenServiceWorker,
+  requestPersistentStorage,
+  revokeDropboxAccessToken,
   syncAppFamily,
 } from '../packages/core/data-layer.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
 
 const syncButton = document.querySelector('#sync-all');
+const disconnectButton = document.querySelector('#disconnect-dropbox');
 const syncSummary = document.querySelector('#sync-summary');
 const releaseStatus = document.querySelector('#release-status');
 const session = new SharedDropboxSession({ clientId: DROPBOX_CLIENT_ID, exchangeRefreshToken: exchangeDropboxRefreshToken });
@@ -67,6 +71,29 @@ async function connectDropbox() {
   location.assign(attempt.url);
 }
 
+async function disconnectDropbox() {
+  if (!window.confirm('Koppla från Dropbox på den här enheten? Lokala register och bilder behålls.')) return;
+  syncButton.disabled = true;
+  disconnectButton.disabled = true;
+  syncSummary.textContent = 'Kopplar från Dropbox och rensar sparade inloggningskopior…';
+  try {
+    const result = await disconnectDropboxEverywhere({ session, revokeAccessToken: revokeDropboxAccessToken });
+    syncButton.textContent = 'Anslut Dropbox';
+    disconnectButton.hidden = true;
+    const incomplete = result.revokeError || result.failures.length;
+    syncSummary.textContent = incomplete
+      ? 'Dropbox är frånkopplad lokalt. Fjärrspärr eller någon äldre tokenkopia kunde inte bekräftas; försök igen när alla appflikar är stängda och nätet fungerar.'
+      : 'Dropbox är frånkopplad. Lokala register och bilder finns kvar på enheten.';
+    syncSummary.className = incomplete ? 'sync-summary is-error' : 'sync-summary is-ok';
+  } catch (error) {
+    syncSummary.textContent = `Frånkopplingen misslyckades · ${error.message}`;
+    syncSummary.className = 'sync-summary is-error';
+  } finally {
+    syncButton.disabled = false;
+    disconnectButton.disabled = false;
+  }
+}
+
 async function syncAll({ force = true } = {}) {
   if (syncing) return;
   const token = await session.getAccessToken({ online: navigator.onLine !== false });
@@ -112,22 +139,26 @@ async function loadRelease() {
 }
 
 syncButton.addEventListener('click', () => syncAll({ force: true }));
+disconnectButton.addEventListener('click', disconnectDropbox);
 window.addEventListener('online', () => syncAll({ force: false }));
 
 async function init() {
   const serviceWorkerPromise = registerKorpholmenServiceWorker({ rootPage: true });
+  const persistencePromise = requestPersistentStorage();
   if (await completeOAuthCallbackIfNeeded()) return;
   await migrateLegacyCredentialsToShared();
   await mirrorSharedDropboxCredential({ refreshToken: await session.getRefreshToken() });
   await Promise.all([renderStatuses(), loadRelease()]);
   if (await session.hasCredential()) {
     syncButton.textContent = 'Synka allt';
+    disconnectButton.hidden = false;
     await syncAll({ force: false });
   } else {
     syncButton.textContent = 'Anslut Dropbox';
+    disconnectButton.hidden = true;
     syncSummary.textContent = 'Anslut en gång för att använda samma Dropbox-inloggning i alla appar.';
   }
-  await serviceWorkerPromise;
+  await Promise.all([serviceWorkerPromise, persistencePromise]);
 }
 
 init().catch(error => {

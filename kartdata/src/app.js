@@ -6,8 +6,10 @@ import {
   beginDropboxOAuth,
   completeDropboxOAuth,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../core/data-layer.js';
 import { resolveCurrentOwners, resolvePropertyReferences } from '../core/master-data.js';
@@ -67,10 +69,8 @@ const legacyPersonRefs = () => recordList('person-ref');
 const legacyExternalParties = () => recordList('external-party');
 const placeRelations = () => recordList('place-relation');
 const oldPropertyLinks = () => recordList('object-property-link');
-const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
-
 function setStatus(text, tone = '') { statusNode.textContent = text; statusNode.className = tone ? `status-${tone}` : ''; }
-function deviceId() { const key = 'korpholmen:kartdata-device-id'; let id = localStorage.getItem(key); if (!id) { id = `kartdata-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); } return id; }
+const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:kartdata-device-id', prefix: 'kartdata-web-' });
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
 function option(value, selected, label) { return `<option value="${escapeAttribute(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`; }
 function queueRank(value) { return ({ osäker: 0, ogranskad: 1, rättad: 2, bekräftad: 3, utgår: 4 }[value] ?? 5); }
@@ -369,6 +369,6 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });

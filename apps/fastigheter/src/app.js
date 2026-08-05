@@ -7,8 +7,10 @@ import {
   completeDropboxOAuth,
   createBatch,
   exchangeDropboxRefreshToken,
+  isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
+  resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
 import { resolvePartyName } from '../../../packages/core/master-data.js';
@@ -71,7 +73,6 @@ const communityFor = id => communityRecords().filter(item => item.property_id ==
 const holdingClaimsFor = id => holdingClaimRecords().filter(item => item.property_id === id).sort((a, b) => (a.order || 0) - (b.order || 0));
 const eventClaimsFor = id => eventClaimRecords().filter(item => (item.property_ids || []).includes(id));
 const relationsFor = id => relationRecords().filter(item => item.to_property_id === id || item.from_id === id);
-const isOfflineError = error => navigator.onLine === false || error instanceof TypeError || /failed to fetch|load failed|networkerror|internetanslutning|network connection/i.test(String(error?.message || error));
 
 function kartdataRows(type) {
   return kartdataMaster?.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })) || [];
@@ -92,12 +93,7 @@ function setStatus(text, tone = '') {
   statusNode.className = tone ? `status-${tone}` : '';
 }
 
-function deviceId() {
-  const key = 'korpholmen:fastigheter-device-id';
-  let id = localStorage.getItem(key);
-  if (!id) { id = `fastigheter-web-${crypto.randomUUID()}`; localStorage.setItem(key, id); }
-  return id;
-}
+const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:fastigheter-device-id', prefix: 'fastigheter-web-' });
 
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
 
@@ -555,7 +551,7 @@ async function init() {
     onBlocked: () => setStatus('En annan Fastigheter-flik blockerar uppdateringen · stäng den och ladda om', 'warning'),
   });
   store = new IndexedDBStore(db);
-  repository = await new Repository({ store, deviceId: deviceId() }).init();
+  repository = await new Repository({ store, deviceId: await deviceId() }).init();
   matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
   kartdataMaster = await new ReadOnlyMaster({ store, cacheKey: 'kartdata' }).init();
   bootstrapButton.hidden = !isSourceTree;

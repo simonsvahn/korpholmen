@@ -68,6 +68,10 @@ export class MemoryStore {
     return value === undefined ? null : cloneJson(value);
   }
 
+  async deleteMeta(key) {
+    this.meta.delete(String(key));
+  }
+
   async saveSnapshot(id, snapshot) {
     canonicalStringify(snapshot);
     this.snapshots.set(String(id), cloneJson(snapshot));
