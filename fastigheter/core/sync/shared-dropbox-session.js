@@ -16,9 +16,10 @@ const transactionDone = transaction => new Promise((resolve, reject) => {
 });
 
 export class KorpholmenSharedStore {
-  constructor({ indexedDB = globalThis.indexedDB, openTimeoutMs = 8_000 } = {}) {
+  constructor({ indexedDB = globalThis.indexedDB, openTimeoutMs = 8_000, transactionTimeoutMs = 2_000 } = {}) {
     this.indexedDB = indexedDB;
     this.openTimeoutMs = openTimeoutMs;
+    this.transactionTimeoutMs = transactionTimeoutMs;
     this.databasePromise = null;
   }
 
@@ -66,26 +67,46 @@ export class KorpholmenSharedStore {
     return this.databasePromise;
   }
 
-  async get(key) {
+  async transaction(mode, action) {
     const database = await this.database();
-    const transaction = database.transaction(STORE_NAME, 'readonly');
-    const row = await requestResult(transaction.objectStore(STORE_NAME).get(String(key)));
-    await transactionDone(transaction);
-    return row?.value ?? null;
+    const transaction = database.transaction(STORE_NAME, mode);
+    const work = Promise.resolve().then(() => action(transaction.objectStore(STORE_NAME))).then(async value => {
+      await transactionDone(transaction);
+      return value;
+    });
+    if (!(this.transactionTimeoutMs > 0)) return work;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(value);
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        try { transaction.abort(); } catch { /* transaktionen kan redan vara avslutad */ }
+        try { database.close(); } catch { /* stängning är en skyddsåtgärd */ }
+        this.databasePromise = null;
+        finish(reject, new Error('Det gemensamma lokala sessionslagret svarade inte. Stäng äldre Korpholmen-flikar och försök igen.'));
+      }, this.transactionTimeoutMs);
+      work.then(value => finish(resolve, value), error => finish(reject, error));
+    });
+  }
+
+  async get(key) {
+    return this.transaction('readonly', async store => {
+      const row = await requestResult(store.get(String(key)));
+      return row?.value ?? null;
+    });
   }
 
   async put(key, value) {
-    const database = await this.database();
-    const transaction = database.transaction(STORE_NAME, 'readwrite');
-    transaction.objectStore(STORE_NAME).put({ key: String(key), value });
-    await transactionDone(transaction);
+    return this.transaction('readwrite', store => { store.put({ key: String(key), value }); });
   }
 
   async delete(key) {
-    const database = await this.database();
-    const transaction = database.transaction(STORE_NAME, 'readwrite');
-    transaction.objectStore(STORE_NAME).delete(String(key));
-    await transactionDone(transaction);
+    return this.transaction('readwrite', store => { store.delete(String(key)); });
   }
 }
 

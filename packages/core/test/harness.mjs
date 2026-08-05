@@ -12,6 +12,7 @@ import {
   MemoryStore,
   ReadOnlyMaster,
   Repository,
+  KorpholmenSharedStore,
   SharedDropboxSession,
   SyncEngine,
   createRevisionCache,
@@ -77,6 +78,26 @@ await test('en äldre flik släpper databasen automatiskt vid nästa versionsbyt
   const opened = await openSlaktlandskapDB({ indexedDB, openTimeoutMs: 50 });
   opened.onversionchange();
   assert.equal(closed, 1);
+});
+
+await test('ett blockerat gemensamt sessionsanrop får en begriplig sluttid', async () => {
+  let request;
+  let aborted = 0;
+  const transaction = {
+    objectStore: () => ({ get: () => ({ result: null, error: null }) }),
+    abort() { aborted += 1; this.onabort?.(); },
+  };
+  const database = { transaction: () => transaction, close: () => {}, onversionchange: null };
+  const indexedDB = {
+    open() {
+      request = { result: database, error: null };
+      queueMicrotask(() => request.onsuccess());
+      return request;
+    },
+  };
+  const store = new KorpholmenSharedStore({ indexedDB, openTimeoutMs: 50, transactionTimeoutMs: 5 });
+  await assert.rejects(store.get('dropbox:refresh-token'), /sessionslagret svarade inte/);
+  assert.equal(aborted, 1);
 });
 
 await test('automatisk totalsynk dubbelköas inte av flera flikar', async () => {

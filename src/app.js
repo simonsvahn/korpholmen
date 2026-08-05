@@ -172,6 +172,9 @@ async function init() {
 
 init().catch(error => {
   console.error(error);
+  syncButton.disabled = false;
+  syncButton.textContent = 'Försök igen';
+  disconnectButton.hidden = true;
   syncSummary.textContent = `Korpholmen kunde inte starta · ${error.message}`;
   syncSummary.className = 'sync-summary is-error';
 });
