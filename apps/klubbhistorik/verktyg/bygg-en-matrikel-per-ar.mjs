@@ -19,10 +19,12 @@ const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}
 const pad=value=>String(value).padStart(3,'0');
 
 const baseDocument=JSON.parse(await readFile(BASE_PATH,'utf8'));
-const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&file!==OUT_FILE).sort();
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&file!==OUT_FILE&&file!=='2026-08-05-matrikel-1996.json').sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const previousState=materialize([...baseDocument.operations,...correctionDocuments.flatMap(document=>document.operations||document.ops||[])]);
-const sourceFiles=(await readdir(SOURCES)).filter(file=>/^matrikel-\d{4}\.json$/.test(file)).sort((a,b)=>a.localeCompare(b,'sv'));
+// Denna korrigeringsbatch frystes 2026-08-03. Senare årsimporter läggs i egna
+// append-only-batcher och får inte retroaktivt skrivas in i den gamla batchen.
+const sourceFiles=(await readdir(SOURCES)).filter(file=>/^matrikel-\d{4}\.json$/.test(file)&&file!=='matrikel-1996.json').sort((a,b)=>a.localeCompare(b,'sv'));
 const sources=await Promise.all(sourceFiles.map(async file=>{const bytes=await readFile(resolve(SOURCES,file));return {file,bytes,json:JSON.parse(bytes)}}));
 
 if(!sources.length)throw new Error('Inga årsvisa matrikel-JSON-filer hittades.');

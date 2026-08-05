@@ -11,8 +11,9 @@ stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
 Normaliserade vyer läser personens aktuella namn skrivskyddat från Matrikel;
 `person_name_raw` och källayouten förblir bundna till den historiska utgåvan.
 
-Mastern omfattar 14 årsvisa originalmatriklar från juli 1980 till augusti
-2025, inklusive den tvåsidiga medlemsmatrikeln 2010. Före dessa ligger en
+Mastern omfattar 15 årsvisa originalmatriklar från juli 1980 till augusti
+2025, inklusive matrikeln från juli 1996 och den tvåsidiga medlemsmatrikeln
+2010. Före dessa ligger en
 separat, uttryckligen märkt **grundarmatrikel (rekonstruktion)** för cirka
 1945. Den bygger på fem redovisade källor och är inte ett påstående om att ett
 sådant originaldokument har bevarats. I de
@@ -53,7 +54,11 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   privata kopior. Originalnamn och originalets SHA-256 ligger i varje JSON;
 - `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
   radspårbart äldre importunderlag, nu ersatt som konsumtionsformat av de
-  synkade filerna ovan men bevarat för reproducerbarhet;
+  synkade filerna ovan men bevarat byte för byte för reproducerbarhet; filen
+  omfattar 1991 och 1998;
+- `privat/kallkopior/matrikel-1996-underlag.json` — separat, nytt
+  avskriftsunderlag för 1996, så att 1991/1998-underlagets tidigare
+  kontrollsumma inte ändras;
 - `privat/migrering-2026-08-02/initial-ops.json` — reproducerbar startmaster;
 - `privat/migrering-2026-08-02/kontrollrapport.json` — radtäckning,
   kontrollsummor, dubbletter och olösta identiteter;
@@ -63,6 +68,8 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   radräkning och återanvändning för hela den gemensamma importen;
 - `privat/migrering-2026-08-02/kontrollrapport-matrikel-2010.json` —
   radräkning, identitetsförslag och öppna kontrollpunkter för 2010;
+- `privat/migrering-2026-08-02/kontrollrapport-matrikel-1996.json` —
+  radräkning, källhashar och kvarstående person- och båtkopplingar för 1996;
 - `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
   operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
   1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad,
@@ -71,6 +78,8 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
   av en ny årsvalsbatch och `2026-08-03-kalltrogen-layout-v3.json` med 1 606
   layoutrader, separerade flerspersonrader och strukturerade båtårsperioder.
   De tidigare Dropbox-distribuerade batcherna skrivs inte över.
+  `2026-08-05-matrikel-1996.json` lägger till 1996 som en egen append-only-
+  batch med samtliga källrader och layoutrader.
   `2026-08-04-grundarmatrikel-1940-tal.json` lägger ovanpå samma master en
   källkorsläst arbetsrekonstruktion av tio grundare. Exakt år, bostadsö,
   platsdetalj och säkerhet lagras var för sig;
