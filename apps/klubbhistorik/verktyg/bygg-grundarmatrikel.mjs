@@ -16,7 +16,7 @@ const RELEASE_ID='matrikel-grundare-1940-tal';
 
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const baseDocument=JSON.parse(await readFile(BASE_PATH,'utf8'));
-const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&file!==OUT_FILE).sort();
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')&&file!==OUT_FILE&&file!=='2026-08-05-matrikel-1996.json').sort();
 const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
 const previousOperations=[...baseDocument.operations,...correctionDocuments.flatMap(document=>document.operations||document.ops||[])];
 const previousState=materialize(previousOperations);

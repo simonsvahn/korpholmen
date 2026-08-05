@@ -143,8 +143,8 @@ flowchart LR
 
 ## Båtar och ägande
 
-I samtliga fotograferade båtmtriklar 1980, 1982, 1986, 1987, 1988, 1991 och
-1998 är medlems- och fartygskolumnernas visuella placering otillräcklig för
+I samtliga fotograferade båtmatriklar 1980, 1982, 1986, 1987, 1988, 1991,
+1996 och 1998 är medlems- och fartygskolumnernas visuella placering otillräcklig för
 att bära ägande. Därför gäller:
 
 Källvyn återger den faktiska trycksidan från explicita `source-layout-row`:
@@ -231,15 +231,15 @@ görs endast av det lokala checkpointverktyget.
 | Område | Status |
 |---|---|
 | Grundarmatrikel cirka 1945: 10 personer, bostadsöar, fem evidenskällor | Byggt som märkt rekonstruktion |
-| 14 årsvisa matriklar: 1980–1998, 2010 samt 2020–2025 | Byggt |
+| 15 årsvisa matriklar: 1980–1998, 2010 samt 2020–2025 | Byggt |
 | Gemensamt validerat JSON-schema för samtliga matrikeldokument | Byggt |
-| Schema v2: 1 606 källayoutrader och explicita medlems-/båtankare | Byggt |
-| 1 539 personförekomster ur 1 533 medlemsrader; flerspersonrader separerade | Byggt |
-| 14 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
+| Schema v2: 1 738 källayoutrader och explicita medlems-/båtankare | Byggt |
+| 1 660 personförekomster ur 1 652 medlemsrader; flerspersonrader separerade | Byggt |
+| 15 valda JSON-källdokument, exakt ett per kalenderår | Byggt |
 | 2010: 77 källrader på två fotograferade sidor, utan fartygskolumn | Byggt |
-| Juniorer och korresponderande medlemskategori 1991/1998 | Byggt |
+| Juniorer och korresponderande medlemskategori 1991/1996/1998 | Byggt |
 | Fullständiga sida 2-avsnitt för 1980/1986 samt matriklarna 1982/1987/1988 | Byggt |
-| Avregistrerade eller namnändrade fartyg 1991/1998 | Byggt, som egen källkategori |
+| Avregistrerade eller namnändrade fartyg 1991/1996/1998 | Byggt, som egen källkategori |
 | Ordagranna person- och båtrader | Byggt |
 | Person- och båtreferenser med granskningskö | Byggt |
 | Källvy, normaliserad vy, medlemsmatris, tidsjämförelse och personhistorik | Byggt |

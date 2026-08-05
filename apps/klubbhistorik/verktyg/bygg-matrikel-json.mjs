@@ -18,6 +18,7 @@ const SOURCE_ROOT=resolve(valueAfter('--source-root')||DEFAULT_SOURCE_ROOT);
 const OUTPUT=resolve(valueAfter('--output')||DEFAULT_OUTPUT);
 const ORIGINALS=resolve(OUTPUT,'original');
 const HISTORICAL_INPUT=valueAfter('--historical');
+const LEGACY_1996=resolve(PRIVATE,'kallkopior/matrikel-1996-underlag.json');
 const PDFTOTEXT=valueAfter('--pdftotext')||'/opt/homebrew/bin/pdftotext';
 const ISLANDS=new Set(['Korpholmen','Sviholmen','Ängsholmen','Blidö','Svanö']);
 const MEMBER_KEYS=['id','order','page','category','raw_text','source_annotation','induction_year_raw','induction_year','first_name_raw','last_name_raw','person_name_raw','club_name_core_raw','age_raw','birth_year_raw','birth_year','birth_date_raw','birth_date','island_raw','club_name_raw','relation_raw','entity_kind','person_components'];
@@ -285,9 +286,11 @@ function pageForPerson(release,status,index){
   return null;
 }
 
-async function build1991And1998(){
-  const legacy=JSON.parse(await readFile(LEGACY_1991_1998,'utf8'));const documents=[];
-  for(const releaseSource of legacy.releases){
+async function buildHistoricalPhotoMatriklar(){
+  const documents=[];
+  for(const legacyPath of [LEGACY_1991_1998,LEGACY_1996]){
+    const legacy=JSON.parse(await readFile(legacyPath,'utf8'));
+    for(const releaseSource of legacy.releases){
     const documentId=`source-document:${releaseSource.id}:foto`;let order=0;const memberRows=[];
     for(const category of ['active','passive','junior','corresponding'])for(const [index,raw] of (releaseSource.people?.[category]||[]).entries()){
       order+=1;const match=String(raw).match(/^\s*(?:(\d{4}\??)\s+)?(.+?)\s*$/);const parsed=historicName(match?.[2]||raw);
@@ -297,7 +300,8 @@ async function build1991And1998(){
     const boatRows=releaseSource.boat_rows.map((row,index)=>({id:`boat-row:${documentId}:${pad(index+1)}`,order:index+1,page:row.page??null,category:row.category,raw_text:row.raw_text||'',source_annotation:row.annotation||'',components:(row.components||splitOutsideParentheses(row.raw_text||'')).map((component,componentIndex)=>parseBoatComponent(component,componentIndex+1))}));
     const files=[];
     for(const source of legacy.source_files.filter(file=>file.year===releaseSource.year))files.push(await fileInfo(source.filename,`medlemsmatrikel-${releaseSource.year}-sida-${source.page}.heic`,{role:'original',page:source.page}));
-    documents.push({schema_version:1,document:{id:documentId,label:releaseSource.title,source_type:'fotografier av maskinskriven medlemsmatrikel',is_primary_for_release:true,transcription_method:'manuellt kontrollerad bildavskrift',transcription_status:'kontrollerad mot samtliga fotograferade sidor',original_files:files},release:{id:releaseSource.id,year:releaseSource.year,as_of:releaseSource.as_of,as_of_precision:'month',title:releaseSource.title,release_type:'medlemsmatrikel',sort_order:'källordning',source_date:releaseSource.source_date||null,source_signature:releaseSource.source_signature||null},columns:[{id:'induction_year',label_raw:'INV. ÅR'},{id:'member_name',label_raw:'MEDLEMMAR'},{id:'registered_vessel',label_raw:'INREG. FARTYG'}],sections:Object.entries(releaseSource.people||{}).map(([category,rows])=>({id:`section:${documentId}:${category}`,kind:'member',category,label_raw:category,page:null,start_order:null,end_order:rows.length})),member_rows:memberRows,boat_rows:boatRows,document_notes:['Äldre avskriftsunderlag bevarat oförändrat; detta dokument är den synkade schema-versionen.']});
+      documents.push({schema_version:1,document:{id:documentId,label:releaseSource.title,source_type:'fotografier av maskinskriven medlemsmatrikel',is_primary_for_release:true,transcription_method:'manuellt kontrollerad bildavskrift',transcription_status:'kontrollerad mot samtliga fotograferade sidor',original_files:files},release:{id:releaseSource.id,year:releaseSource.year,as_of:releaseSource.as_of,as_of_precision:'month',title:releaseSource.title,release_type:'medlemsmatrikel',sort_order:'källordning',source_date:releaseSource.source_date||null,source_signature:releaseSource.source_signature||null},columns:[{id:'induction_year',label_raw:'INV. ÅR'},{id:'member_name',label_raw:'MEDLEMMAR'},{id:'registered_vessel',label_raw:'INREG. FARTYG'}],sections:Object.entries(releaseSource.people||{}).map(([category,rows])=>({id:`section:${documentId}:${category}`,kind:'member',category,label_raw:category,page:null,start_order:null,end_order:rows.length})),member_rows:memberRows,boat_rows:boatRows,document_notes:['Äldre avskriftsunderlag bevarat oförändrat; detta dokument är den synkade schema-versionen.']});
+    }
   }
   return documents;
 }
@@ -486,7 +490,7 @@ else{
   if(existingFiles.length!==5)throw new Error(`Fem befintliga historiska JSON-underlag krävs när --historical saknas; hittade ${existingFiles.length}.`);
   for(const file of existingFiles)documents.push(await hydrateHistorical(JSON.parse(await readFile(resolve(OUTPUT,file),'utf8'))));
 }
-documents.push(...await build1991And1998());
+documents.push(...await buildHistoricalPhotoMatriklar());
 documents.push(await build2010());
 documents.push(...await buildModernDocuments());
 

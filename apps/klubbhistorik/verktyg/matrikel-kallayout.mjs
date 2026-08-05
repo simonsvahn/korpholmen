@@ -33,6 +33,12 @@ export const BOAT_MEMBER_ANCHORS={
     [39,37],[40,38,39],[41,40,41],[43,42],[44,43,44],[45,45],[49,46,47,48],[50,49],[51,50],[52,51],[53,52,53],[54,54],[55,55],[56,56],
     [61,57],[62,58],[64,59],[66,60],[68,61],[70,62],[72,63],[73,64],
   ]),
+  1996:anchors([
+    [1,1,2],[4,3],[5,4],[6,5,6],[9,7],[10,8],[11,9],[12,10],[13,11],[14,12],[15,13],[16,14],[17,15],[19,16],[20,17],[21,18],[22,19],[23,20],[24,21],[25,22],[26,23],[27,24],[28,25],[31,26],[33,27],[34,28],[35,29],[38,30],[39,31],[40,32],[41,33],[42,34],[43,35],
+    [44,36],[45,37],[48,38,39,40],[49,41],[50,42],[51,43],[52,44],[53,45],[55,46],[56,47],[58,48],[59,49],
+    [64,50],[68,51],[71,52],[72,53],[73,54],[84,55],[85,56],[86,57],
+    [117,58],[118,59],[119,60],
+  ]),
   1998:anchors([
     [1,1,2],[4,3],[5,4],[7,5,6],[8,7],[10,8],[11,9],[12,10],[13,11],[14,12],[15,13,14],[16,15],[17,16],[19,17],[20,18],[21,19],[22,20],[23,21],[24,22],[25,23],[26,24],[27,25],[28,26],[31,27],[33,28],[34,29],[35,30],[38,31],[39,32],[40,33],[41,34],[42,35],[43,36],
     [44,37],[45,38],[48,39,40,41],[49,42],[50,43],[51,44],[52,45],[53,46],[55,47,48],[56,49],[57,50,51],[59,52],[60,53],[67,54],[70,55],[71,56],[72,57,58],
@@ -61,12 +67,17 @@ export function personStructure(personName,category){
 }
 
 export function exactLegacySections(documentId,year,memberRows){
-  if(![1991,1998].includes(year))return null;
+  if(![1991,1996,1998].includes(year))return null;
   const memberRanges=year===1991?[
     ['active','ORDINARIE MEDLEMMAR',1,1,58],
     ['passive','ORDINARIE PASSIVA MEDLEMMAR',2,59,68],
     ['junior','JUNIORMEDLEMMAR',2,69,94],
     ['corresponding','KORRESPONDERANDE MEDLEMMAR',3,95,96],
+  ]:year===1996?[
+    ['active','Ordinarie medlemmar',1,1,60],
+    ['passive','ORDINARIE PASSIVA MEDLEMMAR',2,61,69],
+    ['junior','JUNIORMEDLEMMAR',2,70,115],
+    ['corresponding','KORRESPONDERANDE MEDLEMMAR',3,116,119],
   ]:[
     ['active','Ordinarie medlemmar',1,1,63],
     ['passive','ORDINARIE PASSIVA MEDLEMMAR',2,64,65],
@@ -79,6 +90,13 @@ export function exactLegacySections(documentId,year,memberRows){
     ['registered-passive','INREG. FARTYG – passiva',2,57,61],
     ['registered-junior','INREG. FARTYG – juniorer',2,62,64],
     ['deregistered-or-renamed','AVREGISTRERADE OCH/ELLER NAMNÄNDRADE FARTYG',3,65,71],
+  ]:year===1996?[
+    ['registered','Inreg.fartyg',1,1,35],
+    ['registered','Inreg.fartyg – forts.',2,36,49],
+    ['registered-passive','Inreg.fartyg – passiva',2,50,51],
+    ['registered-junior','Inreg.fartyg – juniorer',2,52,57],
+    ['registered-corresponding','Inreg.fartyg – korresponderande',3,58,60],
+    ['deregistered-or-renamed','AVREGISTRERADE OCH/ELLER NAMNÄNDRADE FARTYG',3,61,67],
   ]:[
     ['registered','Inreg.fartyg',1,1,36],
     ['registered','Inreg.fartyg – forts.',2,37,53],
