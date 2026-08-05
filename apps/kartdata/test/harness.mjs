@@ -131,6 +131,8 @@ await test('fastigheter väljs en i taget utan en lång krysslista', async () =>
 
 await test('exportkoden använder v2-format och utesluter arkivposterna', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(app.includes('repository.upsertFields(fields)'));
+  assert.ok(app.includes("repository.upsertFields(Object.entries({ preferred_name:"));
   assert.ok(app.includes("format: 'korpholmen-kartdata-v2'"));
   assert.ok(!app.includes("recordList('map-entry')"));
   assert.ok(!app.includes('source_current_owner'));

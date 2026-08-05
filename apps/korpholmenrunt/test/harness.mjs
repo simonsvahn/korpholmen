@@ -127,6 +127,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   for(const control of ['edit-review-status','edit-review-issues','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
+  assert.ok(app.includes('await repository.upsertFields(entries)'));
   assert.ok(app.includes("['Tävlande 1',result.captain_raw]"));
   assert.ok(app.includes("['Tävlande 2',result.crew_1_raw]"));
   assert.ok(app.includes("['Tävlande 3',result.crew_2_raw]"));

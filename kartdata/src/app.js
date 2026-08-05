@@ -253,7 +253,7 @@ async function replaceEntryLinks(entryId, islandId, propertyIds) {
     const id = `entry:${entryId}:property:${propertyId}`;
     fields.push({ entityType: 'data-entry-property-link', entityId: id, field: 'entry_id', value: entryId }, { entityType: 'data-entry-property-link', entityId: id, field: 'property_id', value: propertyId });
   }
-  if (fields.length) await repository.setFields(fields);
+  if (fields.length) await repository.upsertFields(fields);
 }
 async function saveEntry(form) {
   const data = new FormData(form); const objectType = data.get('object_type'); if (!OBJECT_CLASSES.includes(objectType)) throw new Error('Otillåten objekttyp');
@@ -280,7 +280,7 @@ async function saveIsland(form) {
     { type: 'historiskt', values: splitList(data.get('historical_names')) },
   ];
   await syncEdit(async () => {
-    await repository.setFields(Object.entries({ preferred_name: name, subtype: 'ö', review_status: status, source_ids: null, note: null, valid_from: validFrom, valid_to: validTo }).map(([field, value]) => ({ entityType: 'place', entityId: id, field, value })));
+    await repository.upsertFields(Object.entries({ preferred_name: name, subtype: 'ö', review_status: status, source_ids: null, note: null, valid_from: validFrom, valid_to: validTo }).map(([field, value]) => ({ entityType: 'place', entityId: id, field, value })));
     const existing = namesForIsland(id); const keep = new Set(); const fields = [];
     for (const group of desired) for (const [index, value] of group.values.entries()) {
       const previous = existing.find(item => item.name_type === group.type && item.name === value);
@@ -288,7 +288,7 @@ async function saveIsland(form) {
       const record = { target_type: 'place', target_id: id, name: value, name_type: group.type, review_status: status, source_ids: null, note: null, valid_from: validFrom, valid_to: validTo };
       fields.push(...Object.entries(record).map(([field, fieldValue]) => ({ entityType: 'name-record', entityId: nameId, field, value: fieldValue })));
     }
-    if (fields.length) await repository.setFields(fields);
+    if (fields.length) await repository.upsertFields(fields);
     const obsolete = existing.filter(item => !keep.has(item.id)).map(item => ({ entityType: 'name-record', entityId: item.id })); if (obsolete.length) await repository.deleteEntities(obsolete);
   }, `${name} uppdaterad`);
 }
