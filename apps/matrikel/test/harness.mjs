@@ -35,6 +35,7 @@ import {
   nextReferenceCode,
   readableReference,
   searchFamilyTargets,
+  wouldCreateParentChildCycle,
 } from '../../../packages/core/family-context.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -263,6 +264,33 @@ await test('landskapsmodellen tål saknade ändpunkter och hittar släktskapsvä
   const sampleRelation = relations[0];
   const path = relationshipPath(sampleRelation.from_person_id, sampleRelation.to_person_id, graph);
   assert.equal(path.length, 1);
+});
+
+await test('förälder-barn-cykler terminerar och kan inte skapas i redigeraren', async () => {
+  const people = ['a', 'b', 'c', 'd'].map(id => ({ id, display_name: id.toUpperCase() }));
+  const chain = [
+    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'b', user_confirmed: true },
+    { kind: 'foralder-barn', from_person_id: 'b', to_person_id: 'c', user_confirmed: true },
+  ];
+  const chainContext = buildFamilyContext({ people, relations: chain });
+  assert.equal(wouldCreateParentChildCycle('c', 'a', chainContext), true);
+  assert.equal(wouldCreateParentChildCycle('a', 'c', chainContext), false);
+
+  const cycleContext = buildFamilyContext({ people, relations: [
+    ...chain,
+    { kind: 'foralder-barn', from_person_id: 'c', to_person_id: 'a', user_confirmed: true },
+  ] });
+  const group = { id: 'cykel', anchor_person_ids: ['a'], membership_rule: 'anchors_and_descendants', confirmed: true };
+  assert.deepEqual(kinGroupMemberDetails(group, cycleContext).map(member => [member.person_id, member.generation]), [
+    ['a', 1],
+    ['b', 2],
+    ['c', 3],
+  ]);
+  assert.equal(wouldCreateParentChildCycle('d', 'a', cycleContext), false);
+
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(app.includes("wouldCreateParentChildCycle(from, to, familyContext)"));
+  assert.ok(app.includes('skulle skapa en cirkel mellan förälder och barn'));
 });
 
 await test('familjenivåerna är begripliga utan ny sakdata', () => {

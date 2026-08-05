@@ -46,7 +46,8 @@ import {
   kinGroupMemberDetails,
   nextReferenceCode,
   relativeGenerationLabel,
-} from '../core/family-context.js';
+  wouldCreateParentChildCycle,
+} from '../core/family-context.js?v=2026-08-05-paket-3';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
 
@@ -1095,6 +1096,10 @@ async function addRelation() {
     kind = 'syskon';
   } else {
     kind = 'partner';
+  }
+  if (kind === 'foralder-barn' && wouldCreateParentChildCycle(from, to, familyContext)) {
+    setEditStatus('Relationen skulle skapa en cirkel mellan förälder och barn.', 'error');
+    return;
   }
   const id = relationEntityId(kind, from, to);
   if (currentRelations.some((relation) => relation.id === id)) {
