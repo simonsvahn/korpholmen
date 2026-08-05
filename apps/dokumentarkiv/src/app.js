@@ -15,6 +15,8 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
+import { resolveArchiveEntity } from '../../../packages/core/master-data.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
 
 const $ = selector => document.querySelector(selector);
@@ -36,12 +38,14 @@ const ui = {
 };
 let store;
 let repository;
+let matrikelMaster;
+let batregisterMaster;
 let historyOperations = [];
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
 const contentImageUrls = new Map();
-const viewCache = createRevisionCache(() => repository?.revision || 0);
+const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelMaster?.revision || 0}:${batregisterMaster?.revision || 0}`);
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const escapeAttribute = escapeHtml;
@@ -49,7 +53,9 @@ const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCas
 const typeLabel = type => type ? type.charAt(0).toLocaleUpperCase('sv') + type.slice(1) : 'Okänd';
 const recordList = type => viewCache(`records:${type}`, () => repository ? repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })) : []);
 const documentRecords = () => viewCache('documents', () => [...recordList('document')].sort((a, b) => String(a.document_date).localeCompare(String(b.document_date), 'sv') || String(a.title || '').localeCompare(String(b.title || ''), 'sv')));
-const entityRecords = () => viewCache('archive-entities', () => [...recordList('archive-entity')].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'sv')));
+const entityRecords = () => viewCache('archive-entities', () => recordList('archive-entity')
+  .map(entity => resolveArchiveEntity(entity, { personMaster: matrikelMaster, boatMaster: batregisterMaster }))
+  .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'sv')));
 const entityMap = () => viewCache('archive-entity-map', () => new Map(entityRecords().map(entity => [entity.id, entity])));
 const summaryRecord = () => recordList('archive-summary')[0] || {};
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
@@ -491,9 +497,15 @@ async function syncNow() {
     const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-dokumentarkiv', opsRoot: '/dokumentarkiv/ops' });
     const bootstrap = await uploadBootstrapOps(transport);
     const result = await new SyncEngine({ repository, transport }).syncOnce();
+    const referenceResults = await Promise.allSettled([
+      matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
+      batregisterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-read', opsRoot: '/batregister/ops', readOnly: true })),
+    ]);
+    const referenceFailures = referenceResults.filter(item => item.status === 'rejected');
+    for (const failure of referenceFailures) console.warn('En referensmaster kunde inte uppdateras; markerad lokal cache används', failure.reason);
     await refreshHistory();
     const images = await syncContentImages(transport);
-    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
+    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned · ${referenceFailures.length ? 'referensnamn från lokal cache' : 'namn från Matrikel och Båtregister'}`, referenceFailures.length ? 'warning' : 'ok');
     return result;
   })().catch(error => {
     console.error(error);
@@ -591,6 +603,8 @@ async function init() {
   const db = await openSlaktlandskapDB({ name: 'korpholmen-dokumentarkiv' });
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
+  matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
+  batregisterMaster = await new ReadOnlyMaster({ store, cacheKey: 'batregister' }).init();
   await refreshHistory();
   await loadCachedContentImages();
   bootstrapButton.hidden = !isSourceTree;

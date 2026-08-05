@@ -27,6 +27,7 @@ export {
   canonicalPeople,
   canonicalPersonMap,
   mergePersonReferences,
+  resolveArchiveEntity,
   resolveCurrentOwners,
   resolvePartyName,
   resolvePropertyReferences
