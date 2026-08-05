@@ -1,6 +1,6 @@
 {
-  "release": "2026-08-05-korpholmen-pwa-6",
-  "generated_at": "2026-08-04",
+  "release": "2026-08-05-korpholmen-pwa-7",
+  "generated_at": "2026-08-05",
   "pwa": {
     "id": "./",
     "scope": "./",
@@ -68,7 +68,6 @@
     "./dokumentarkiv/core/sync/sync-engine.js",
     "./dokumentarkiv/index.html",
     "./dokumentarkiv/manifest.webmanifest",
-    "./dokumentarkiv/og.png",
     "./dokumentarkiv/src/app.js",
     "./dokumentarkiv/src/config.js",
     "./dokumentarkiv/styles.css",
@@ -186,7 +185,6 @@
     "./korpholmenrunt/index.html",
     "./korpholmenrunt/manifest.webmanifest",
     "./korpholmenrunt/matchning.css",
-    "./korpholmenrunt/og.png",
     "./korpholmenrunt/src/app.js",
     "./korpholmenrunt/src/config.js",
     "./korpholmenrunt/src/klassstandard.js",

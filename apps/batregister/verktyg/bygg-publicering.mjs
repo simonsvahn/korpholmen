@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../batregister');
@@ -15,6 +16,7 @@ const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../
 await mkdir(resolve(OUT,'src'),{recursive:true});await writeFile(resolve(OUT,'src/app.js'),app);
 const connectionFilter=(await readFile(resolve(ROOT,'src/connection-filter.js'),'utf8')).replace("../../../packages/core/family-context.js","../core/family-context.js");
 await writeFile(resolve(OUT,'src/connection-filter.js'),connectionFilter);
+await assertExactPublicationFiles(OUT,[...FILES,'src/app.js','src/connection-filter.js',...CORE_FILES.map(file=>`core/${file}`)]);
 const bundle=(await Promise.all([...FILES.map(file=>readFile(resolve(OUT,file),'utf8')),...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),(async()=>app)(),(async()=>connectionFilter)()])).join('\n');
 const privateData=JSON.parse(await readFile(resolve(ROOT,'privat/migrering-2026-08-01/initial-ops.json'),'utf8'));
 const privateBoatNames=privateData.operations.filter(operation=>operation.entity_type==='boat'&&operation.field==='namn').map(operation=>operation.value).filter(name=>name&&name!=='Namn okänt');

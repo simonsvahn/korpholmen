@@ -1,6 +1,6 @@
 const legacyScope = (scope, rootScope) => scope.startsWith(rootScope) && scope !== rootScope;
 
-export async function registerKorpholmenServiceWorker({ sourceTree = false, rootPage = false, reloadOnUpdate = true } = {}) {
+export async function registerKorpholmenServiceWorker({ sourceTree = false, rootPage = false, reloadOnUpdate = false } = {}) {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return null;
   const root = new URL(rootPage ? './' : sourceTree ? '../../' : '../', location.href);
   const rootScope = root.href;

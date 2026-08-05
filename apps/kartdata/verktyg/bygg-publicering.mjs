@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../kartdata');
@@ -20,6 +21,7 @@ for (const relative of CORE_FILES) {
 }
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).replaceAll('../../../packages/core/', '../core/');
 await mkdir(resolve(OUT, 'src'), { recursive: true }); await writeFile(resolve(OUT, 'src/app.js'), app);
+await assertExactPublicationFiles(OUT, [...FILES, 'src/app.js', ...CORE_FILES.map(file => `core/${file}`)]);
 
 const bundle = (await Promise.all([
   ...FILES.map(file => readFile(resolve(OUT, file), 'utf8')),
