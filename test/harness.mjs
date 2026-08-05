@@ -68,6 +68,7 @@ await test('lagring, offlinefel och Dropbox-frånkoppling hanteras gemensamt', a
   assert.match(runtimeSafety, /failed to fetch/);
   assert.doesNotMatch(runtimeSafety, /instanceof TypeError/);
   assert.match(familySync, /sharedDropboxDisconnectedKey/);
+  assert.match(familySync, /quarantined_batches/);
   assert.match(familySync, /clearLegacyCredentialStores/);
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');

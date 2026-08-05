@@ -66,13 +66,15 @@ async function pullApp({ app, accessToken, sharedStore, onProgress }) {
           downloaded_ops: progress.downloadedOps || 0,
           downloaded_batches: progress.downloadedBatches || 0,
           skipped_batches: progress.skippedBatches || 0,
+          quarantined_batches: progress.quarantinedBatches || 0,
           checkpoint_loaded: Boolean(progress.checkpointLoaded),
         };
         await sharedStore.put(statusKey(app.id), status);
         onProgress?.({ app, ...status });
       },
     });
-    const status = { state: 'ok', synced_at: new Date().toISOString(), downloaded_ops: result.downloadedOps, downloaded_batches: result.downloadedBatches };
+    const quarantined = result.quarantinedBatches?.length || 0;
+    const status = { state: quarantined ? 'warning' : 'ok', synced_at: new Date().toISOString(), downloaded_ops: result.downloadedOps, downloaded_batches: result.downloadedBatches, quarantined_batches: quarantined };
     await sharedStore.put(statusKey(app.id), status);
     onProgress?.({ app, ...status });
     return { app: app.id, ...status };
@@ -217,7 +219,7 @@ export async function syncAppFamily({ accessToken, skipApp = null, force = false
       }
     });
     await Promise.all(workers);
-    if (results.every(result => result.state === 'ok')) await sharedStore.put(FAMILY_SYNC_KEY, new Date().toISOString());
+    if (results.every(result => result.state !== 'error')) await sharedStore.put(FAMILY_SYNC_KEY, new Date().toISOString());
     return { skipped: false, results };
   }, { ifAvailable: true, unavailableValue: { skipped: true, reason: 'locked', results: [] } });
 }

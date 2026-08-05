@@ -1,7 +1,7 @@
 import { Materializer } from './domain/materializer.js';
 import { validateOperation } from './domain/operations.js';
-import { parseBatchPath, validateBatch } from './sync/batch.js';
-import { CursorResetError } from './sync/errors.js';
+import { DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS, parseBatchPath, validateBatchEnvelope } from './sync/batch.js';
+import { CursorResetError, TransportError } from './sync/errors.js';
 
 const isBatchPath = path => /\/ops\/.+\.json$/.test(String(path || ''));
 
@@ -23,17 +23,21 @@ async function mapConcurrent(values, limit, mapper) {
 }
 
 export class ReadOnlyMaster {
-  constructor({ store, cacheKey, downloadConcurrency = 6, downloadChunkSize = 24 } = {}) {
+  constructor({ store, cacheKey, downloadConcurrency = 6, downloadChunkSize = 24, maxFutureClockDriftMs = DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS, now = () => Date.now() } = {}) {
     if (!store || typeof store.getMeta !== 'function' || typeof store.putMeta !== 'function' || typeof store.getSnapshot !== 'function' || typeof store.saveSnapshot !== 'function') {
       throw new TypeError('ReadOnlyMaster kräver ett lager med metadata och snapshots');
     }
     if (typeof cacheKey !== 'string' || !cacheKey.trim()) throw new TypeError('ReadOnlyMaster kräver cacheKey');
     if (!Number.isSafeInteger(downloadConcurrency) || downloadConcurrency < 1) throw new TypeError('Ogiltig samtidighetsgräns');
     if (!Number.isSafeInteger(downloadChunkSize) || downloadChunkSize < downloadConcurrency) throw new TypeError('Ogiltig nedladdningschunk');
+    if (!Number.isSafeInteger(maxFutureClockDriftMs) || maxFutureClockDriftMs < 0) throw new TypeError('Ogiltig framtidsgräns för HLC');
+    if (typeof now !== 'function') throw new TypeError('ReadOnlyMaster kräver en klockfunktion');
     this.store = store;
     this.cacheKey = cacheKey.trim();
     this.downloadConcurrency = downloadConcurrency;
     this.downloadChunkSize = downloadChunkSize;
+    this.maxFutureClockDriftMs = maxFutureClockDriftMs;
+    this.now = now;
     this.snapshotKey = `read-only-master:${this.cacheKey}:snapshot`;
     this.cursorKey = `read-only-master:${this.cacheKey}:cursor`;
     this.statusKey = `read-only-master:${this.cacheKey}:status`;
@@ -41,6 +45,17 @@ export class ReadOnlyMaster {
     this.cursor = null;
     this.initialized = false;
     this.revision = 0;
+  }
+
+  async quarantineBatch(entry, error) {
+    const record = {
+      path: entry.path,
+      rev: entry.rev || null,
+      reason: error?.message || 'Ogiltig batch',
+      quarantined_at: new Date(Number(this.now())).toISOString(),
+    };
+    await this.store.putMeta(`read-only-master:${this.cacheKey}:quarantine:${encodeURIComponent(entry.path)}`, record);
+    return record;
   }
 
   async init() {
@@ -121,6 +136,7 @@ export class ReadOnlyMaster {
     let cursor = this.cursor;
     let downloadedOps = 0;
     let downloadedBatches = 0;
+    const quarantinedBatches = [];
     let resetUsed = false;
     while (true) {
       let page;
@@ -144,17 +160,33 @@ export class ReadOnlyMaster {
       });
       for (let offset = 0; offset < entries.length; offset += this.downloadChunkSize) {
         const chunk = entries.slice(offset, offset + this.downloadChunkSize);
-        const batches = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
-          const batch = await transport.getJson(entry.path);
-          validateBatch(batch);
-          return batch;
+        const downloaded = await mapConcurrent(chunk, this.downloadConcurrency, async entry => {
+          let batch;
+          try {
+            batch = await transport.getJson(entry.path);
+          } catch (error) {
+            if (!(error instanceof TransportError) || error.code !== 'invalid_json') throw error;
+            return { quarantine: await this.quarantineBatch(entry, error) };
+          }
+          try {
+            validateBatchEnvelope(entry, batch, {
+              rootPath: transport.opsRoot,
+              now: Number(this.now()),
+              maxFutureClockDriftMs: this.maxFutureClockDriftMs,
+            });
+            return { batch };
+          } catch (error) {
+            return { quarantine: await this.quarantineBatch(entry, error) };
+          }
         });
+        const batches = downloaded.filter(item => item.batch).map(item => item.batch);
+        quarantinedBatches.push(...downloaded.filter(item => item.quarantine).map(item => item.quarantine));
         for (const batch of batches) {
           this.state.applyAll(batch.ops);
           downloadedOps += batch.ops.length;
           downloadedBatches += 1;
         }
-        await onProgress?.({ downloadedOps, downloadedBatches, pageBatches: entries.length, pageProcessed: Math.min(offset + chunk.length, entries.length) });
+        await onProgress?.({ downloadedOps, downloadedBatches, quarantinedBatches: quarantinedBatches.length, pageBatches: entries.length, pageProcessed: Math.min(offset + chunk.length, entries.length) });
       }
       cursor = page.cursor;
       await this.persist(cursor, {
@@ -162,12 +194,13 @@ export class ReadOnlyMaster {
         synced_at: new Date().toISOString(),
         downloaded_ops: downloadedOps,
         downloaded_batches: downloadedBatches,
+        quarantined_batches: quarantinedBatches.length,
         cursor_reset: resetUsed,
       });
       if (!page.has_more) break;
     }
     this.cursor = cursor;
     if (downloadedOps || resetUsed) this.revision += 1;
-    return { downloadedOps, downloadedBatches, cursor, cursorReset: resetUsed };
+    return { downloadedOps, downloadedBatches, quarantinedBatches, cursor, cursorReset: resetUsed };
   }
 }

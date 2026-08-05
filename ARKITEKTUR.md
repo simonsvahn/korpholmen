@@ -309,6 +309,13 @@ Dropbox-cursorn flyttas först när hela listningssidan är behandlad. Därmed
 hålls minnet begränsat utan att ett avbrott kan skapa ett datahål. Nätanrop
 och databasöppning har sluttid, gamla databasanslutningar stängs vid
 versionsbyte och en avbruten status får inte visas som pågående för alltid.
+En batch vars innehåll inte matchar filnamnet, som är strukturellt ogiltig
+eller vars HLC ligger mer än ett dygn framför mottagarens klocka isoleras i
+lokal synkmetadata. Övriga batcher på sidan tillämpas och synkcentralen visar
+en tydlig varning för manuell granskning. Dropbox-huvuden kodas ASCII-säkert,
+så sökvägar med svenska tecken inte kan stoppa bild- eller JSON-hämtning.
+Matrikelns äldre `/ops`-migrering får en beständig slutmarkör efter lyckad
+genomgång och körs därefter inte vid varje synk.
 
 Bilder ligger utanför operationsloggen. Båtregistrets operationsdata bär
 bara strukturerade bildreferenser; originalfilerna ligger under
