@@ -232,6 +232,17 @@ await test('livs- och fastighetsfilter samt härledd ö fungerar tillsammans', (
   const sampleLink = state.listEntities('property-link')[0];
   assert.ok(visiblePersonIds(people, graph, { ...defaults, property: sampleLink.fields.property_id }).has(sampleLink.fields.person_id));
   assert.equal(visiblePersonIds(people, graph, { ...defaults, property: '__none__' }).size, 77);
+  const historicalPeople = [
+    { id: 'living', birth: '1950', death: null },
+    { id: 'dead', birth: '1950', death: '1990' },
+    { id: 'future', birth: '2010', death: null },
+    { id: 'unknown', birth: null, death: null },
+  ];
+  const historicalGraph = buildGraph(historicalPeople, []);
+  assert.deepEqual(
+    [...visiblePersonIds(historicalPeople, historicalGraph, { ...defaults, yearOn: true, year: 2000 })].sort(),
+    ['living', 'unknown'],
+  );
   assert.deepEqual(resolvedIslands({ property_islands: ['Svanö'], legacy_island: 'Ängsholmen' }), ['Svanö', 'Ängsholmen']);
   const propertyGroup = groupPeopleByProperty(people, properties).find(group => group.id === sampleLink.fields.property_id);
   assert.ok(propertyGroup.people.some(person => person.id === sampleLink.fields.person_id));
