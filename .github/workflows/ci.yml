@@ -1,0 +1,39 @@
+name: Kvalitetskontroll
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-app-shell:
+    name: Testa och bygg datafritt appskal
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Hämta koden utan kvarvarande GitHub-token
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Använd Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+
+      - name: Kör datafria kontrakt
+        run: npm run test:ci
+
+      - name: Bygg samtliga publika appskal
+        run: npm run build
+
+      - name: Kontrollera att publiceringskopiorna är aktuella
+        run: git diff --exit-code

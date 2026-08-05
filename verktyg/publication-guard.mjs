@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 async function listRelativeFiles(directory, prefix = '') {
@@ -21,4 +21,13 @@ export async function assertExactPublicationFiles(directory, expectedFiles) {
   const missing = expected.filter(file => !actualSet.has(file));
   if (missing.length) throw new Error(`Publiceringspaketet saknar: ${missing.join(', ')}`);
   return actual;
+}
+
+export async function readOptionalPrivateJson(path) {
+  try {
+    return JSON.parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
 }

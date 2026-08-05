@@ -248,4 +248,16 @@ await test('alla publiceringsbyggare vägrar oväntade filer och arbetsmaterial 
   }
 });
 
+await test('CI är datafri, skrivskyddad och verifierar byggda publiceringskopior', async () => {
+  const workflow = await readFile(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /permissions:\s*\n\s*contents: read/);
+  assert.match(workflow, /persist-credentials: false/);
+  assert.match(workflow, /npm run test:ci/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /git diff --exit-code/);
+  assert.doesNotMatch(workflow, /secrets\.|contents: write|pull-requests: write/);
+  const guard = await readFile(resolve(ROOT, 'verktyg/publication-guard.mjs'), 'utf8');
+  assert.match(guard, /readOptionalPrivateJson/);
+});
+
 console.log(`\n${passed} Korpholmen-kontrakt godkända.`);

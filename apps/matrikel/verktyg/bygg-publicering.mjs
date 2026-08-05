@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertExactPublicationFiles } from '../../../verktyg/publication-guard.mjs';
+import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../verktyg/publication-guard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../matrikel');
@@ -71,8 +71,8 @@ const actual = await assertExactPublicationFiles(OUT, expected);
 const textBundle = (await Promise.all(actual
   .filter(file => /\.(?:html|css|js|webmanifest|svg)$/.test(file))
   .map(file => readFile(resolve(OUT, file), 'utf8')))).join('\n');
-const privateArchive = JSON.parse(await readFile(resolve(ROOT, 'privat/migrering-2026-08-01/initial-archive.json'), 'utf8'));
-const leakedNames = privateArchive.persons
+const privateArchive = await readOptionalPrivateJson(resolve(ROOT, 'privat/migrering-2026-08-01/initial-archive.json'));
+const leakedNames = (privateArchive?.persons || [])
   .map(person => person.fields.display_name)
   .filter(name => name && textBundle.includes(name));
 if (leakedNames.length) throw new Error(`Persondata har läckt in i appskalet: ${leakedNames.slice(0, 3).join(', ')}`);
