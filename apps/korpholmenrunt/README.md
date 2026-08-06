@@ -17,12 +17,17 @@ kolumnindelning används inte som kapten-/besättningsdata; originalraden finns
 fortfarande kvar för källkontroll.
 Det aktuella personnamnet läses skrivskyddat från Matrikel. Resultatets rånamn
 ligger kvar i tävlingsmastern och ändras inte när personen byter namn.
+På samma sätt läses hela den aktuella båtkatalogen skrivskyddat från
+Båtregister. Äldre `boat-ref`-poster är bara en offline-reserv och begränsar
+inte matchningslistan. En bekräftad felskrivning i tävlingskällan visas med det
+rättade båtnamnet medan originalvärdet bevaras som uttrycklig proveniens.
 
 Ofullständigt granskade analoga år kan publiceras som preliminära rader. De
 visas tydligt i resultatlistan och under **Granska & matcha**, där varje rad kan
-öppnas, rättas och godkännas. Preliminära eller tidsosäkra rader räknas inte i
-placeringar, topptider eller rekord förrän de har godkänts. Källans råvärden och
-granskningsfrågor bevaras även när den normaliserade posten ändras.
+öppnas och rättas. Inget resultat filtreras bort på grund av granskningsstatus;
+alla resultat med ordningsbar tid ingår i placeringar, topptider och rekord.
+Källans råvärden och granskningsfrågor bevaras även när den normaliserade
+posten ändras.
 
 Den beslutade klassstandarden kan tillämpas på hela den levande mastern med
 ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
@@ -49,7 +54,9 @@ npm run migrate:tavlande -- --dry-run
 npm run migrate:med-flera
 npm test
 npm run build:publish
+node verktyg/granska-batkopplingar.mjs "/Users/.../Dropbox/Appar/Korpholmen"
 node verktyg/standardisera-klasser.mjs "/Users/.../Dropbox/Appar/Korpholmen"
+node verktyg/ratta-homsan-till-mymlan.mjs "/Users/.../Dropbox/Appar/Korpholmen" --write
 ```
 
 På localhost kan den privata startmastern aktiveras i en tom lokal databas och

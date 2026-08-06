@@ -8,7 +8,7 @@
 | `race-person-link` | En tävlande och dess koppling till Matrikelns person-ID. Alla länkar har samma roll: `tävlande`. |
 | `race-participant-placeholder` | Ett beslutat terminalt deltagarobjekt, exempelvis ”Med flera”, när ytterligare identiteter inte kan fastställas. |
 | `person-ref` | Lokal referenskatalog över Matrikelns stabila personer. |
-| `boat-ref` | Lokal referenskatalog över Båtregistrets stabila båtar. |
+| `boat-ref` | Äldre lokal läskopia av Båtregistrets stabila båtar, endast reserv när den levande skrivskyddade mastern ännu inte har synkats. |
 | `source-note` | Tomma rader, förklaringar och övrigt som inte är resultat. |
 
 ## Källtrohet
@@ -17,7 +17,10 @@
 ändras aldrig tyst. `participants_raw` är en ordnad lista över de deltagarnamn
 som källraden innehåller. Den innebär ingen uppdelning i kapten och besättning.
 Access-radens ursprungliga kolumner finns dessutom oförändrade i `raw_row`.
-Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden kan
+En bekräftad felskrivning av båtnamn lagras separat som
+`boat_name_corrected`, med status och beslutsnotering. Appens vanliga vyer och
+sökning använder då det rättade namnet; rånamnet syns bara som uttrycklig
+källproveniens. Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden kan
 tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
 `60+` och `80,95` bevaras men flaggas för granskning.
 Appinmatning använder formatet minuter och sekunder, exempelvis `21:05`.
@@ -34,6 +37,11 @@ att avgöra. Källvärdena `Paddel`, `rodel`, `Dagen` och `jolle` normaliseras
 till Kajak 2, Rodd, Rodd respektive Segel utan att råvärdet ändras.
 
 ## Registerkopplingar
+
+Aktuella båtnamn och samtliga valbara båtar läses skrivskyddat från
+Båtregistrets levande master. `boat-ref` används endast som lokal reserv innan
+den första synkningen och får inte begränsa vilka nuvarande båtar som går att
+välja.
 
 En person- eller båtlänk har `match_status`:
 

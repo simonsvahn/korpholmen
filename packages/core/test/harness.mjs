@@ -18,6 +18,7 @@ import {
   SharedDropboxSession,
   SyncEngine,
   canonicalStringify,
+  canonicalBoats,
   createRevisionCache,
   decodeCheckpointPayload,
   debounce,
@@ -25,6 +26,7 @@ import {
   dropboxUploadTimeoutMs,
   formatPropertyDisplayName,
   isOfflineError,
+  mergeBoatReferences,
   mergePersonReferences,
   migrateLegacyCredentialsToShared,
   mirrorSharedDropboxCredential,
@@ -760,6 +762,32 @@ await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fasti
   await persons.repository.setField('person', 'p1', 'display_name', 'Anna Efter'); await persons.sync(); await personReader.sync(personRemote);
   assert.equal(mergePersonReferences([{ external_id: 'p1', display_name: 'Gammal kopia' }], personReader)[0].display_name, 'Anna Efter');
   assert.equal(resolveCurrentOwners('Alsvik 3:1', propertyReader, personReader)[0].display_name, 'Anna Efter');
+});
+
+await test('Båtregistrets aktuella båtar ersätter gamla referensnamn och kompletterar saknade båtar', async () => {
+  const boatMaster = {
+    initialized: true,
+    listEntities(type) {
+      if (type !== 'boat') return [];
+      return [
+        { entity_id: 'filifjonkaniii', fields: { namn: 'Filifjonkan I', tidigare_namn: ['Filifjonkan'], typ: 'M/S', agare: 'Per-Olof Bethge' } },
+        { entity_id: 'filifjonkanii', fields: { namn: 'Filifjonkan II', typ: 'M/S', agare: 'Familjen Bethge' } },
+      ];
+    },
+  };
+  assert.deepEqual(canonicalBoats(boatMaster).map(boat => boat.id), ['filifjonkaniii', 'filifjonkanii']);
+  const references = mergeBoatReferences([
+    { external_id: 'filifjonkaniii', name: 'Filifjonkan I & II', owner_text: 'Gammal ägartext' },
+    { external_id: 'utgangen-bat', name: 'Äldre läskopia' },
+  ], boatMaster, { includeUnreferenced: true });
+  const byId = new Map(references.map(boat => [boat.external_id, boat]));
+  assert.equal(byId.get('filifjonkaniii').name, 'Filifjonkan I');
+  assert.equal(byId.get('filifjonkaniii').owner_text, 'Per-Olof Bethge');
+  assert.deepEqual(byId.get('filifjonkaniii').aliases, ['Filifjonkan']);
+  assert.equal(byId.get('filifjonkaniii').resolution, 'canonical-master');
+  assert.equal(byId.get('filifjonkanii').name, 'Filifjonkan II');
+  assert.equal(byId.get('filifjonkanii').url, '../batregister/?boat=filifjonkanii');
+  assert.equal(byId.get('utgangen-bat').resolution, 'cached-reference');
 });
 
 await test('fastighetens visningsnamn byggs av unika efternamn på nuvarande ägare', async () => {

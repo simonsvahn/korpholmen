@@ -128,7 +128,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','År för år','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderYearView','editionYears','selectedEditionYear','openEditionYear','raceSources','sourceNotes','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','exactBoatNameGroups','bulkCompanionNames','bulkBoatGroups','bulkPersonCard','bulkUnresolvedBoatCard','confirmPersonBulk','confirmBoatBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderYearView','editionYears','selectedEditionYear','openEditionYear','raceSources','sourceNotes','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','exactBoatNameGroups','bulkCompanionNames','bulkBoatGroups','bulkPersonCard','bulkUnresolvedBoatCard','confirmPersonBulk','confirmBoatBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard','resultBoatName','structuredBoatChoices','exactBoatIds','prioritizedBoatIds','boatCandidateOptions','selectableBoats'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-participant-1','edit-participant-2','edit-participant-3','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes('review_status:reviewStatus'));
   assert.ok(app.includes("review_issues:reviewStatus==='granskad'?[]:reviewIssues"));
@@ -145,7 +145,15 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(matchingStyles.includes('.matchkontext'));
   assert.ok(app.includes("opsRoot:'/korpholmenrunt/ops'"));
   assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
+  assert.ok(app.includes("opsRoot:'/batregister/ops',readOnly:true"));
   assert.ok(app.includes('mergePersonReferences(storedPeople(),matrikelMaster)'));
+  assert.ok(app.includes('mergeBoatReferences(storedBoats(),batregisterMaster,{includeUnreferenced:true})'));
+  assert.ok(app.includes("cacheKey:'batregister'"));
+  assert.ok(app.includes("boat?.owner_text||boat?.period"));
+  assert.ok(app.includes("result?.boat_name_corrected||result?.boat_name_raw"));
+  assert.ok(app.includes("resultBoatName(item),item.boat_name_raw"));
+  assert.ok(app.includes('[boat.name,...(boat.aliases||[])]'));
+  assert.equal(app.includes('result.boat_candidate_ids?.length?result.boat_candidate_ids'),false);
   assert.ok(app.includes("source_id:prior?.source_id??'race-source:user'"));
   assert.ok(app.includes("!result||reviewPending(result)?'granskning krävs':'granskad'"));
   const ranking=app.slice(app.indexOf('function rankMap()'),app.indexOf('const participantRawValues'));
@@ -267,6 +275,21 @@ await test('publiceringspaketet är datafritt och länkat från appnavet',async(
   assert.ok(root.includes('./korpholmenrunt/'));
   assert.ok(root.includes('En installerad app'));
   for(const result of results.slice(0,40))assert.equal(publishedApp.includes(JSON.stringify(result.boat_name_raw)),false);
+});
+
+await test('Homsan-rättelsen är avgränsad till Mymlan och bevarar råkällan',async()=>{
+  const script=await readFile(resolve(ROOT,'verktyg/ratta-homsan-till-mymlan.mjs'),'utf8');
+  for(const expected of [
+    "const RESULT_ID='race-result:analog-img-7402-2010-02'",
+    "boat_name_raw:'Homsan'",
+    "boat_id:'mymlan'",
+    "boat_name_corrected:'Mymlan'",
+    "class_id:'kajak-1'",
+    "entity.fields.boat_id==='homsan'",
+    "raw_source_preserved:corrected.boat_name_raw",
+  ])assert.ok(script.includes(expected));
+  assert.ok(script.includes("writeFile(path,content,{flag:'wx'})"));
+  assert.equal(script.includes("field:'boat_name_raw'"),false);
 });
 
 console.log(`\n${passed} Korpholmen runt-kontrakt godkända.`);
