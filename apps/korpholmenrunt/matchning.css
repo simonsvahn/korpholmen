@@ -153,6 +153,23 @@
   border-top: 1px dotted var(--linje);
 }
 
+.bulkforekomsttext {
+  display: grid;
+  gap: 3px;
+}
+
+.bulkforekomsttext strong {
+  font: 600 13px var(--serif);
+}
+
+.bulkforekomsttext small {
+  color: var(--mjuk);
+}
+
+.bulkforekomsttext b {
+  color: var(--text);
+}
+
 .bulkkort .statusrad {
   align-items: center;
   display: flex;
