@@ -10,6 +10,14 @@ export function canonicalPersonMap(master) {
   return new Map(canonicalPeople(master).map(person => [person.id, person]));
 }
 
+export function canonicalBoats(master) {
+  return rows(master, 'boat');
+}
+
+export function canonicalBoatMap(master) {
+  return new Map(canonicalBoats(master).map(boat => [boat.id, boat]));
+}
+
 export function resolvePartyName(party, personMaster) {
   if (!party) return '';
   const person = party.person_id ? canonicalPersonMap(personMaster).get(party.person_id) : null;
@@ -69,6 +77,51 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
     source_master: 'matrikel',
     resolution: 'canonical-master',
   });
+  return [...byId.values()];
+}
+
+const textValues = values => [...new Set((values || []).flat().map(value => String(value || '').trim()).filter(Boolean))];
+
+function boatAliases(boat) {
+  return textValues([
+    boat?.dopnamn,
+    boat?.onskat_namn,
+    boat?.smeknamn || [],
+    boat?.tidigare_namn || [],
+    boat?.senare_namn || [],
+  ]);
+}
+
+function resolvedBoatReference(reference, boat, externalId) {
+  const canonicalName = boat?.namn || boat?.onskat_namn || boat?.modell;
+  const name = canonicalName || reference?.name || 'Namn okänt';
+  return {
+    ...(reference || {}),
+    ...(boat || {}),
+    id: externalId,
+    external_id: externalId,
+    name,
+    aliases: textValues([reference?.aliases || [], boatAliases(boat)]).filter(alias => alias !== name),
+    type: boat?.typ || reference?.type || '',
+    period: boat?.period ?? reference?.period ?? '',
+    owner_text: boat?.agare || boat?.agarnamn || reference?.owner_text || '',
+    url: reference?.url || `../batregister/?boat=${encodeURIComponent(externalId)}`,
+    source_master: 'batregister',
+    resolution: boat ? 'canonical-master' : 'cached-reference',
+  };
+}
+
+export function mergeBoatReferences(references, boatMaster, { includeUnreferenced = false } = {}) {
+  const canonical = canonicalBoatMap(boatMaster);
+  const byId = new Map();
+  for (const reference of references || []) {
+    const externalId = reference.external_id || reference.boat_id || reference.id;
+    if (!externalId) continue;
+    byId.set(externalId, resolvedBoatReference(reference, canonical.get(externalId), externalId));
+  }
+  if (includeUnreferenced) for (const [id, boat] of canonical) if (!byId.has(id)) {
+    byId.set(id, resolvedBoatReference(null, boat, id));
+  }
   return [...byId.values()];
 }
 
