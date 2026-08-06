@@ -128,7 +128,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','rankEligible','approveResult','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','bulkPersonCard','confirmPersonBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-participant-1','edit-participant-2','edit-participant-3','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes("field:'review_status'"));
   assert.ok(app.includes("field:'review_issues'"));
@@ -173,7 +173,12 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("field:'class_match_method'"));
   assert.ok(app.includes("field:'class_id'"));
   assert.ok(html.includes('standardize-classes'));
-  assert.ok(app.includes("field:'match_method',value:'bekräftat från förslag i resultatlistan'"));
+  assert.ok(app.includes("'bekräftat från förslag i resultatlistan'"));
+  assert.ok(app.includes("'bulkbeslut för exakt källnamn'"));
+  assert.ok(app.includes('data-action="confirm-person-bulk"'));
+  assert.ok(app.includes('Alla förekomster visas före beslutet'));
+  assert.ok(matchingStyles.includes('.bulkkort'));
+  assert.ok(matchingStyles.includes('.bulkforekomst'));
   assert.ok(matchingStyles.includes('.sortknapp'));
   assert.ok(matchingStyles.includes('.snabbval'));
   assert.ok(matchingStyles.includes('.sorteringsperson'));

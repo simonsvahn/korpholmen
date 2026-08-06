@@ -99,6 +99,78 @@
   color: var(--text);
 }
 
+.bulkforklaring {
+  color: var(--mjuk);
+  max-width: 78ch;
+}
+
+.bulkgrid {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.bulkkort {
+  background: color-mix(in srgb, var(--guld) 7%, white);
+  border: 1px solid color-mix(in srgb, var(--guld) 32%, var(--linje));
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.bulkhuvud {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr);
+}
+
+.bulkhuvud h3,
+.bulkhuvud p {
+  margin: 0;
+}
+
+.bulkforekomster {
+  border-bottom: 1px solid var(--linje);
+  border-top: 1px solid var(--linje);
+  display: grid;
+  gap: 0;
+  padding: 4px 0;
+}
+
+.bulkforekomst {
+  align-items: start;
+  cursor: pointer;
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  grid-template-columns: auto 1fr;
+  padding: 7px 4px;
+}
+
+.bulkforekomst + .bulkforekomst {
+  border-top: 1px dotted var(--linje);
+}
+
+.bulkkort .statusrad {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.bulkkort .statusrad small {
+  color: var(--mjuk);
+}
+
+@media(max-width:680px) {
+  .bulkhuvud {
+    grid-template-columns: 1fr;
+  }
+}
+
 .registerlista {
   display: grid;
   gap: 8px;
