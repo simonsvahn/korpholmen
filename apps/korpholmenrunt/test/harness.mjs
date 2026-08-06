@@ -127,8 +127,8 @@ await test('analysdatabasen har främmande nycklar och index för topplistor',()
 await test('appen har redigering, rekord, profiler, duell, export och matchningskö',async()=>{
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
-  for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','bulkCompanionNames','bulkBoatGroups','bulkPersonCard','confirmPersonBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const label of ['Översikt','Alla resultat','År för år','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
+  for(const capability of ['saveResult','exportCsv','renderYearView','editionYears','selectedEditionYear','openEditionYear','raceSources','sourceNotes','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','exactBoatNameGroups','bulkCompanionNames','bulkBoatGroups','bulkPersonCard','bulkUnresolvedBoatCard','confirmPersonBulk','confirmBoatBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-participant-1','edit-participant-2','edit-participant-3','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes('review_status:reviewStatus'));
   assert.ok(app.includes("review_issues:reviewStatus==='granskad'?[]:reviewIssues"));
@@ -190,6 +190,16 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes('data-action="confirm-person-bulk"'));
   assert.ok(app.includes('const unresolvedPeople=personLinks().filter(link=>!participantLinkResolved(link))'));
   assert.ok(app.includes('const bulkGroups=exactRawNameGroups(unresolvedPeople,resultMap)'));
+  assert.ok(app.includes('data-action="confirm-boat-bulk"'));
+  assert.ok(app.includes('data-bulk-boat-result-id'));
+  assert.ok(app.includes('bulkbeslut för exakt båtkällnamn'));
+  assert.ok(app.includes('const bulkBoatNameGroups=exactBoatNameGroups(unresolvedBoats)'));
+  assert.ok(app.includes('Källnamnet i varje resultat och hela Båtregistret lämnas oförändrade'));
+  const boatBulk=app.slice(app.indexOf('async function confirmBoatBulk'),app.indexOf('async function confirmBoatCandidate'));
+  assert.ok(boatBulk.includes("field:'boat_id'"));
+  assert.ok(boatBulk.includes("field:'boat_match_status'"));
+  assert.equal(boatBulk.includes("field:'boat_name_raw'"),false);
+  assert.equal(boatBulk.includes("entityType:'boat-ref'"),false);
   assert.equal(app.includes('Vem är vem?'),false);
   assert.equal(app.includes('individualPeople'),false);
   assert.equal(app.includes('data-person-select'),false);
@@ -208,6 +218,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(matchingStyles.includes('.bulkresultat'));
   assert.ok(matchingStyles.includes('.bulkforekomst'));
   assert.ok(matchingStyles.includes('.bulkforekomsttext'));
+  assert.ok(matchingStyles.includes('.bulkhuvud select'));
   assert.ok(matchingStyles.includes('.sortknapp'));
   assert.ok(matchingStyles.includes('.snabbval'));
   assert.ok(matchingStyles.includes('.sorteringsperson'));
@@ -215,6 +226,19 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(matchingStyles.includes('.namndelning'));
   assert.ok(matchingStyles.includes('.delningsfilter'));
   assert.ok(app.includes('registerKorpholmenServiceWorker'));
+  assert.ok(app.includes("ui.view==='arsvis'?renderYearView()"));
+  assert.ok(app.includes("params.has('year')"));
+  assert.ok(app.includes("url.searchParams.set('year'"));
+  assert.ok(app.includes('data-edition-year='));
+  assert.ok(app.includes('edition-year-select'));
+  assert.ok(app.includes('Källor för året'));
+  assert.ok(app.includes('Sådant som inte är ett resultat'));
+  const yearView=app.slice(app.indexOf('function renderYearView'),app.indexOf('function topList'));
+  assert.ok(yearView.includes('boatRegisterCell(result,bMap)'));
+  assert.ok(yearView.includes('participantRegisterCell(result,linkMap,pMap)'));
+  assert.equal(yearView.includes('boatRegisterCell(result,bMap,true)'),false);
+  assert.equal(yearView.includes('data-result-id'),false);
+  for(const selector of ['.arshuvud','.arsnavigering','.arsoversikt','.arskursgrid','.arskallor','.arsnoteringar'])assert.ok(styles.includes(selector));
   assert.ok(sharedServiceWorkerClient.includes("updateViaCache: 'none'"));
   assert.ok(serviceWorker.includes("if(request.mode==='navigate')"));
   assert.ok(serviceWorker.includes("fetch(request,{cache:'no-store'})"));

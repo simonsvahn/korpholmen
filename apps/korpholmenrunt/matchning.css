@@ -98,6 +98,14 @@
   margin: 0;
 }
 
+.bulkhuvud select {
+  background: white;
+  border: 1px solid var(--linje);
+  color: var(--hav);
+  padding: 10px;
+  width: 100%;
+}
+
 .bulkforekomster {
   border-bottom: 1px solid var(--linje);
   border-top: 1px solid var(--linje);
@@ -178,6 +186,16 @@
 
 .bulkkort .statusrad small {
   color: var(--mjuk);
+}
+
+.bulkkort .statusrad button {
+  background: var(--hav);
+  border: 0;
+  color: white;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 9px 12px;
 }
 
 @media(max-width:680px) {
