@@ -249,6 +249,17 @@ export class IndexedDBStore {
     await transactionDone(transaction);
   }
 
+  async listMeta(prefix = '') {
+    const normalized = String(prefix);
+    const transaction = this.db.transaction('meta', 'readonly');
+    const rows = await requestResult(transaction.objectStore('meta').getAll());
+    await transactionDone(transaction);
+    return rows
+      .filter(row => String(row.key).startsWith(normalized))
+      .map(row => ({ key: String(row.key), value: cloneJson(row.value) }))
+      .sort((a, b) => a.key.localeCompare(b.key));
+  }
+
   async saveSnapshot(id, snapshot) {
     canonicalStringify(snapshot);
     const transaction = this.db.transaction('snapshots', 'readwrite');

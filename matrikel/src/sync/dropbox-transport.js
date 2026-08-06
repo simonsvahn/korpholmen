@@ -105,9 +105,15 @@ export class DropboxTransport {
     });
     if (!response.ok) return this.parseError(response);
     try {
-      return cloneJson(await response.json());
+      const value = typeof response.text === 'function'
+        ? JSON.parse(await response.text())
+        : await response.json();
+      return cloneJson(value);
     } catch (error) {
-      throw new TransportError(`Dropbox-filen innehåller ogiltig JSON: ${path}`, { code: 'invalid_json' });
+      if (error instanceof SyntaxError) {
+        throw new TransportError(`Dropbox-filen innehåller ogiltig JSON: ${path}`, { code: 'invalid_json' });
+      }
+      throw error;
     }
   }
 

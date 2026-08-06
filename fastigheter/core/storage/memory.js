@@ -86,6 +86,14 @@ export class MemoryStore {
     this.meta.delete(String(key));
   }
 
+  async listMeta(prefix = '') {
+    const normalized = String(prefix);
+    return [...this.meta.entries()]
+      .filter(([key]) => key.startsWith(normalized))
+      .map(([key, value]) => ({ key, value: cloneJson(value) }))
+      .sort((a, b) => a.key.localeCompare(b.key));
+  }
+
   async saveSnapshot(id, snapshot) {
     canonicalStringify(snapshot);
     this.snapshots.set(String(id), cloneJson(snapshot));
