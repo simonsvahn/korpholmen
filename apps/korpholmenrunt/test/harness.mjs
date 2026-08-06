@@ -176,7 +176,10 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("'bekräftat från förslag i resultatlistan'"));
   assert.ok(app.includes("'bulkbeslut för exakt källnamn'"));
   assert.ok(app.includes('data-action="confirm-person-bulk"'));
-  assert.ok(app.includes('Varje förekomst visar båt och övriga tävlande före beslutet'));
+  assert.ok(app.includes('Varje förekomst visar båt, ägar-/anknytningsuppgift och övriga tävlande före beslutet'));
+  assert.ok(app.includes('registeredBoat?.owner_text'));
+  assert.ok(app.includes('Ägare/anknytning:'));
+  assert.ok(app.includes('Båten är inte säkert kopplad till Båtregistret'));
   assert.ok(app.includes('Övriga tävlande:'));
   assert.ok(matchingStyles.includes('.bulkkort'));
   assert.ok(matchingStyles.includes('.bulkforekomst'));
