@@ -18,6 +18,16 @@ Personnamn är inte kanonisk båtdata. Båtlänken lagrar personens stabila ID o
 appen läser Matrikel skrivskyddat för aktuellt `display_name`. Äldre
 `person_display_name` ligger kvar endast som offline-/migrationsfallback.
 
+I en lokal Båtmasterpilot kan en privat Matrikel-snapshot byggas in i
+förhandsvisningen. Den används bara som skrivskyddad namn- och länkkontext och
+publiceras aldrig. Pilotens ägargranskning läser den privata inventeringsfilen,
+visar återstående fritextposter och sparar granskningsbeslut separat från
+mastern. Rollen `owner`, ägarpart, tid och källor är strukturerade. Bara beslut
+med status **Klar för införande** exporteras till en validerad ändringskö;
+Dropbox-mastern skrivs först efter separat torrkörning och ett uttryckligt
+`--write`. Kandidater godkänns aldrig automatiskt. Se
+[`DATAMODELL-BATMASTER.md`](./DATAMODELL-BATMASTER.md).
+
 Den låsta startkopian byggs av arbetskopiorna i `privat/kallkopior/`:
 
 ```sh

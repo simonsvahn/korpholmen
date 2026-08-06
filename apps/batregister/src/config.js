@@ -7,3 +7,4 @@ export const DROPBOX_SCOPES = [
 export const LOCAL_BOOTSTRAP_URL = './privat/migrering-2026-08-01/initial-ops.json';
 export const LOCAL_IMAGE_MANIFEST_URL = './privat/migrering-2026-08-01/bildmanifest.json';
 export const LOCAL_IMAGE_BASE_URL = './privat/migrering-2026-08-01/bilder/';
+export const LOCAL_MATRIKEL_CONTEXT_URL = './privat/migrering-2026-08-01/matrikel-context.json';

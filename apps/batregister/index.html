@@ -9,8 +9,8 @@
   <link rel="manifest" href="../../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../../icons/korpholmen-180.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-06-korpholmen-pwa-28">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-06-korpholmen-pwa-28">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-06-korpholmen-pwa-30">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-06-korpholmen-pwa-30">
 </head>
 <body class="app-batregister">
   <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
@@ -29,7 +29,7 @@
     <div>
       <p class="eyebrow">Korpholmen</p>
       <h1>Båtregister</h1>
-      <p class="intro">Master för båtar, bilder och deras historia. Båtar kan kopplas till en person, en stabil FAMILJ eller en stabil SLÄKT och visas då tydligt även i underliggande grupper.</p>
+      <p class="intro">Båtar och deras historia.</p>
     </div>
     <div class="sync-panel">
       <div class="status-stack"><span id="sync-status" role="status">Startar lokalt lager…</span><span id="undo-status" role="status" hidden></span></div>
@@ -42,24 +42,12 @@
       <label class="field boat-search-field">Sök båtar
         <input id="search" type="search" placeholder="Båtnamn, modell, ägare eller källa …">
       </label>
-      <div class="field connection-search-field">
-        <label for="connection-filter-search">Person, familj eller släkt</label>
-        <div class="connection-combobox">
-          <input id="connection-filter" type="hidden" value="">
-          <input id="connection-filter-search" type="search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="connection-filter-results" placeholder="Sök ett namn eller en släkt …">
-          <button id="connection-filter-clear" type="button" aria-label="Rensa anknytningsfiltret" hidden>×</button>
-          <div id="connection-filter-results" class="family-results connection-results" hidden></div>
-        </div>
-        <div class="connection-picker-actions">
-          <button id="connection-filter-browse" type="button" aria-expanded="false" aria-controls="connection-filter-results">Bläddra bland släkterna</button>
-          <span id="connection-filter-summary" aria-live="polite">Familjedata laddas …</span>
-        </div>
-      </div>
     </div>
 
     <div class="filter-command-row">
       <button id="filter-panel-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-controls="filter-panel">Filter <span id="filter-badge" hidden></span></button>
       <button id="view-panel-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-controls="view-panel">Visa</button>
+      <button id="owner-review-toggle" class="panel-toggle owner-review-toggle" type="button" aria-expanded="false" aria-controls="owner-review-view" hidden>Ägargranskning <span id="owner-review-badge"></span></button>
       <output id="filter-count" aria-live="polite"></output>
       <button id="add-boat" type="button" class="primary add-boat">Ny båt</button>
       <button id="bootstrap-local" type="button" hidden>Aktivera godkänd startkopia</button>
@@ -69,9 +57,23 @@
 
   <section id="filter-panel" class="options-panel" hidden aria-label="Fler filter">
     <header><div><span>Filtrera båtar</span><b>Förfina resultatet</b></div><button type="button" data-close-panel aria-label="Stäng filter">×</button></header>
+    <div class="panel-section connection-filter-panel"><h2>Person, familj eller släkt</h2><div class="field connection-search-field">
+      <div class="connection-combobox">
+        <input id="connection-filter" type="hidden" value="">
+        <input id="connection-filter-search" type="search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="connection-filter-results" placeholder="Sök ett namn eller en släkt …">
+        <button id="connection-filter-clear" type="button" aria-label="Rensa anknytningsfiltret" hidden>×</button>
+        <div id="connection-filter-results" class="family-results connection-results" hidden></div>
+      </div>
+      <div class="connection-picker-actions">
+        <button id="connection-filter-browse" type="button" aria-expanded="false" aria-controls="connection-filter-results">Bläddra bland släkterna</button>
+        <span id="connection-filter-summary" aria-live="polite">Familjedata laddas …</span>
+      </div>
+    </div></div>
+    <div class="panel-section" id="pilot-filter-section" hidden><h2>Särskilt urval</h2><div id="pilot-options" class="choice-grid"></div></div>
     <div class="panel-section"><h2>Båttyp</h2><div id="type-options" class="choice-grid"></div></div>
     <div class="panel-section"><h2>Bild</h2><div class="choice-grid" id="image-options"><button type="button" data-image-status="">Alla</button><button type="button" data-image-status="with">Med bild</button><button type="button" data-image-status="without">Utan bild</button></div></div>
-    <div class="panel-section"><h2>Namnstatus</h2><div class="choice-grid" id="name-options"><button type="button" data-name-status="">Alla</button><button type="button" data-name-status="namn">Känt namn</button><button type="button" data-name-status="dopnamn">Endast dopnamn</button></div></div>
+    <div class="panel-section" id="quality-filter-section" hidden><h2>Datakvalitet</h2><p class="filter-help">Antalen gäller piloturvalets strukturerade data. Flera val kombineras.</p><div class="choice-grid" id="quality-options"></div></div>
+    <div class="panel-section"><h2>Namnstatus</h2><div class="choice-grid" id="name-options"><button type="button" data-name-status="">Alla</button><button type="button" data-name-status="namn">Känt namn</button><button type="button" data-name-status="dopnamn">Endast dopnamn</button><button type="button" data-name-status="saknas">Namn okänt</button></div></div>
     <button id="clear-all-filters" class="clear-all" type="button">Rensa alla filter</button>
   </section>
 
@@ -82,15 +84,72 @@
   </section>
   <div id="panel-backdrop" hidden></div>
 
+  <section id="owner-review-view" class="owner-review-view" hidden aria-label="Ägargranskning">
+    <header class="owner-review-heading">
+      <div>
+        <p class="eyebrow">Pilotverktyg</p>
+        <h2>Ägargranskning</h2>
+        <p id="owner-review-summary"></p>
+      </div>
+      <button id="owner-review-close" type="button">Tillbaka till båtarna</button>
+    </header>
+    <div class="owner-review-controls">
+      <label class="field">Sök i ägaruppgifterna
+        <input id="owner-review-search" type="search" placeholder="Båt, ägartext, person eller källa …">
+      </label>
+      <label class="field">Typ av granskning
+        <select id="owner-review-class"><option value="">Alla typer</option></select>
+      </label>
+      <label class="field">Beslutsstatus
+        <select id="owner-review-status"><option value="active">Aktiva</option></select>
+      </label>
+      <output id="owner-review-count" aria-live="polite"></output>
+    </div>
+    <div class="owner-review-queue-actions">
+      <button id="owner-review-export-ready" class="primary" type="button" disabled>Hämta ändringskö</button>
+      <button id="owner-review-export-backup" type="button">Säkerhetskopiera beslut</button>
+      <button id="owner-review-import-button" type="button">Importera beslut</button>
+      <input id="owner-review-import" type="file" accept="application/json,.json" hidden>
+      <p>Ändringskön är ett kontrollerat underlag. Den ändrar inte Dropbox-mastern av sig själv.</p>
+    </div>
+    <div class="owner-review-batch-bar">
+      <button id="owner-review-batch-toggle" type="button">Batchläge</button>
+      <div id="owner-review-batch-actions" hidden><b id="owner-review-batch-count">0 valda</b><button id="owner-review-batch-open" class="primary" type="button" disabled>Koppla ägare</button><button id="owner-review-batch-clear" type="button">Rensa val</button></div>
+      <p>Välj flera båtar och skapa ett separat utkast per båt.</p>
+    </div>
+    <div id="owner-review-list" class="owner-review-list"></div>
+  </section>
+
   <main id="content" aria-live="polite"></main>
 
-  <aside id="boat-drawer" aria-hidden="true" aria-label="Redigera båt">
+  <aside id="boat-drawer" aria-hidden="true" aria-label="Båt">
     <button class="drawer-close" type="button" data-action="close" aria-label="Stäng">×</button>
     <div id="drawer-content"></div>
   </aside>
   <div id="backdrop" hidden></div>
 
-  <script type="module" src="../../src/app-family-bootstrap.js?v=2026-08-06-korpholmen-pwa-28"></script>
-  <script type="module" src="./src/app.js?v=2026-08-06-korpholmen-pwa-28"></script>
+  <dialog id="source-viewer" class="source-viewer" aria-labelledby="source-viewer-title">
+    <header>
+      <div><span id="source-viewer-meta"></span><h2 id="source-viewer-title">Källa</h2></div>
+      <button type="button" data-action="close-source-viewer" aria-label="Stäng källan">×</button>
+    </header>
+    <nav id="source-viewer-artifacts" aria-label="Välj källfil"></nav>
+    <div id="source-viewer-body" class="source-viewer-body"></div>
+    <footer><details><summary>Fil</summary><code id="source-viewer-path"></code></details><a id="source-viewer-open" target="_blank" rel="noreferrer" hidden>Öppna i ny flik</a></footer>
+  </dialog>
+
+  <dialog id="owner-batch-dialog" class="owner-batch-dialog" aria-labelledby="owner-batch-title">
+    <header><div><span>Batchutkast</span><h2 id="owner-batch-title">Koppla ägare till flera båtar</h2></div><button type="button" data-action="close-owner-batch" aria-label="Stäng batchen">×</button></header>
+    <div class="owner-batch-form">
+      <label class="full-field">Person, familj eller släkt<input id="owner-batch-party-search" list="owner-batch-party-options" autocomplete="off" placeholder="Sök i Matrikeln …"><datalist id="owner-batch-party-options"></datalist></label>
+      <div class="structured-date-grid"><label>Tidsstatus<select id="owner-batch-start-precision"><option value="observed">Belagd detta år</option><option value="year">Från år</option><option value="not_later_than">Belagd senast</option></select></label><label>Start/belägg<input id="owner-batch-start-year" type="number" inputmode="numeric"></label><label>Slutår<input id="owner-batch-end-year" type="number" inputmode="numeric"></label></div>
+      <label class="full-field">Anteckning<textarea id="owner-batch-note" rows="2" placeholder="Gemensam anteckning för batchen (valfritt)"></textarea></label>
+      <section><header><div><h3 id="owner-batch-boats-title">Valda båtar</h3><p>Varje båt behåller sin egen äldre text och sin egen källa.</p></div></header><div id="owner-batch-list" class="owner-batch-list"></div></section>
+    </div>
+    <footer><button type="button" data-action="close-owner-batch">Avbryt</button><button class="primary" type="button" data-action="save-owner-batch">Spara batchutkast</button></footer>
+  </dialog>
+
+  <script type="module" src="../../src/app-family-bootstrap.js?v=2026-08-06-korpholmen-pwa-30"></script>
+  <script type="module" src="./src/app.js?v=2026-08-06-korpholmen-pwa-30"></script>
 </body>
 </html>

@@ -25,10 +25,13 @@ export { KORPHOLMEN_APPS, clearLegacyDropboxCredentials, disconnectDropboxEveryw
 export { registerKorpholmenServiceWorker } from './pwa/korpholmen-service-worker.js';
 export { ReadOnlyMaster } from './read-only-master.js';
 export {
+  canonicalBoatMap,
+  canonicalBoats,
   canonicalPeople,
   canonicalPersonMap,
   formatPropertyDisplayName,
   formatSwedishList,
+  mergeBoatReferences,
   mergePersonReferences,
   ownerSurnameLabel,
   resolveArchiveEntity,

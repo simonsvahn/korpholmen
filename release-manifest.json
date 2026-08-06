@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-06-korpholmen-pwa-28",
+  "release": "2026-08-06-korpholmen-pwa-30",
   "generated_at": "2026-08-06",
   "pwa": {
     "id": "./",
@@ -45,9 +45,14 @@
     "./batregister/index.html",
     "./batregister/manifest.webmanifest",
     "./batregister/src/app.js",
+    "./batregister/src/boat-master-view.js",
     "./batregister/src/config.js",
     "./batregister/src/connection-filter.js",
     "./batregister/src/image-pipeline.js",
+    "./batregister/src/owner-review-decisions.js",
+    "./batregister/src/owner-review.js",
+    "./batregister/src/source-review.js",
+    "./batregister/src/spec-review-decisions.js",
     "./batregister/styles.css",
     "./batregister/sw.js",
     "./dokumentarkiv/core/data-layer.js",
