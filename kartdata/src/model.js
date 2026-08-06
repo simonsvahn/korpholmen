@@ -40,6 +40,15 @@ export function entryIdNumber(value) {
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
+export function nextEntryId(values) {
+  const numbers = (values || []).map(value => {
+    const id = typeof value === 'string' ? value : value?.id || value?.entity_id;
+    const match = String(id || '').match(/^K(\d+)$/);
+    return match ? Number(match[1]) : 0;
+  });
+  return `K${Math.max(0, ...numbers) + 1}`;
+}
+
 export function islandDeletionRefs({ id, names = [], islandLinks = [], relations = [], propertyLinks = [] }) {
   if (!id) return [];
   const refs = [{ entityType: 'place', entityId: id }];

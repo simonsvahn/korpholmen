@@ -23,6 +23,7 @@ import {
   classLabel,
   entryIdNumber,
   islandDeletionRefs,
+  nextEntryId,
   objectTypeLabel,
   reviewStatusLabel,
   splitList,
@@ -39,6 +40,7 @@ const backdrop = $('#backdrop');
 const statusNode = $('#sync-status');
 const undoNode = $('#undo-status');
 const connectButton = $('#connect-dropbox');
+const newEntryButton = $('#new-entry');
 const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/kartdata/');
 const TOKEN_META = 'dropbox:refresh-token';
@@ -53,6 +55,7 @@ let accessTokenExpiresAt = 0;
 let syncPromise = null;
 let selectedEntryId = null;
 let selectedIslandId = null;
+let creatingEntry = false;
 const ui = { search: '', island: '', objectClass: '', subtype: '', property: '', status: '', sort: 'name', view: 'atlas' };
 const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${fastigheterMaster?.revision || 0}:${matrikelMaster?.revision || 0}`);
 
@@ -220,9 +223,10 @@ function render() {
   content.innerHTML = ui.view === 'structure' ? renderStructure() : ui.view === 'queue' ? renderQueue() : ui.view === 'table' ? renderTable() : renderAtlas();
 }
 
-function openDrawer(entryId) { selectedIslandId = null; selectedEntryId = entryId; renderEntryDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
-function openIslandDrawer(islandId = null) { selectedEntryId = null; selectedIslandId = islandId; renderIslandDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
-function closeDrawer() { selectedEntryId = null; selectedIslandId = null; drawer.setAttribute('aria-hidden', 'true'); backdrop.hidden = true; }
+function openDrawer(entryId) { creatingEntry = false; selectedIslandId = null; selectedEntryId = entryId; renderEntryDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
+function openNewEntryDrawer() { creatingEntry = true; selectedIslandId = null; selectedEntryId = null; renderEntryDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
+function openIslandDrawer(islandId = null) { creatingEntry = false; selectedEntryId = null; selectedIslandId = islandId; renderIslandDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
+function closeDrawer() { creatingEntry = false; selectedEntryId = null; selectedIslandId = null; drawer.setAttribute('aria-hidden', 'true'); backdrop.hidden = true; }
 
 function propertySelectionRow(property) {
   return `<div class="selected-property" data-property-id="${escapeAttribute(property.external_id)}"><input type="hidden" name="property_ids" value="${escapeAttribute(property.external_id)}"><a href="${escapeAttribute(property.url || '#')}">${escapeHtml(propertyDisplayName(property.external_id))}</a><button type="button" data-action="remove-property" aria-label="Ta bort ${escapeAttribute(propertyDisplayName(property.external_id))}">Ta bort</button></div>`;
@@ -247,9 +251,14 @@ function updatePropertyPicker(form, propertyIds) {
   const owners = form.querySelector('[data-owner-preview-list]'); if (owners) owners.innerHTML = ownerChipsForProperties(state.selected.map(item => item.id));
 }
 function renderEntryDrawer() {
-  const entry = entryRecords().find(item => item.id === selectedEntryId); if (!entry) return closeDrawer();
-  const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id);
-  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.name)}</h2><span class="large-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></header><section class="drawer-section data-panel"><h3>Data</h3><form id="data-form" class="review-form"><label>Granskningsstatus<select name="review_status">${REVIEW_STATUSES.map(value => option(value, entry.review_status, reviewStatusLabel(value))).join('')}</select></label><label>Objektstyp<select name="object_type">${OBJECT_CLASSES.map(value => option(value, entry.object_type, classLabel(value))).join('')}</select></label><label class="span-2">Namn<input name="name" value="${escapeAttribute(entry.name)}" required></label><label>Undertyp<input name="subtype" value="${escapeAttribute(entry.subtype || '')}" list="subtype-options" placeholder="exempelvis gäststuga eller udde"></label><label>Ö<select name="island_id"><option value="">Ingen ö kopplad</option>${islandRecords().map(item => option(item.id, island?.id || '', item.preferred_name)).join('')}</select></label><fieldset class="span-2"><legend>Fastighet</legend>${propertyPicker(properties)}</fieldset><section class="span-2 owner-preview"><h3>Nuvarande ägare</h3><p>Hämtas skrivskyddat från Fastighetshistorikens granskade nulägesbedömning.</p><div class="owner-list" data-owner-preview-list>${ownerChips(entry.id)}</div></section><div class="form-actions span-2"><button type="submit" class="primary">Spara data</button></div></form><div class="danger-zone"><div><strong>Ta bort dataposten</strong><small>Posten tas bort ur den aktiva v2-datan. Det äldre v1-arkivet används inte av appen.</small></div><button type="button" class="delete-button" data-action="delete-entry">Ta bort</button></div></section>`;
+  const entry = creatingEntry
+    ? { id: nextEntryId(repository.listEntities('data-entry', { includeDeleted: true })), name: '', object_type: 'byggnad', subtype: '', review_status: 'ogranskad' }
+    : entryRecords().find(item => item.id === selectedEntryId);
+  if (!entry) return closeDrawer();
+  const island = creatingEntry ? null : islandForEntry(entry.id); const properties = creatingEntry ? [] : propertyIdsForEntry(entry.id);
+  const title = creatingEntry ? 'Nytt kartobjekt' : entry.name;
+  const eyebrow = creatingEntry ? `Ny kartpost · ${entry.id}` : entry.id;
+  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">${escapeHtml(eyebrow)}</p><h2>${escapeHtml(title)}</h2><span class="large-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></header><section class="drawer-section data-panel"><h3>Data</h3><form id="data-form" class="review-form"><input type="hidden" name="entry_id" value="${escapeAttribute(entry.id)}"><label>Granskningsstatus<select name="review_status">${REVIEW_STATUSES.map(value => option(value, entry.review_status, reviewStatusLabel(value))).join('')}</select></label><label>Objektstyp<select name="object_type">${OBJECT_CLASSES.map(value => option(value, entry.object_type, classLabel(value))).join('')}</select></label><label class="span-2">Namn<input name="name" value="${escapeAttribute(entry.name)}" required autofocus></label><label>Undertyp<input name="subtype" value="${escapeAttribute(entry.subtype || '')}" list="subtype-options" placeholder="exempelvis gäststuga eller udde"></label><label>Ö<select name="island_id"><option value="">Ingen ö kopplad</option>${islandRecords().map(item => option(item.id, island?.id || '', item.preferred_name)).join('')}</select></label><fieldset class="span-2"><legend>Fastighet</legend>${propertyPicker(properties)}</fieldset><section class="span-2 owner-preview"><h3>Nuvarande ägare</h3><p>Hämtas skrivskyddat från Fastighetshistorikens granskade nulägesbedömning.</p><div class="owner-list" data-owner-preview-list>${ownerChipsForProperties(properties)}</div></section><div class="form-actions span-2"><button type="submit" class="primary">${creatingEntry ? 'Skapa kartobjekt' : 'Spara data'}</button></div></form>${creatingEntry ? '' : '<div class="danger-zone"><div><strong>Ta bort dataposten</strong><small>Posten tas bort ur den aktiva v2-datan. Det äldre v1-arkivet används inte av appen.</small></div><button type="button" class="delete-button" data-action="delete-entry">Ta bort</button></div>'}</section>`;
 }
 function renderIslandDrawer() {
   const island = selectedIslandId ? islandRecords().find(item => item.id === selectedIslandId) : null;
@@ -286,10 +295,25 @@ async function replaceEntryLinks(entryId, islandId, propertyIds) {
 async function saveEntry(form) {
   const data = new FormData(form); const objectType = data.get('object_type'); if (!OBJECT_CLASSES.includes(objectType)) throw new Error('Otillåten objekttyp');
   const islandId = String(data.get('island_id') || ''); if (islandId && !islandRecords().some(island => island.id === islandId)) throw new Error('Den valda ön finns inte');
-  const propertyIds = validatePropertySelection({ selectedIds: data.getAll('property_ids'), propertyReferences: propertyRefs(), existingIds: propertyIdsForEntry(selectedEntryId) });
+  const isNew = creatingEntry; const entryId = isNew ? String(data.get('entry_id') || '') : selectedEntryId;
+  if (!/^K\d+$/.test(entryId)) throw new Error('Kartposten saknar ett giltigt ID');
+  if (isNew && repository.getEntity('data-entry', entryId, { includeDeleted: true })) throw new Error(`Kartposten ${entryId} finns redan. Stäng och öppna formuläret igen.`);
+  const propertyIds = validatePropertySelection({ selectedIds: data.getAll('property_ids'), propertyReferences: propertyRefs(), existingIds: isNew ? [] : propertyIdsForEntry(entryId) });
   const fields = { name: String(data.get('name') || '').trim(), object_type: objectType, subtype: String(data.get('subtype') || '').trim() || null, review_status: data.get('review_status') };
   if (!fields.name) throw new Error('Namn saknas');
-  await syncEdit(async () => { await repository.setFields(Object.entries(fields).map(([field, value]) => ({ entityType: 'data-entry', entityId: selectedEntryId, field, value }))); await replaceEntryLinks(selectedEntryId, islandId, propertyIds); }, `${fields.name} uppdaterad`);
+  await syncEdit(async () => {
+    if (isNew) {
+      const newEntities = [
+        { entityType: 'data-entry', entityId: entryId, fields },
+        ...(islandId ? [{ entityType: 'data-entry-island-link', entityId: `entry:${entryId}:island:${islandId}`, fields: { entry_id: entryId, island_id: islandId } }] : []),
+        ...propertyIds.map(propertyId => ({ entityType: 'data-entry-property-link', entityId: `entry:${entryId}:property:${propertyId}`, fields: { entry_id: entryId, property_id: propertyId } })),
+      ];
+      await repository.replaceEntities(newEntities);
+      return;
+    }
+    await repository.setFields(Object.entries(fields).map(([field, value]) => ({ entityType: 'data-entry', entityId: entryId, field, value })));
+    await replaceEntryLinks(entryId, islandId, propertyIds);
+  }, `${fields.name} ${isNew ? 'skapad' : 'uppdaterad'}`);
 }
 async function deleteEntry() {
   const entry = entryRecords().find(item => item.id === selectedEntryId); if (!entry) return;
@@ -351,7 +375,8 @@ async function completeOAuthCallbackIfNeeded() { const url = new URL(location.hr
 async function currentAccessToken() { if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken; const refreshToken = await store.getMeta(TOKEN_META); if (!refreshToken || !DROPBOX_CLIENT_ID || navigator.onLine === false) return null; const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken }); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token); return accessToken; }
 async function syncNow() {
   if (syncPromise) return syncPromise;
-  syncPromise = (async () => { const hasCredential = Boolean(await store.getMeta(TOKEN_META)); if (navigator.onLine === false) { setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning'); return null; } const token = await currentAccessToken(); if (!token) { setStatus('Lokalt sparat · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; } connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar Kartdata och läser mastrar…'); const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata', opsRoot: '/kartdata/ops' }); const result = await new SyncEngine({ repository, transport }).syncOnce(); await Promise.all([
+  syncPromise = (async () => { const hasCredential = Boolean(await store.getMeta(TOKEN_META)); if (navigator.onLine === false) { setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning'); return null; } const token = await currentAccessToken(); if (!token) { setStatus('Lokalt sparat · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; } connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar Kartdata och läser mastrar…'); const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata', opsRoot: '/kartdata/ops' }); const kartdataSync = new SyncEngine({ repository, transport }).syncOnce().then(result => { render(); return result; }); const [result] = await Promise.all([
+    kartdataSync,
     fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
     matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
   ]); render(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned · ägare från Fastigheter`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
@@ -397,10 +422,11 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
 bootstrapButton.addEventListener('click', () => bootstrapCleanV2({ force: true }).then(() => setStatus(`${entryRecords().length} rena dataposter inlästa lokalt · ägare läses från Fastigheter`, 'ok')).catch(error => setStatus(error.message, 'error')));
 $('#export-json').addEventListener('click', exportData);
+newEntryButton.addEventListener('click', openNewEntryDrawer);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDrawer(); });
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {})); window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; newEntryButton.disabled = false; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });
