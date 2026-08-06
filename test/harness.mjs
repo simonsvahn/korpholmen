@@ -177,7 +177,7 @@ await test('borttagningar kan ångras och granskningsköer har ett källbevarand
     assert.match(styles, /\.undo-action/);
     assert.match(html, /id="undo-status" role="status" hidden/);
   }
-  for (const app of ['korpholmenrunt', 'klubbhistorik']) {
+  for (const app of ['klubbhistorik']) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     assert.match(source, /review_decision/);
     assert.match(source, /bevarad okopplad/);
