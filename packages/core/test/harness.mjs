@@ -22,6 +22,7 @@ import {
   decodeCheckpointPayload,
   debounce,
   disconnectDropboxEverywhere,
+  dropboxUploadTimeoutMs,
   isOfflineError,
   mergePersonReferences,
   migrateLegacyCredentialsToShared,
@@ -779,6 +780,14 @@ await test('hängande Dropbox-anrop avbryts med begriplig timeout', async () => 
     fetchImpl,
   });
   await assert.rejects(() => transport.listChanges(), /Dropbox svarade inte inom/);
+});
+
+await test('stora Dropbox-uppladdningar får en storleksanpassad men begränsad timeout', () => {
+  assert.equal(dropboxUploadTimeoutMs({ size: 10 * 1024 * 1024 }, 0), 0);
+  assert.equal(dropboxUploadTimeoutMs(new Blob([]), 45_000), 45_000);
+  assert.equal(dropboxUploadTimeoutMs(new Blob([new Uint8Array(1024)]), 45_000), 45_000);
+  assert.ok(dropboxUploadTimeoutMs({ size: 10 * 1024 * 1024 }, 45_000) > 45_000);
+  assert.equal(dropboxUploadTimeoutMs({ size: 1024 * 1024 * 1024 }, 45_000), 10 * 60_000);
 });
 
 await test('Dropbox-huvuden är ASCII-säkra även för svenska filnamn', async () => {

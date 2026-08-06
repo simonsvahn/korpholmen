@@ -192,7 +192,7 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(html.includes('Person, familj eller släkt'));
   assert.ok(html.includes('stabil FAMILJ'));
   assert.ok(html.includes('stabil SLÄKT'));
-  assert.ok(app.includes('putBlobImmutable'));
+  assert.ok(app.includes('uploadBlobWithRetry'));
   assert.ok(app.includes("repository.deleteEntities"));
   assert.equal((app.match(/repository\.upsertFields\(/g)||[]).length,3);
 });
@@ -291,8 +291,8 @@ await test('webbappen lagrar hela bildbeståndet och nya bilder för offlinebruk
   const storage=await readFile(resolve(REPO,'packages/core/storage/indexeddb.js'),'utf8');
   assert.ok(storage.includes("createObjectStore('blobs'"));
   assert.ok(app.includes('cacheAllBoatImages'));
-  assert.ok(app.includes('uploadPendingImages'));
-  assert.ok(app.includes("store.putBlob(path,file,{pendingUpload:true})"));
+  assert.ok(app.includes('uploadPendingImageBlobs'));
+  assert.ok(app.includes("store.putBlob(path,prepared.blob,{pendingUpload:true})"));
   assert.ok(app.includes("Offline · lokalt sparat · synkas automatiskt"));
 });
 

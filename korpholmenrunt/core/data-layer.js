@@ -15,7 +15,7 @@ export { MemoryStore } from './storage/memory.js';
 export { IndexedDBStore, openSlaktlandskapDB } from './storage/indexeddb.js';
 export { createBatch, batchPath, parseBatchPath, validateBatch } from './sync/batch.js';
 export { decodeCheckpointPayload, packSnapshot, sha256Hex, unpackSnapshot, validateCheckpointManifest } from './sync/checkpoint-format.js';
-export { DropboxTransport } from './sync/dropbox-transport.js';
+export { DropboxTransport, dropboxUploadTimeoutMs } from './sync/dropbox-transport.js';
 export { MemoryRemoteTransport } from './sync/memory-transport.js';
 export { beginDropboxOAuth, completeDropboxOAuth } from './sync/oauth-flow.js';
 export { exchangeDropboxRefreshToken, revokeDropboxAccessToken } from './sync/oauth-pkce.js';

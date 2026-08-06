@@ -36,6 +36,11 @@ import {
   searchPeopleForConnection,
 } from './connection-filter.js?v=2026-08-05-paket-3';
 import {
+  prepareImageForStorage,
+  uploadBlobWithRetry,
+  uploadPendingImageBlobs,
+} from './image-pipeline.js';
+import {
   DROPBOX_CLIENT_ID,
   DROPBOX_SCOPES,
   LOCAL_BOOTSTRAP_URL,
@@ -449,24 +454,18 @@ function allImagePaths() {
 async function cacheAllBoatImages(transport) {
   const paths = allImagePaths();
   let downloaded = 0;
+  const failures = [];
   await mapConcurrent(paths, 4, async path => {
-    if (await store.getBlob(path)) return;
-    await cachedBlob(path, transport);
-    downloaded += 1;
-    if (downloaded === 1 || downloaded % 10 === 0) setStatus(`Säkrar bilder för offline-läge · ${downloaded}/${paths.length}`);
+    try {
+      if (await store.getBlob(path)) return;
+      await cachedBlob(path, transport);
+      downloaded += 1;
+      if (downloaded === 1 || downloaded % 10 === 0) setStatus(`Säkrar bilder för offline-läge · ${downloaded}/${paths.length}`);
+    } catch (error) {
+      failures.push({ path, error, message: error?.message || String(error) });
+    }
   });
-  return { total: paths.length, downloaded };
-}
-
-async function uploadPendingImages(transport) {
-  const pending = await store.listPendingBlobs();
-  let uploaded = 0;
-  for (const entry of pending) {
-    await transport.putBlobImmutable(entry.key, entry.value);
-    await store.markBlobUploaded(entry.key);
-    uploaded += 1;
-  }
-  return uploaded;
+  return { total: paths.length, downloaded, failures };
 }
 
 function closeOptionsPanels() {
@@ -688,14 +687,17 @@ async function deleteLink(type,id) {
 
 async function uploadImage(file) {
   if (!file || !selectedBoatId) return;
-  const hashBytes=new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()));
+  setStatus('Förbereder bilden…');
+  const prepared=await prepareImageForStorage(file);
+  const hashBytes=new Uint8Array(await crypto.subtle.digest('SHA-256',await prepared.blob.arrayBuffer()));
   const hash=[...hashBytes].map(byte=>byte.toString(16).padStart(2,'0')).join('');
-  const extension=(file.type.split('/')[1]||'bin').replace('jpeg','jpg');
+  const extension=prepared.extension;
   const path=`/batregister/bilder/${hash}.${extension}`;
-  await store.putBlob(path,file,{pendingUpload:true});
-  objectUrl(path,file);
+  await store.putBlob(path,prepared.blob,{pendingUpload:true});
+  objectUrl(path,prepared.blob);
   const boat=boatRecords().find(item=>item.id===selectedBoatId);
-  const images=[...(boat.images||[]),{id:crypto.randomUUID(),thumb:{dropbox_path:path,sha256:hash},full:{dropbox_path:path,sha256:hash},source:`Uppladdad ${new Date().toISOString()}`}];
+  const dimensions=prepared.width&&prepared.height?`, ${prepared.width}×${prepared.height}px`:'';
+  const images=[...(boat.images||[]),{id:crypto.randomUUID(),thumb:{dropbox_path:path,sha256:hash},full:{dropbox_path:path,sha256:hash},source:`Uppladdad ${new Date().toISOString()}${prepared.resized?` · nedskalad${dimensions}`:''}`}];
   await syncEdit(()=>repository.setField('boat',boat.id,'images',images));
 }
 
@@ -724,11 +726,30 @@ async function uploadBootstrapOps(transport) {
 }
 
 async function uploadBootstrapImages(transport) {
-  const pending=await store.getMeta(IMAGE_BOOTSTRAP_META); if(!pending?.pending||!isSourceTree)return 0;
+  const pending=await store.getMeta(IMAGE_BOOTSTRAP_META); if(!pending?.pending||!isSourceTree)return {total:0,uploaded:0,failures:[]};
   const response=await fetch(LOCAL_IMAGE_MANIFEST_URL,{cache:'no-store'}); if(!response.ok)throw new Error('Bildmanifestet kunde inte läsas');
-  const manifest=await response.json(); let uploaded=0;
-  for(const file of manifest.image_files){const imageResponse=await fetch(`${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(file.filename)}`,{cache:'no-store'});if(!imageResponse.ok)throw new Error(`Startbild saknas: ${file.filename}`);const blob=await imageResponse.blob();await transport.putBlobImmutable(file.dropbox_path,blob);await store.putBlob(file.dropbox_path,blob);uploaded+=1;if(uploaded%10===0)setStatus(`Laddar upp startbilder · ${uploaded}/${manifest.image_files.length}`)}
-  await store.putMeta(IMAGE_BOOTSTRAP_META,{...pending,pending:false,uploaded_at:new Date().toISOString()}); return uploaded;
+  const manifest=await response.json();
+  const completed=new Set(Array.isArray(pending.completed_paths)?pending.completed_paths:[]);
+  const failures=[];
+  let uploaded=0;
+  for(const file of manifest.image_files){
+    if(completed.has(file.dropbox_path))continue;
+    try{
+      const imageResponse=await fetch(`${LOCAL_IMAGE_BASE_URL}${encodeURIComponent(file.filename)}`,{cache:'no-store'});
+      if(!imageResponse.ok)throw new Error(`Startbild saknas: ${file.filename}`);
+      const blob=await imageResponse.blob();
+      await uploadBlobWithRetry({transport,path:file.dropbox_path,blob});
+      await store.putBlob(file.dropbox_path,blob);
+      completed.add(file.dropbox_path);uploaded+=1;
+      await store.putMeta(IMAGE_BOOTSTRAP_META,{...pending,pending:true,completed_paths:[...completed]});
+      if(uploaded===1||uploaded%10===0)setStatus(`Laddar upp startbilder · ${completed.size}/${manifest.image_files.length}`);
+    }catch(error){failures.push({path:file.dropbox_path,error,message:error?.message||String(error)})}
+  }
+  const done=completed.size===manifest.image_files.length;
+  await store.putMeta(IMAGE_BOOTSTRAP_META,done
+    ?{...pending,pending:false,completed_paths:[],failed_paths:[],image_count:completed.size,uploaded_at:new Date().toISOString()}
+    :{...pending,pending:true,completed_paths:[...completed],failed_paths:failures.map(item=>item.path),last_attempt_at:new Date().toISOString()});
+  return {total:manifest.image_files.length,uploaded,failures};
 }
 
 async function loadMatrikelPeople(token) {
@@ -750,12 +771,33 @@ function applyMatrikelMaster() {
 
 async function syncNow() {
   if(syncPromise)return syncPromise;
-  syncPromise=(async()=>{const hasCredential=Boolean(await store.getMeta(TOKEN_META));if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}ändringar sparas lokalt`,'warning');connectButton.textContent=hasCredential?'Offline · Dropbox ansluten':'Anslut Dropbox när du är online';return null}const token=await currentAccessToken();if(!token){setStatus('Lokalt sparat · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}
-    connectButton.textContent='Synka Dropbox';setStatus('Synkar…');const transport=new DropboxTransport({accessToken:token,id:'dropbox-batregister',opsRoot:'/batregister/ops'});
-    const images=await uploadBootstrapImages(transport);const bootstrap=await uploadBootstrapOps(transport);const queuedImages=await uploadPendingImages(transport);const result=await new SyncEngine({repository,transport}).syncOnce();
-    const cached=await cacheAllBoatImages(transport);render();
+  syncPromise=(async()=>{
+    const hasCredential=Boolean(await store.getMeta(TOKEN_META));
+    if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}ändringar sparas lokalt`,'warning');connectButton.textContent=hasCredential?'Offline · Dropbox ansluten':'Anslut Dropbox när du är online';return null}
+    const token=await currentAccessToken();
+    if(!token){setStatus('Lokalt sparat · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}
+    connectButton.textContent='Synka Dropbox';setStatus('Synkar data…');
+    const transport=new DropboxTransport({accessToken:token,id:'dropbox-batregister',opsRoot:'/batregister/ops'});
+    let bootstrap=0;let bootstrapError=null;
+    try{bootstrap=await uploadBootstrapOps(transport)}catch(error){bootstrapError=error;console.warn('Startmastern kunde inte laddas upp',error)}
+    const result=await new SyncEngine({repository,transport}).syncOnce();
     await loadMatrikelPeople(token).catch(error=>console.warn('Matrikelns familjekontext kunde inte hämtas',error));
-    setStatus(`Synkad · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · ${cached.total} bilder offline${images+queuedImages?` · ${images+queuedImages} bilder upp`:''}`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});
+    render();
+
+    let bootstrapImages={total:0,uploaded:0,failures:[]};
+    try{bootstrapImages=await uploadBootstrapImages(transport)}catch(error){bootstrapImages.failures.push({error,message:error?.message||String(error)})}
+    let queuedImages={total:0,uploaded:0,failures:[]};
+    try{queuedImages=await uploadPendingImageBlobs({store,transport,onProgress:({uploaded,total})=>setStatus(`Synkad data · laddar upp bilder ${uploaded}/${total}`)})}
+    catch(error){queuedImages.failures.push({error,message:error?.message||String(error)})}
+    const cached=await cacheAllBoatImages(transport);
+    render();
+    const imageFailures=bootstrapImages.failures.length+queuedImages.failures.length+cached.failures.length;
+    const warnings=imageFailures+(bootstrapError?1:0);
+    const uploadedImages=bootstrapImages.uploaded+queuedImages.uploaded;
+    const summary=`Synkad data · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · ${cached.total-cached.failures.length}/${cached.total} bilder offline${uploadedImages?` · ${uploadedImages} bilder upp`:''}`;
+    setStatus(warnings?`${summary} · ${warnings} väntar på nytt försök`:summary,warnings?'warning':'ok');
+    return {...result,imageUploads:queuedImages,imageBootstrap:bootstrapImages,imageCache:cached};
+  })().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});
   return syncPromise;
 }
 
@@ -841,6 +883,7 @@ $('#active-filters').addEventListener('click',event=>{const button=event.target.
 $('#clear-all-filters').addEventListener('click',()=>{clearFilter('all');closeOptionsPanels()});
 $('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal().catch(error=>setStatus(error.message,'error')));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeDrawer();closeConnectionSearch();closeOptionsPanels()}});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));window.addEventListener('korpholmen:dropbox-ready',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
+window.addEventListener('pagehide',()=>{for(const url of imageUrls.values())URL.revokeObjectURL(url);imageUrls.clear()});
 
 async function init(){const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});store=new IndexedDBStore(db);repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();applyMatrikelMaster();bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;if(requestedBoatId&&boatRecords().some(boat=>boat.id===requestedBoatId))selectedBoatId=requestedBoatId;render();await completeOAuthCallbackIfNeeded();await syncNow();await serviceWorkerPromise}
 init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

@@ -6,7 +6,7 @@ import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../v
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../batregister');
 const CORE=resolve(ROOT,'../../packages/core');
-const FILES=['index.html','styles.css','manifest.webmanifest','sw.js','icons/icon.svg','src/config.js'];
+const FILES=['index.html','styles.css','manifest.webmanifest','sw.js','icons/icon.svg','src/config.js','src/image-pipeline.js'];
 const CORE_FILES=['data-layer.js', 'runtime-safety.js', 'family-context.js','master-data.js','read-only-master.js','domain/canonical.js','domain/hlc.js','domain/materializer.js','domain/operations.js','domain/repository.js','pwa/korpholmen-service-worker.js','storage/indexeddb.js','storage/memory.js','sync/app-family-sync.js','sync/batch.js','sync/batch-progress.js','sync/checkpoint-format.js','sync/dropbox-transport.js','sync/errors.js','sync/memory-transport.js','sync/oauth-flow.js','sync/oauth-pkce.js','sync/shared-dropbox-session.js','sync/sync-engine.js'];
 for(const relative of FILES){const source=resolve(ROOT,relative);if(!(await stat(source)).isFile())throw new Error(`Publiceringsfil saknas: ${relative}`);const target=resolve(OUT,relative);await mkdir(dirname(target),{recursive:true});await copyFile(source,target)}
 const sharedIndex=(await readFile(resolve(ROOT,'index.html'),'utf8')).replaceAll('../../manifest.webmanifest','../manifest.webmanifest').replaceAll('../../icons/korpholmen.svg','../icons/korpholmen.svg').replaceAll('../../icons/korpholmen-180.png','../icons/korpholmen-180.png').replaceAll('../../src/app-family-bootstrap.js','../src/app-family-bootstrap.js');
