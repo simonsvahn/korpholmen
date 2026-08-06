@@ -52,20 +52,6 @@
   text-transform: uppercase;
 }
 
-.badge.utkast {
-  background: color-mix(in srgb, #b7791f 18%, transparent);
-  border-color: color-mix(in srgb, #b7791f 48%, var(--linje));
-  color: #8a5310;
-}
-
-.preliminar-rad {
-  background: color-mix(in srgb, #f2c879 12%, transparent);
-}
-
-.preliminar-rad:hover {
-  background: color-mix(in srgb, #f2c879 22%, transparent);
-}
-
 .bulkforklaring {
   color: var(--mjuk);
   max-width: 78ch;
@@ -489,6 +475,42 @@ a.registernamn:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 13px 14px 14px;
+}
+
+.deltagarredigering {
+  display: grid;
+  gap: 12px;
+}
+
+.deltagarrad {
+  position: relative;
+}
+
+.ta-bort-tavlande {
+  align-self: end;
+  background: transparent;
+  border: 1px solid var(--linje);
+  color: var(--rod);
+  cursor: pointer;
+  font-size: 9px;
+  justify-self: start;
+  padding: 8px 10px;
+}
+
+.lagg-till-tavlande {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.justera {
+  background: var(--hav);
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 7px 11px;
 }
 
 .tavlandegrupp[hidden] {

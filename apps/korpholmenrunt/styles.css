@@ -97,6 +97,11 @@
 .arskursgrid {
   display: grid;
   gap: 22px;
+  min-width: 0;
+}
+
+.arskurs {
+  min-width: 0;
 }
 
 .arskurs > header h3 {
@@ -175,6 +180,38 @@
   font-size: 10px;
   line-height: 1.45;
   margin: 4px 0;
+}
+
+.kallbild {
+  border-top: 1px solid var(--linje);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.kallbild summary {
+  color: var(--hav);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 7px 0;
+}
+
+.kallbildyta {
+  background: #eee9dd;
+  margin-top: 10px;
+  min-height: 90px;
+  padding: 10px;
+}
+
+.kallbildyta img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+.kallbildfel {
+  color: var(--rod) !important;
 }
 
 @media(max-width:680px) {
