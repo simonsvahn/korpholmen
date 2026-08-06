@@ -138,10 +138,10 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("field:'participant_link_ids'"));
   for(const retired of ['captain_raw','crew_1_raw','crew_2_raw','person_link_ids','source_parent_field','data-inline-person-field'])assert.equal(app.includes(retired),false);
   assert.ok(app.includes("method:'valt i resultatdialogen'"));
-  assert.ok(app.includes('participantRole(link)'));
+  assert.ok(app.includes('participantRole()'));
   assert.ok(matchingStyles.includes('.tavlandegrupp'));
   assert.ok(app.includes('matchContext(result,bMap)'));
-  assert.equal((app.match(/\$\{matchContext\(result,bMap\)\}/g)||[]).length,2);
+  assert.equal((app.match(/\$\{matchContext\(result,bMap\)\}/g)||[]).length,1);
   assert.ok(matchingStyles.includes('.matchkontext'));
   assert.ok(app.includes("opsRoot:'/korpholmenrunt/ops'"));
   assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
@@ -188,6 +188,13 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("'bekräftat från förslag i resultatlistan'"));
   assert.ok(app.includes("'bulkbeslut för exakt källnamn'"));
   assert.ok(app.includes('data-action="confirm-person-bulk"'));
+  assert.ok(app.includes('const unresolvedPeople=personLinks().filter(link=>!participantLinkResolved(link))'));
+  assert.ok(app.includes('const bulkGroups=exactRawNameGroups(unresolvedPeople,resultMap)'));
+  assert.equal(app.includes('Vem är vem?'),false);
+  assert.equal(app.includes('individualPeople'),false);
+  assert.equal(app.includes('data-person-select'),false);
+  assert.equal(app.includes('data-action="confirm-person"'),false);
+  assert.equal(app.includes('keepPersonUnlinked'),false);
   assert.ok(app.includes('Varje förekomst visar båt, ägar-/anknytningsuppgift och övriga tävlande före beslutet'));
   assert.ok(app.includes('registeredBoat?.owner_text'));
   assert.ok(app.includes('Ägare/anknytning:'));
