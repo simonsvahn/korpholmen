@@ -27,6 +27,15 @@ for(const boatId of ['lassemaja','tillfälligheten']){
   const boat=boatsById.get(boatId);
   if(!boat||(boat.kbk_personer||[]).some(value=>value==='Junior Peter = Peter Neretnieks')===false)throw new Error(`${boatId}: källans uttryckliga Peter Neretnieks-koppling saknas.`);
 }
+const correctionAlreadyInBase=['lassemaja','tillfälligheten'].every(boatId=>
+  !previousState.getEntity('boat-person-link',`${boatId}--peterholm`)
+  && previousState.getEntity('boat-person-link',`${boatId}--peterneretnieks`)?.fields.person_id==='peterneretnieks');
+if(correctionAlreadyInBase){
+  const existing=JSON.parse(await readFile(OUT_PATH,'utf8'));
+  if(existing.device_id!==DEVICE||existing.correction_id!=='peter-identitetsdelning')throw new Error('Den redan införda rättningens lokala revisionsfil avviker.');
+  console.log('Båtidentitetsrättningen är redan införd i startkopian; revisionsfilen lämnas oförändrad.');
+  process.exit(0);
+}
 if(!previousState.getEntity('boat-person-link','lassemaja--peterholm')||!previousState.getEntity('boat-person-link','tillfälligheten--peterholm'))throw new Error('De två felkopplingarna finns inte i väntad form.');
 if(previousState.getEntity('boat-person-link','lassemaja--peterneretnieks')||previousState.getEntity('boat-person-link','tillfälligheten--peterneretnieks'))throw new Error('De rättade länkarna finns redan; korrigeringsunderlaget måste granskas.');
 
