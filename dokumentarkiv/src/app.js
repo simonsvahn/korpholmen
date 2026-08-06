@@ -41,12 +41,13 @@ let store;
 let repository;
 let matrikelMaster;
 let batregisterMaster;
+let fastigheterMaster;
 let historyOperations = [];
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
 const contentImageUrls = new Map();
-const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelMaster?.revision || 0}:${batregisterMaster?.revision || 0}`);
+const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelMaster?.revision || 0}:${batregisterMaster?.revision || 0}:${fastigheterMaster?.revision || 0}`);
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const escapeAttribute = escapeHtml;
@@ -55,7 +56,7 @@ const typeLabel = type => type ? type.charAt(0).toLocaleUpperCase('sv') + type.s
 const recordList = type => viewCache(`records:${type}`, () => repository ? repository.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields })) : []);
 const documentRecords = () => viewCache('documents', () => [...recordList('document')].sort((a, b) => String(a.document_date).localeCompare(String(b.document_date), 'sv') || String(a.title || '').localeCompare(String(b.title || ''), 'sv')));
 const entityRecords = () => viewCache('archive-entities', () => recordList('archive-entity')
-  .map(entity => resolveArchiveEntity(entity, { personMaster: matrikelMaster, boatMaster: batregisterMaster }))
+  .map(entity => resolveArchiveEntity(entity, { personMaster: matrikelMaster, boatMaster: batregisterMaster, fastigheterMaster }))
   .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'sv')));
 const entityMap = () => viewCache('archive-entity-map', () => new Map(entityRecords().map(entity => [entity.id, entity])));
 const summaryRecord = () => recordList('archive-summary')[0] || {};
@@ -501,12 +502,13 @@ async function syncNow() {
     const referenceResults = await Promise.allSettled([
       matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
       batregisterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-read', opsRoot: '/batregister/ops', readOnly: true })),
+      fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
     ]);
     const referenceFailures = referenceResults.filter(item => item.status === 'rejected');
     for (const failure of referenceFailures) console.warn('En referensmaster kunde inte uppdateras; markerad lokal cache används', failure.reason);
     await refreshHistory();
     const images = await syncContentImages(transport);
-    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned · ${referenceFailures.length ? 'referensnamn från lokal cache' : 'namn från Matrikel och Båtregister'}`, referenceFailures.length ? 'warning' : 'ok');
+    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned · ${referenceFailures.length ? 'referensnamn från lokal cache' : 'namn från Matrikel, Båtregister och Fastigheter'}`, referenceFailures.length ? 'warning' : 'ok');
     return result;
   })().catch(error => {
     console.error(error);
@@ -607,6 +609,7 @@ async function init() {
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
   matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
   batregisterMaster = await new ReadOnlyMaster({ store, cacheKey: 'batregister' }).init();
+  fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init();
   await refreshHistory();
   await loadCachedContentImages();
   bootstrapButton.hidden = !isSourceTree;

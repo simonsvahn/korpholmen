@@ -69,6 +69,11 @@ ska källvyn i stället peka på en begriplig originalkälla: handling, bok och
 sida, eller namngiven muntlig uppgiftslämnare med datum/tidskod. Saknas den
 kopplingen visas luckan uttryckligen inför den separata källkontrollen.
 
+Fastighetens synliga namn är en läsprojektion och lagras inte som en fristående
+ägaretikett. Det byggs av det stabila fastighets-ID:t och de unika strukturerade
+efternamnen på parterna i `current-owner-assessment`, exempelvis
+`Alsvik 3:79 (Bethge)`. Om en säker nulägesbedömning saknas visas bara ID:t.
+
 `community-link` presenteras långt ned som **Matrikelns huvudsakliga eller
 senast kända fastighetsanknytning**. Det är varken juridiskt ägande, fullständig
 boendehistorik eller bevis för var en avliden eller avflyttad person bodde sist.

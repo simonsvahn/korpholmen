@@ -8,15 +8,16 @@ import { OBJECT_CLASSES, islandDeletionRefs, objectTypeLabel, stableEntityId } f
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
-const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2');
+const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-06-fastighetsvisning');
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
 let passed = 0;
 async function test(name, action) { try { await action(); passed += 1; console.log(`✓ ${name}`); } catch (error) { console.error(`✗ ${name}`); throw error; } }
 
 const document = await readJson(resolve(PRIVATE, 'clean-v2-ops.json'));
+const verificationBase = await readJson(resolve(PRIVATE, 'verification-base-ops.json'));
 const preview = await readJson(resolve(PRIVATE, 'preview.json'));
 const manifest = await readJson(resolve(PRIVATE, 'manifest.json'));
-const state = materialize(document.operations);
+const state = materialize([...verificationBase.operations, ...document.operations]);
 const rows = type => state.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 
 await test('alla JavaScript-filer har giltig syntax', async () => {
@@ -28,18 +29,36 @@ await test('alla JavaScript-filer har giltig syntax', async () => {
 });
 
 await test('v2-migrationen är giltig och har låst identitet', () => {
-  assert.equal(document.migration_id, '2026-08-04-kartdata-clean-v2');
+  assert.equal(document.migration_id, '2026-08-06-kartdata-property-owner-display');
   document.operations.forEach(validateOperation);
   assert.equal(new Set(document.operations.map(operation => operation.op_id)).size, document.operations.length);
   assert.deepEqual(document.counts, manifest.counts);
 });
 
-await test('den aktiva datan har 158 poster och inga förbjudna objekttyper', () => {
+await test('migreringen rör bara ägaretiketter och deras aktuella ägarprojektion', () => {
+  const tombstones = document.operations.filter(operation => operation.field === '__deleted');
+  assert.deepEqual(Object.fromEntries(['data-entry', 'data-entry-island-link', 'data-entry-property-link'].map(type => [type, tombstones.filter(operation => operation.entity_type === type).length])), {
+    'data-entry': 32,
+    'data-entry-island-link': 32,
+    'data-entry-property-link': 31,
+  });
+  assert.ok(tombstones.every(operation => ['data-entry', 'data-entry-island-link', 'data-entry-property-link', 'property-owner-link', 'person-ref', 'external-party'].includes(operation.entity_type)));
+});
+
+await test('den aktiva datan har 126 sakposter och inga ägaretiketter', () => {
   const entries = rows('data-entry');
-  assert.equal(entries.length, 158);
+  assert.equal(entries.length, 126);
   assert.ok(entries.every(entry => OBJECT_CLASSES.includes(entry.object_type)));
-  assert.deepEqual(OBJECT_CLASSES, ['byggnad', 'plats', 'namnform', 'ägaretikett']);
+  assert.deepEqual(OBJECT_CLASSES, ['byggnad', 'plats', 'namnform']);
+  assert.ok(!entries.some(entry => entry.object_type === 'ägaretikett'));
   for (const removedId of ['K105', 'K161', 'K32']) assert.ok(!entries.some(entry => entry.id === removedId), removedId);
+});
+
+await test('de 32 äldre ägaretiketterna finns bara kvar i råarkivet', async () => {
+  const archive = await readJson(resolve(ROOT, 'privat/kallkopior/kartdata-source.json'));
+  const labels = archive.rows.filter(row => /ägaretikett/i.test(row.raw?.source_name_type || ''));
+  assert.equal(labels.length, 32);
+  assert.equal(preview.entries.filter(entry => entry.object_type === 'ägaretikett').length, 0);
 });
 
 await test('previewfilen saknar källfält, arbetsförslag och anteckningar', () => {
@@ -58,23 +77,23 @@ await test('de tio manuellt kvarvarande öarna är v2-mastern', () => {
   assert.equal(rows('place').length, 10);
 });
 
-await test('139 poster har säker strukturerad ökoppling och 19 lämnas okopplade', () => {
+await test('107 poster har säker strukturerad ökoppling och 19 lämnas okopplade', () => {
   const links = rows('data-entry-island-link'); const islandIds = new Set(preview.islands.map(island => island.id)); const entryIds = new Set(preview.entries.map(entry => entry.id));
-  assert.equal(links.length, 139);
+  assert.equal(links.length, 107);
   assert.equal(preview.entries.filter(entry => !entry.island_id).length, 19);
   assert.ok(links.every(link => islandIds.has(link.island_id) && entryIds.has(link.entry_id)));
 });
 
-await test('fastighetskopplingarna pekar bara på de 31 validerade referenserna', () => {
+await test('fastighetskopplingarna pekar bara på de 27 använda referenserna', () => {
   const links = rows('data-entry-property-link'); const refs = new Set(rows('property-ref').map(ref => ref.external_id)); const entries = new Set(rows('data-entry').map(entry => entry.id));
-  assert.equal(links.length, 106); assert.equal(refs.size, 31);
+  assert.equal(links.length, 75); assert.equal(preview.properties.length, 27);
   assert.ok(links.every(link => entries.has(link.entry_id) && refs.has(link.property_id)));
 });
 
 await test('den äldre ägarreferensmigreringen är bevarad som fullständig fallback', () => {
-  assert.equal(rows('property-owner-link').length, 52);
-  assert.equal(rows('person-ref').length, 28);
-  assert.equal(rows('external-party').length, 23);
+  assert.equal(rows('property-owner-link').length, 46);
+  assert.equal(rows('person-ref').length, 45);
+  assert.equal(rows('external-party').length, 1);
   assert.ok(rows('person-ref').some(ref => ref.external_id === 'olaböving'));
   assert.ok(rows('person-ref').some(ref => ref.external_id === 'månsböving'));
   assert.ok(!rows('property-owner-link').some(link => link.owner_id === 'kajböving' || link.owner_id === 'party-kaj-gunder-boving'));
@@ -101,6 +120,11 @@ await test('modellens typetiketter är rena och ö-ID:n stabila', () => {
   assert.equal(stableEntityId('Stora Sviholmen'), 'stora-sviholmen');
 });
 
+await test('fastigheter visas med nuvarande ägares unika efternamn', () => {
+  assert.equal(preview.properties.find(property => property.id === 'Alsvik 3:79')?.display_name, 'Alsvik 3:79 (Bethge)');
+  assert.equal(preview.properties.find(property => property.id === 'Alsvik 3:26')?.display_name, 'Alsvik 3:26 (Ilveus, Lindblom och Granath)');
+});
+
 await test('borttagning av en ö tar även bort dess ökopplingar men inte dataposterna', () => {
   const refs = islandDeletionRefs({ id: 'korpholmen', names: [{ id: 'n1', target_type: 'place', target_id: 'korpholmen' }], islandLinks: [{ id: 'l1', entry_id: 'K1', island_id: 'korpholmen' }], relations: [], propertyLinks: [] });
   assert.deepEqual(refs, [{ entityType: 'place', entityId: 'korpholmen' }, { entityType: 'name-record', entityId: 'n1' }, { entityType: 'data-entry-island-link', entityId: 'l1' }]);
@@ -117,6 +141,8 @@ await test('appen visar bara Data och de strukturerade sakfälten', async () => 
   assert.ok(app.includes("opsRoot: '/matrikel/ops', readOnly: true"));
   assert.ok(!app.includes('bootstrapCurrentOwners'));
   assert.ok(!html.includes('value="kartsymbol"')); assert.ok(!html.includes('value="annat"')); assert.ok(html.includes('Exportera data'));
+  assert.ok(!html.includes('value="ägaretikett"'));
+  assert.ok(app.includes('propertyDisplayName'));
 });
 
 await test('fastigheter väljs en i taget utan en lång krysslista', async () => {

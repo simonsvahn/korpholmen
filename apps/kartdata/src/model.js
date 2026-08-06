@@ -3,7 +3,7 @@ export const REVIEW_STATUSES = ['ogranskad', 'bekräftad', 'rättad', 'osäker',
 // Kartdata v2 innehåller bara saktyper som ska kunna finnas i den aktiva datan.
 // Kartsymbol, annat och den äldre pseudotypen "ingen masterpost" är avsiktligt
 // inte tillåtna.
-export const OBJECT_CLASSES = ['byggnad', 'plats', 'namnform', 'ägaretikett'];
+export const OBJECT_CLASSES = ['byggnad', 'plats', 'namnform'];
 
 export function stableEntityId(value) {
   return String(value || '')
@@ -19,7 +19,7 @@ export function splitList(value) {
 }
 
 export function classLabel(value) {
-  return { byggnad: 'Byggnad', plats: 'Plats', namnform: 'Namnform', ägaretikett: 'Ägaretikett' }[value] || value || 'Okänd';
+  return { byggnad: 'Byggnad', plats: 'Plats', namnform: 'Namnform' }[value] || value || 'Okänd';
 }
 
 export function objectTypeLabel(objectClass, subtype) {

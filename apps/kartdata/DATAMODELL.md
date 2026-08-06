@@ -18,8 +18,8 @@ AI-förslag är ett avskilt v1-arkiv och läses inte som aktiv data.
 äldre referenskopior. De finns kvar som migrations- och offlinefallback men är
 inte aktiva sakentiteter när Fastigheter och Matrikel kan läsas.
 
-Aktiva objekttyper är endast `byggnad`, `plats`, `namnform` och
-`ägaretikett`. `kartsymbol`, `annat` och den äldre pseudotypen
+Aktiva objekttyper är endast `byggnad`, `plats` och `namnform`.
+`ägaretikett`, `kartsymbol`, `annat` och den äldre pseudotypen
 `ingen masterpost` är inte tillåtna i v2.
 
 ## Vad som uttryckligen har tagits bort
@@ -61,11 +61,17 @@ Kartdatas operationslogg och ingen namnlikhet används för att gissa identitet.
 Historiska observationsdatum och ägarkedjor visas i Fastighetshistorik, inte i
 Kartdatas nulägeskolumn.
 
+När en fastighet visas byggs namnet dynamiskt som fastighets-ID följt av de
+unika efternamnen på de granskade nuvarande ägarna, exempelvis
+`Alsvik 3:79 (Bethge)`. Saknas en nulägesbedömning visas bara fastighets-ID:t.
+De äldre ägaretiketterna ligger kvar i v1-arkivet men är inte aktiva kartobjekt.
+
 ## Lagring och publicering
 
-Den levande Kartdata-mastern är append-only-loggen i `/kartdata/ops`. En privat,
-reproducerbar v2-migration byggs i
-`privat/migrering-2026-08-04-ren-v2/`. GitHub Pages innehåller bara appskalet;
+Den levande Kartdata-mastern är append-only-loggen i `/kartdata/ops`. Den privata
+v2-basen ligger i `privat/migrering-2026-08-04-ren-v2/` och den avgränsade
+fastighetsvisningsmigrationen byggs i
+`privat/migrering-2026-08-06-fastighetsvisning/`. GitHub Pages innehåller bara appskalet;
 varken dataposter, personnamn eller fastighetsdata byggs in i publiceringen.
 
 Fastigheter och Matrikel cachas som skrivskyddade snapshots i Kartdatas lokala

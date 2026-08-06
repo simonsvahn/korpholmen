@@ -61,7 +61,9 @@ const dataLayer = (await readFile(resolve(ROOT, 'src/data-layer.js'), 'utf8'))
 await writeFile(resolve(OUT, 'src/data-layer.js'), dataLayer);
 
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))
-  .replace("../../../packages/core/family-context.js", "../core/family-context.js");
+  .replace("../../../packages/core/family-context.js", "../core/family-context.js")
+  .replace("../../../packages/core/master-data.js", "../core/master-data.js")
+  .replace("../../../packages/core/read-only-master.js", "../core/read-only-master.js");
 await mkdir(resolve(OUT, 'src'), { recursive: true });
 await writeFile(resolve(OUT, 'src/app.js'), app);
 

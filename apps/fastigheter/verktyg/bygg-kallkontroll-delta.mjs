@@ -11,13 +11,13 @@ import {
 } from '../../../packages/core/data-layer.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(ROOT, 'privat/migrering-2026-08-04-kallkontroll');
+const OUT = resolve(ROOT, 'privat/migrering-2026-08-06-fastighetsvisning');
 const DESIRED_PATH = resolve(ROOT, 'privat/migrering-2026-08-02/initial-ops.json');
 const DROPBOX_ROOT = resolve(process.argv[2] || '/Users/simon/Dropbox/Appar/Korpholmen');
 const OPS_ROOT = resolve(DROPBOX_ROOT, 'fastigheter/ops');
-const DEVICE = 'migration-fastigheter-source-audit-2026-08-04';
-const MIGRATION_ID = '2026-08-04-fastigheter-source-audit';
-const CLOCK_MS = 1785880800000;
+const DEVICE = 'migration-fastigheter-property-owner-display-2026-08-06';
+const MIGRATION_ID = '2026-08-06-fastigheter-property-owner-display';
+const CLOCK_MS = 1786030200000;
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 const desiredText = await readFile(DESIRED_PATH, 'utf8');

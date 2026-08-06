@@ -148,6 +148,9 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(app.includes('syncContentImages'));
   assert.ok(app.includes("document.addEventListener('visibilitychange'"));
   assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
+  assert.ok(app.includes("opsRoot: '/fastigheter/ops', readOnly: true"));
+  assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'fastigheter' })"));
+  assert.ok(app.includes('fastigheterMaster }'));
   assert.ok(app.includes("location.pathname.includes('/apps/dokumentarkiv/')"));
   assert.ok(app.includes("new URL('dokumentarkiv/', redirectUri())"));
   assert.ok(app.includes('categories: new Set()'));

@@ -23,6 +23,7 @@ import {
   debounce,
   disconnectDropboxEverywhere,
   dropboxUploadTimeoutMs,
+  formatPropertyDisplayName,
   isOfflineError,
   mergePersonReferences,
   migrateLegacyCredentialsToShared,
@@ -32,6 +33,7 @@ import {
   resolveArchiveEntity,
   resolveDeviceId,
   resolveCurrentOwners,
+  resolvePropertyDisplayName,
   revokeDropboxAccessToken,
   sharedDropboxDisconnectedKey,
   sha256Hex,
@@ -760,7 +762,29 @@ await test('ett namnbyte i Matrikel slår igenom i referenser och aktuella fasti
   assert.equal(resolveCurrentOwners('Alsvik 3:1', propertyReader, personReader)[0].display_name, 'Anna Efter');
 });
 
-await test('Dokumentarkivets kopplade namn och båtlänkar löses från ägarmastrarna', async () => {
+await test('fastighetens visningsnamn byggs av unika efternamn på nuvarande ägare', async () => {
+  assert.equal(formatPropertyDisplayName('Alsvik 3:79', [{ display_surname: 'Bethge' }]), 'Alsvik 3:79 (Bethge)');
+  assert.equal(formatPropertyDisplayName('Alsvik 3:26', [
+    { display_surname: 'Ilveus' },
+    { display_surname: 'Lindblom' },
+    { display_surname: 'Granath' },
+    { display_surname: 'Granath' },
+  ]), 'Alsvik 3:26 (Ilveus, Lindblom och Granath)');
+  assert.equal(formatPropertyDisplayName('Alsvik S:14', []), 'Alsvik S:14');
+
+  const fastigheter = {
+    initialized: true,
+    listEntities(type) {
+      if (type === 'property') return [{ entity_id: 'Alsvik 3:79', fields: { display_name: 'Gammalt statiskt namn' } }];
+      if (type === 'current-owner-assessment') return [{ entity_id: 'owner-3-79', fields: { property_id: 'Alsvik 3:79', owner_party_ids: ['party-inger'] } }];
+      if (type === 'party') return [{ entity_id: 'party-inger', fields: { name: 'Inger Bethge', display_surname: 'Bethge', party_type: 'person eller namngrupp' } }];
+      return [];
+    },
+  };
+  assert.equal(resolvePropertyDisplayName('Alsvik 3:79', fastigheter), 'Alsvik 3:79 (Bethge)');
+});
+
+await test('Dokumentarkivets kopplade namn, båtlänkar och fastigheter löses från ägarmastrarna', async () => {
   const personMaster = {
     initialized: true,
     getEntity: (type, id) => type === 'person' && id === 'p1' ? { fields: { display_name: 'Anna Holm' } } : null,
@@ -769,12 +793,24 @@ await test('Dokumentarkivets kopplade namn och båtlänkar löses från ägarmas
     initialized: true,
     getEntity: (type, id) => type === 'boat' && id === 'b1' ? { fields: { namn: 'Fadersfriden' } } : null,
   };
-  const person = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Anna Neretnieks', match_status: 'kopplad' }, { personMaster, boatMaster });
-  const boat = resolveArchiveEntity({ entity_type: 'båt', external_id: 'b1', name: 'Äldre båtnamn', match_status: 'kopplad' }, { personMaster, boatMaster });
+  const fastigheterMaster = {
+    initialized: true,
+    getEntity: (type, id) => type === 'property' && id === 'Alsvik 3:79' ? { fields: { display_name: 'Gammalt statiskt namn' } } : null,
+    listEntities(type) {
+      if (type === 'current-owner-assessment') return [{ entity_id: 'owner-3-79', fields: { property_id: 'Alsvik 3:79', owner_party_ids: ['party-inger'] } }];
+      if (type === 'party') return [{ entity_id: 'party-inger', fields: { name: 'Inger Bethge', display_surname: 'Bethge' } }];
+      return [];
+    },
+  };
+  const person = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Anna Neretnieks', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
+  const boat = resolveArchiveEntity({ entity_type: 'båt', external_id: 'b1', name: 'Äldre båtnamn', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
+  const property = resolveArchiveEntity({ entity_type: 'fastighet', external_id: 'Alsvik 3:79', name: 'Alsvik 3:79', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
   assert.equal(person.name, 'Anna Holm');
   assert.equal(person.url, '../matrikel/?person=p1');
   assert.equal(boat.name, 'Fadersfriden');
   assert.equal(boat.url, '../batregister/?boat=b1');
+  assert.equal(property.name, 'Alsvik 3:79 (Bethge)');
+  assert.equal(property.url, '../fastigheter/?property=Alsvik%203%3A79');
   const unresolved = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Osäker Anna', match_status: 'granska' }, { personMaster, boatMaster });
   assert.equal(unresolved.name, 'Osäker Anna');
 });

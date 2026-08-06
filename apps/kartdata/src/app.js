@@ -14,7 +14,7 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
-import { resolveCurrentOwners, resolvePropertyReferences } from '../../../packages/core/master-data.js';
+import { formatPropertyDisplayName, resolveCurrentOwners, resolvePropertyReferences } from '../../../packages/core/master-data.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { CLEAN_V2_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
 import {
@@ -68,7 +68,7 @@ const nameRecords = () => recordList('name-record');
 const islandLinks = () => recordList('data-entry-island-link');
 const entryPropertyLinks = () => recordList('data-entry-property-link');
 const legacyPropertyRefs = () => recordList('property-ref');
-const propertyRefs = () => resolvePropertyReferences(fastigheterMaster, legacyPropertyRefs()).sort((a, b) => String(a.external_id || '').localeCompare(String(b.external_id || ''), 'sv', { numeric: true }));
+const propertyRefs = () => resolvePropertyReferences(fastigheterMaster, legacyPropertyRefs(), matrikelMaster).sort((a, b) => String(a.external_id || '').localeCompare(String(b.external_id || ''), 'sv', { numeric: true }));
 const legacyOwnerLinks = () => recordList('property-owner-link').filter(link => link.basis === 'best-known-current');
 const legacyPersonRefs = () => recordList('person-ref');
 const legacyExternalParties = () => recordList('external-party');
@@ -111,6 +111,12 @@ function ownersForProperty(propertyId) {
   if (fastigheterMaster?.listEntities('property').length) return resolveCurrentOwners(propertyId, fastigheterMaster, matrikelMaster);
   return legacyOwnersForProperty(propertyId);
 }
+function propertyDisplayName(propertyId) {
+  const canonical = propertyRefById(propertyId);
+  if (fastigheterMaster?.listEntities('property').length && canonical?.display_name) return canonical.display_name;
+  return formatPropertyDisplayName(propertyId, ownersForProperty(propertyId));
+}
+function propertyDisplayNames(propertyIds) { return propertyIds.map(propertyDisplayName); }
 function ownersForEntry(entryId) { return propertyIdsForEntry(entryId).flatMap(propertyId => ownersForProperty(propertyId).map(owner => ({ ...owner, property_id: propertyId }))); }
 function namesForIsland(islandId) { return nameRecords().filter(record => record.target_type === 'place' && record.target_id === islandId); }
 
@@ -119,7 +125,7 @@ function entrySearchText(entry) {
   const properties = propertyIdsForEntry(entry.id);
   const owners = ownersForEntry(entry.id);
   return [entry.id, entry.name, entry.object_type, entry.subtype, entry.review_status, island?.preferred_name,
-    ...properties, ...owners.map(owner => owner.display_name)].filter(Boolean).join(' ');
+    ...properties, ...propertyDisplayNames(properties), ...owners.map(owner => owner.display_name)].filter(Boolean).join(' ');
 }
 function compareEntries(a, b) {
   const compare = (x, y) => String(x || '').localeCompare(String(y || ''), 'sv', { numeric: true });
@@ -161,12 +167,12 @@ function ownerChipsForProperties(propertyIds) {
   const owners = propertyIds.flatMap(propertyId => ownersForProperty(propertyId).map(owner => ({ ...owner, property_id: propertyId })));
   if (!owners.length) return '<span class="muted">Ingen tillräckligt säker ägaruppgift</span>';
   const seen = new Set();
-  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'party' || owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.url || '#')}" title="${escapeAttribute(`${owner.property_id} · bäst kända nuvarande ägare`)}"><strong>${escapeHtml(owner.display_name)}</strong><small>${owner.owner_type === 'person' || owner.owner_type === 'person-ref' ? 'Matrikeln' : 'extern part'}</small></a>`).join('');
+  return owners.filter(owner => { const key = `${owner.owner_type}:${owner.owner_id}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(owner => `<a class="owner-chip ${owner.owner_type === 'party' || owner.owner_type === 'external-party' ? 'external' : ''}" href="${escapeAttribute(owner.url || '#')}" title="${escapeAttribute(`${propertyDisplayName(owner.property_id)} · bäst kända nuvarande ägare`)}"><strong>${escapeHtml(owner.display_name)}</strong><small>${owner.owner_type === 'person' || owner.owner_type === 'person-ref' ? 'Matrikeln' : 'extern part'}</small></a>`).join('');
 }
 function ownerChips(entryId) { return ownerChipsForProperties(propertyIdsForEntry(entryId)); }
 function entryCard(entry) {
   const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id);
-  return `<button type="button" class="object-chip class-${escapeAttribute(cssToken(entry.object_type))} status-${escapeAttribute(entry.review_status)}" data-entry-id="${escapeAttribute(entry.id)}"><span class="review-dot"></span><strong>${escapeHtml(entry.name)}</strong><small>${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))} · ${escapeHtml(reviewStatusLabel(entry.review_status))}</small><span class="card-context">${escapeHtml(island?.preferred_name || 'Ingen ö')} · ${escapeHtml(properties.join(' + ') || 'ingen fastighet')}</span></button>`;
+  return `<button type="button" class="object-chip class-${escapeAttribute(cssToken(entry.object_type))} status-${escapeAttribute(entry.review_status)}" data-entry-id="${escapeAttribute(entry.id)}"><span class="review-dot"></span><strong>${escapeHtml(entry.name)}</strong><small>${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))} · ${escapeHtml(reviewStatusLabel(entry.review_status))}</small><span class="card-context">${escapeHtml(island?.preferred_name || 'Ingen ö')} · ${escapeHtml(propertyDisplayNames(properties).join(' + ') || 'ingen fastighet')}</span></button>`;
 }
 function distribution(entries) {
   const counts = Object.fromEntries(OBJECT_CLASSES.map(value => [value, entries.filter(entry => entry.object_type === value).length]));
@@ -179,7 +185,7 @@ function renderAtlas() {
   return [...groups.entries()].sort(([a], [b]) => String(islandRecords().find(item => item.id === a)?.preferred_name || 'Övrigt').localeCompare(String(islandRecords().find(item => item.id === b)?.preferred_name || 'Övrigt'), 'sv')).map(([islandId, islandEntries]) => {
     const island = islandRecords().find(item => item.id === islandId); const properties = new Map();
     for (const entry of islandEntries) { const ids = propertyIdsForEntry(entry.id); const key = ids.join(' + ') || 'Ingen fastighet'; if (!properties.has(key)) properties.set(key, []); properties.get(key).push(entry); }
-    return `<section class="island-board"><header><div><p class="eyebrow dark">Ö</p><h2>${escapeHtml(island?.preferred_name || 'Utan kopplad ö')}</h2><p>${islandEntries.length} dataposter.</p></div>${distribution(islandEntries)}</header><div class="property-board">${[...properties.entries()].sort(([a], [b]) => a.localeCompare(b, 'sv', { numeric: true })).map(([property, propertyEntries]) => `<article class="property-cluster"><h3>${escapeHtml(property)}</h3><p>${propertyEntries.length} poster</p><div class="object-cloud">${propertyEntries.map(entryCard).join('')}</div></article>`).join('')}</div></section>`;
+    return `<section class="island-board"><header><div><p class="eyebrow dark">Ö</p><h2>${escapeHtml(island?.preferred_name || 'Utan kopplad ö')}</h2><p>${islandEntries.length} dataposter.</p></div>${distribution(islandEntries)}</header><div class="property-board">${[...properties.entries()].sort(([a], [b]) => a.localeCompare(b, 'sv', { numeric: true })).map(([property, propertyEntries]) => `<article class="property-cluster"><h3>${escapeHtml(property === 'Ingen fastighet' ? property : propertyDisplayNames(property.split(' + ')).join(' + '))}</h3><p>${propertyEntries.length} poster</p><div class="object-cloud">${propertyEntries.map(entryCard).join('')}</div></article>`).join('')}</div></section>`;
   }).join('') || '<section class="empty"><h2>Inga poster matchar filtren.</h2></section>';
 }
 function renderStructure() {
@@ -197,17 +203,17 @@ function renderStructure() {
 function renderQueue() {
   const entries = filteredEntries().sort((a, b) => queueRank(a.review_status) - queueRank(b.review_status) || compareEntries(a, b));
   $('#filter-count').textContent = `${entries.length} av ${entryRecords().length} poster`;
-  return `<section class="queue-view"><header><p class="eyebrow dark">Data som väntar på kontroll</p><h2>Granskningskö</h2><p>Varje kort innehåller endast den aktiva datan.</p></header><div class="queue-grid">${entries.map(entry => { const island = islandForEntry(entry.id); return `<button type="button" class="queue-card status-${escapeAttribute(entry.review_status)}" data-entry-id="${escapeAttribute(entry.id)}"><span class="source-number">${escapeHtml(entry.id)}</span><h3>${escapeHtml(entry.name)}</h3><p>${escapeHtml(island?.preferred_name || 'Ingen ö')} · ${escapeHtml(propertyIdsForEntry(entry.id).join(' + ') || 'ingen fastighet')}</p><div class="queue-proposal"><span>${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></div><strong>${escapeHtml(reviewStatusLabel(entry.review_status))}</strong></button>`; }).join('')}</div></section>`;
+  return `<section class="queue-view"><header><p class="eyebrow dark">Data som väntar på kontroll</p><h2>Granskningskö</h2><p>Varje kort innehåller endast den aktiva datan.</p></header><div class="queue-grid">${entries.map(entry => { const island = islandForEntry(entry.id); return `<button type="button" class="queue-card status-${escapeAttribute(entry.review_status)}" data-entry-id="${escapeAttribute(entry.id)}"><span class="source-number">${escapeHtml(entry.id)}</span><h3>${escapeHtml(entry.name)}</h3><p>${escapeHtml(island?.preferred_name || 'Ingen ö')} · ${escapeHtml(propertyDisplayNames(propertyIdsForEntry(entry.id)).join(' + ') || 'ingen fastighet')}</p><div class="queue-proposal"><span>${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></div><strong>${escapeHtml(reviewStatusLabel(entry.review_status))}</strong></button>`; }).join('')}</div></section>`;
 }
 function renderTable() {
   const entries = filteredEntries(); $('#filter-count').textContent = `${entries.length} av ${entryRecords().length} poster`;
-  return `<section class="table-view"><header class="table-intro"><div><p class="eyebrow dark">All aktiv information</p><h2>Tabell</h2><p>Öar, fastigheter och bäst kända nuvarande ägare är strukturerade länkar.</p></div></header><div class="table-scroll polished-table"><table><thead><tr><th class="pin-id">ID</th><th class="pin-name">Namn</th><th>Objektstyp</th><th>Ö</th><th>Fastighet</th><th>Nuvarande ägare</th><th>Granskningsstatus</th><th>Åtgärd</th></tr></thead><tbody>${entries.map(entry => { const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id); return `<tr class="data-row status-${escapeAttribute(entry.review_status)}"><td class="pin-id"><span class="row-id">${escapeHtml(entry.id)}</span></td><td class="pin-name"><strong>${escapeHtml(entry.name)}</strong></td><td><span class="type-pill class-${escapeAttribute(cssToken(entry.object_type))}">${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></td><td><strong>${escapeHtml(island?.preferred_name || '—')}</strong></td><td>${properties.map(id => { const ref = propertyRefById(id); return `<a href="${escapeAttribute(ref?.url || '#')}">${escapeHtml(id)}</a>`; }).join('<br>') || '—'}</td><td><div class="owner-list">${ownerChips(entry.id)}</div></td><td><span class="table-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></td><td><button type="button" class="row-edit" data-entry-id="${escapeAttribute(entry.id)}">Redigera</button></td></tr>`; }).join('')}</tbody></table></div></section>`;
+  return `<section class="table-view"><header class="table-intro"><div><p class="eyebrow dark">All aktiv information</p><h2>Tabell</h2><p>Öar, fastigheter och bäst kända nuvarande ägare är strukturerade länkar.</p></div></header><div class="table-scroll polished-table"><table><thead><tr><th class="pin-id">ID</th><th class="pin-name">Namn</th><th>Objektstyp</th><th>Ö</th><th>Fastighet</th><th>Nuvarande ägare</th><th>Granskningsstatus</th><th>Åtgärd</th></tr></thead><tbody>${entries.map(entry => { const island = islandForEntry(entry.id); const properties = propertyIdsForEntry(entry.id); return `<tr class="data-row status-${escapeAttribute(entry.review_status)}"><td class="pin-id"><span class="row-id">${escapeHtml(entry.id)}</span></td><td class="pin-name"><strong>${escapeHtml(entry.name)}</strong></td><td><span class="type-pill class-${escapeAttribute(cssToken(entry.object_type))}">${escapeHtml(objectTypeLabel(entry.object_type, entry.subtype))}</span></td><td><strong>${escapeHtml(island?.preferred_name || '—')}</strong></td><td>${properties.map(id => { const ref = propertyRefById(id); return `<a href="${escapeAttribute(ref?.url || '#')}">${escapeHtml(propertyDisplayName(id))}</a>`; }).join('<br>') || '—'}</td><td><div class="owner-list">${ownerChips(entry.id)}</div></td><td><span class="table-status status-${escapeAttribute(entry.review_status)}">${escapeHtml(reviewStatusLabel(entry.review_status))}</span></td><td><button type="button" class="row-edit" data-entry-id="${escapeAttribute(entry.id)}">Redigera</button></td></tr>`; }).join('')}</tbody></table></div></section>`;
 }
 function populateFilters() {
   const setOptions = (selector, placeholder, values, selected, label = value => value) => { const node = $(selector); node.innerHTML = `<option value="">${placeholder}</option>${values.map(value => option(value, selected, label(value))).join('')}`; };
   setOptions('#island-filter', 'Alla öar', islandRecords().map(item => item.id), ui.island, id => islandRecords().find(item => item.id === id)?.preferred_name || id);
   setOptions('#subtype-filter', 'Alla undertyper', unique(entryRecords().map(entry => entry.subtype)).sort((a, b) => a.localeCompare(b, 'sv')), ui.subtype);
-  setOptions('#property-filter', 'Alla fastigheter', propertyRefs().map(item => item.external_id), ui.property);
+  setOptions('#property-filter', 'Alla fastigheter', propertyRefs().map(item => item.external_id), ui.property, propertyDisplayName);
 }
 function render() {
   renderSummary(); populateFilters(); document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === ui.view));
@@ -219,7 +225,7 @@ function openIslandDrawer(islandId = null) { selectedEntryId = null; selectedIsl
 function closeDrawer() { selectedEntryId = null; selectedIslandId = null; drawer.setAttribute('aria-hidden', 'true'); backdrop.hidden = true; }
 
 function propertySelectionRow(property) {
-  return `<div class="selected-property" data-property-id="${escapeAttribute(property.external_id)}"><input type="hidden" name="property_ids" value="${escapeAttribute(property.external_id)}"><a href="${escapeAttribute(property.url || '#')}">${escapeHtml(property.external_id)}</a><button type="button" data-action="remove-property" aria-label="Ta bort ${escapeAttribute(property.external_id)}">Ta bort</button></div>`;
+  return `<div class="selected-property" data-property-id="${escapeAttribute(property.external_id)}"><input type="hidden" name="property_ids" value="${escapeAttribute(property.external_id)}"><a href="${escapeAttribute(property.url || '#')}">${escapeHtml(propertyDisplayName(property.external_id))}</a><button type="button" data-action="remove-property" aria-label="Ta bort ${escapeAttribute(propertyDisplayName(property.external_id))}">Ta bort</button></div>`;
 }
 function unknownPropertySelectionRow(propertyId) {
   return `<div class="selected-property unknown" data-property-id="${escapeAttribute(propertyId)}"><input type="hidden" name="property_ids" value="${escapeAttribute(propertyId)}"><span><strong>Okänd fastighet</strong><small>${escapeHtml(propertyId)} · länken behålls tills du tar bort den</small></span><button type="button" data-action="remove-property" aria-label="Ta bort okänd fastighet ${escapeAttribute(propertyId)}">Ta bort</button></div>`;
@@ -229,14 +235,14 @@ function propertySelectionMarkup(selected) {
 }
 function propertyPicker(selectedIds) {
   const state = propertySelectionState(selectedIds, propertyRefs());
-  return `<div class="property-picker" data-property-picker><div class="selected-properties" data-selected-properties>${propertySelectionMarkup(state.selected)}</div><div class="property-add"><select data-property-select aria-label="Lägg till fastighet"><option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}</select><button type="button" data-action="add-property" ${state.available.length ? '' : 'disabled'}>Lägg till</button></div><small>De flesta objekt hör till en fastighet. Lägg bara till fler när det verkligen behövs.</small></div>`;
+  return `<div class="property-picker" data-property-picker><div class="selected-properties" data-selected-properties>${propertySelectionMarkup(state.selected)}</div><div class="property-add"><select data-property-select aria-label="Lägg till fastighet"><option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(propertyDisplayName(property.external_id))}</option>`).join('')}</select><button type="button" data-action="add-property" ${state.available.length ? '' : 'disabled'}>Lägg till</button></div><small>De flesta objekt hör till en fastighet. Lägg bara till fler när det verkligen behövs.</small></div>`;
 }
 function updatePropertyPicker(form, propertyIds) {
   const picker = form.querySelector('[data-property-picker]'); if (!picker) return;
   const state = propertySelectionState(propertyIds, propertyRefs());
   picker.querySelector('[data-selected-properties]').innerHTML = propertySelectionMarkup(state.selected);
   const select = picker.querySelector('[data-property-select]');
-  select.innerHTML = `<option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}`;
+  select.innerHTML = `<option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(propertyDisplayName(property.external_id))}</option>`).join('')}`;
   picker.querySelector('[data-action="add-property"]').disabled = !state.available.length;
   const owners = form.querySelector('[data-owner-preview-list]'); if (owners) owners.innerHTML = ownerChipsForProperties(state.selected.map(item => item.id));
 }

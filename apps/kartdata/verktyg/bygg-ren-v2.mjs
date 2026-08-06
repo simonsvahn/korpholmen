@@ -2,16 +2,18 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { materialize } from '../../../packages/core/domain/materializer.js';
 import { validateOperation } from '../../../packages/core/domain/operations.js';
+import { formatPropertyDisplayName } from '../../../packages/core/master-data.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
-const OUT = resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2');
+const OUT = resolve(ROOT, 'privat/migrering-2026-08-06-fastighetsvisning');
 const requestedDropboxRoot = process.argv[2] || '/Users/simon/Dropbox/Appar/Korpholmen';
-const DEVICE = 'migration-kartdata-clean-v2-2026-08-04';
-const CLOCK_MS = 1785866400000;
-const MIGRATION_ID = '2026-08-04-kartdata-clean-v2';
+const DEVICE = 'migration-kartdata-property-owner-display-2026-08-06';
+const CLOCK_MS = 1786032000000;
+const MIGRATION_ID = '2026-08-06-kartdata-property-owner-display';
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 async function loadNamespace(namespace) {
@@ -32,7 +34,7 @@ const activeObjectType = entry => {
   if (entry.review_status && entry.review_status !== 'ogranskad' && entry.review_object_class) return entry.review_object_class;
   const mapKind = String(entry.source_name_type || '');
   if (/symbol|annat/i.test(mapKind)) return 'kartsymbol';
-  if (/ägaretikett/i.test(mapKind)) return 'ägaretikett';
+  if (/ägaretikett/i.test(mapKind)) return null;
   if (/husnamn/i.test(mapKind)) return 'byggnad';
   if (/äldre namn/i.test(mapKind)) return 'namnform';
   if (/ortnamn|plats/i.test(mapKind)) return 'plats';
@@ -76,12 +78,13 @@ const dataEntries = rows(kartdata.state, 'map-entry').map(entry => {
     island_id: island?.id || null,
     property_ids: linkedProperties,
   };
-}).filter(entry => !['kartsymbol', 'annat'].includes(entry.object_type));
+}).filter(entry => entry.object_type && !['kartsymbol', 'annat'].includes(entry.object_type));
 
-if (dataEntries.some(entry => !entry.name || !['byggnad', 'plats', 'namnform', 'ägaretikett'].includes(entry.object_type))) throw new Error('En aktiv v2-post saknar namn eller har otillåten objekttyp');
+if (dataEntries.some(entry => !entry.name || !['byggnad', 'plats', 'namnform'].includes(entry.object_type))) throw new Error('En aktiv v2-post saknar namn eller har otillåten objekttyp');
 if (new Set(dataEntries.map(entry => entry.id)).size !== dataEntries.length) throw new Error('V2-posterna har dubbla ID:n');
 
 const currentOwnersByProperty = new Map(rows(fastigheter.state, 'current-owner-assessment').map(assessment => [assessment.property_id, assessment]));
+const propertyDisplayName = propertyId => formatPropertyDisplayName(propertyId, (currentOwnersByProperty.get(propertyId)?.owner_party_ids || []).map(partyId => partiesById.get(partyId)).filter(Boolean));
 
 const usedPropertyIds = unique(dataEntries.flatMap(entry => entry.property_ids)).sort();
 const ownerLinks = [];
@@ -99,11 +102,11 @@ for (const propertyId of usedPropertyIds) {
     const ownerId = person?.id || party.id;
     if (person) personRefs.set(person.id, {
       external_id: person.id, display_name: person.display_name,
-      full_name: person.full_name || person.display_name, source_master: 'matrikel',
+      full_name: person.full_name || person.display_name, display_surname: party.display_surname || null, source_master: 'matrikel',
       url: `../matrikel/?person=${encodeURIComponent(person.id)}`,
     });
     else externalParties.set(party.id, {
-      external_id: party.id, display_name: party.name,
+      external_id: party.id, display_name: party.name, display_surname: party.display_surname || null,
       party_type: party.party_type || 'extern part', source_master: 'fastigheter',
       url: `../fastigheter/?party=${encodeURIComponent(party.id)}`,
     });
@@ -125,14 +128,22 @@ function operation(entityType, entityId, field, value) {
   };
   validateOperation(op); operations.push(op);
 }
-function setFields(entityType, entityId, fields) { for (const [field, value] of Object.entries(fields)) operation(entityType, entityId, field, value); }
-function remove(entityType, entityId) { operation(entityType, entityId, '__deleted', true); }
+function setFields(entityType, entityId, fields) {
+  const existing = kartdata.state.getEntity(entityType, entityId, { includeDeleted: true });
+  if (existing?.deleted) operation(entityType, entityId, '__deleted', false);
+  const current = existing?.fields || {};
+  for (const [field, value] of Object.entries(fields)) if (!isDeepStrictEqual(current[field], value)) operation(entityType, entityId, field, value);
+}
+function remove(entityType, entityId) {
+  if (kartdata.state.getEntity(entityType, entityId)) operation(entityType, entityId, '__deleted', true);
+}
 
 setFields('root', 'kartdata', {
   active_schema_version: 2,
   active_dataset: 'kartdata-v2',
   migration_id_v2: MIGRATION_ID,
   archived_entity_types: ['source', 'map-entry', 'map-entry-link', 'object-property-link'],
+  archived_object_types: ['ägaretikett'],
 });
 
 const activeByType = new Map([
@@ -146,6 +157,16 @@ const activeByType = new Map([
 for (const [type, ids] of activeByType) {
   for (const base of rows(baseState, type)) if (!ids.has(base.id)) remove(type, base.id);
 }
+
+const desiredEntryIds = new Set(dataEntries.map(entry => entry.id));
+for (const entry of rows(kartdata.state, 'data-entry')) if (!desiredEntryIds.has(entry.id)) remove('data-entry', entry.id);
+for (const link of rows(kartdata.state, 'data-entry-island-link')) if (!desiredEntryIds.has(link.entry_id)) remove('data-entry-island-link', link.id);
+for (const link of rows(kartdata.state, 'data-entry-property-link')) if (!desiredEntryIds.has(link.entry_id)) remove('data-entry-property-link', link.id);
+
+const desiredOwnerLinkIds = new Set(ownerLinks.map(link => `property:${link.property_id}:owner:${link.owner_type}:${link.owner_id}`));
+for (const link of rows(kartdata.state, 'property-owner-link')) if (!desiredOwnerLinkIds.has(link.id)) remove('property-owner-link', link.id);
+for (const ref of rows(kartdata.state, 'person-ref')) if (!personRefs.has(ref.external_id)) remove('person-ref', ref.id);
+for (const ref of rows(kartdata.state, 'external-party')) if (!externalParties.has(ref.external_id)) remove('external-party', ref.id);
 
 for (const island of islands) setFields('place', island.id, {
   preferred_name: island.preferred_name,
@@ -182,7 +203,7 @@ for (const propertyId of usedPropertyIds) {
   const property = propertiesById.get(propertyId);
   setFields('property-ref', `property-ref:${propertyId}`, {
     external_id: propertyId,
-    display_name: property.display_name || propertyId,
+    display_name: propertyDisplayName(propertyId),
     source_master: 'fastigheter',
     url: `../fastigheter/?property=${encodeURIComponent(propertyId)}`,
   });
@@ -191,11 +212,10 @@ for (const [id, fields] of personRefs) setFields('person-ref', `person-ref:${id}
 for (const [id, fields] of externalParties) setFields('external-party', `external-party:${id}`, fields);
 for (const link of ownerLinks) setFields('property-owner-link', `property:${link.property_id}:owner:${link.owner_type}:${link.owner_id}`, link);
 
-const previousSameMigrationRemoved = kartdata.operations.filter(operation => operation.device_id !== DEVICE);
-const combined = materialize([...previousSameMigrationRemoved, ...operations]);
+const combined = materialize([...kartdata.operations, ...operations]);
 const activeEntries = rows(combined, 'data-entry');
 if (activeEntries.length !== dataEntries.length) throw new Error('Materialiseringen tappade v2-poster');
-if (activeEntries.some(entry => ['kartsymbol', 'annat'].includes(entry.object_type))) throw new Error('En borttagen objekttyp finns kvar i v2');
+if (activeEntries.some(entry => ['ägaretikett', 'kartsymbol', 'annat'].includes(entry.object_type))) throw new Error('En borttagen objekttyp finns kvar i v2');
 if (rows(combined, 'place').length !== islands.length) throw new Error('Den rensade ölistan matchar inte den levande mastern');
 
 const preview = {
@@ -205,7 +225,7 @@ const preview = {
     id: entry.id, name: entry.name, object_type: entry.object_type, subtype: entry.subtype,
     review_status: entry.review_status, island_id: entry.island_id, property_ids: entry.property_ids,
   })),
-  properties: usedPropertyIds.map(id => ({ id, display_name: propertiesById.get(id).display_name || id })),
+  properties: usedPropertyIds.map(id => ({ id, display_name: propertyDisplayName(id) })),
   person_refs: [...personRefs].map(([id, fields]) => ({ id, ...fields })),
   external_parties: [...externalParties].map(([id, fields]) => ({ id, ...fields })),
   property_owner_links: ownerLinks,
@@ -232,9 +252,11 @@ const manifest = {
   },
 };
 const document = { operations_version: 1, dataset: 'Korpholmen kartdata v2', device_id: DEVICE, migration_id: MIGRATION_ID, counts: manifest.counts, operations };
+const verificationBase = { operations_version: 1, dataset: 'Kartdata verifieringsbas före fastighetsvisningsmigration', fingerprint: kartdata.fingerprint, operations: kartdata.operations };
 
 await mkdir(OUT, { recursive: true });
 await writeFile(resolve(OUT, 'clean-v2-ops.json'), `${JSON.stringify(document, null, 2)}\n`);
+await writeFile(resolve(OUT, 'verification-base-ops.json'), `${JSON.stringify(verificationBase, null, 2)}\n`);
 await writeFile(resolve(OUT, 'preview.json'), `${JSON.stringify(preview, null, 2)}\n`);
 await writeFile(resolve(OUT, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(JSON.stringify(manifest.counts, null, 2));

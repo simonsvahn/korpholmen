@@ -27,9 +27,13 @@ export { ReadOnlyMaster } from './read-only-master.js';
 export {
   canonicalPeople,
   canonicalPersonMap,
+  formatPropertyDisplayName,
+  formatSwedishList,
   mergePersonReferences,
+  ownerSurnameLabel,
   resolveArchiveEntity,
   resolveCurrentOwners,
   resolvePartyName,
+  resolvePropertyDisplayName,
   resolvePropertyReferences
 } from './master-data.js';
