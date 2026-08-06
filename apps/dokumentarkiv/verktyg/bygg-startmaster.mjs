@@ -13,7 +13,38 @@ const DEVICE = `migration-dokumentarkiv-${MIGRATION_TAG}`;
 const CLOCK_MS = Date.parse(process.env.KORPHOLMEN_MIGRATION_CLOCK || '2026-08-03T12:00:00Z');
 const PUBLISHABLE_STATUSES = new Set(['färdig', 'kontroll behövs']);
 const normalize = value => String(value || '').normalize('NFC').toLocaleLowerCase('sv');
+const isPublishableStatus = value => PUBLISHABLE_STATUSES.has(value) || /^granskad(?:\s|\(|$)/iu.test(String(value || '').trim());
 const slug = value => normalize(value).normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function aliasPattern(alias) {
+  const normalized = String(alias || '').normalize('NFC').trim();
+  if (!normalized) return null;
+  const source = normalized.split(/\s+/).map(escapeRegex).join('[\\p{Zs}\\t]+');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${source}(?![\\p{L}\\p{N}])`, 'iu');
+}
+
+function entityMention(searchText, entity) {
+  if (entity.auto_match === false) return null;
+  for (const alias of entity.aliases) {
+    const pattern = aliasPattern(alias);
+    const match = pattern?.exec(searchText);
+    if (!match) continue;
+    const lineStart = searchText.lastIndexOf('\n', match.index) + 1;
+    const lineEndCandidate = searchText.indexOf('\n', match.index);
+    const lineEnd = lineEndCandidate < 0 ? searchText.length : lineEndCandidate;
+    return {
+      entity_id: entity.id,
+      entity_type: entity.type,
+      external_id: entity.external_id || null,
+      source_label: match[0],
+      relation: 'nämns',
+      link_status: entity.match,
+      evidence_quote: searchText.slice(lineStart, lineEnd).trim(),
+    };
+  }
+  return null;
+}
 
 async function childByNfc(parent, wanted) {
   const entries = await readdir(parent, { withFileTypes: true });
@@ -128,7 +159,8 @@ for (const boat of boats.values()) {
     app: 'Båtregistret',
     external_id: boat.id,
     match: 'granska',
-    note: 'Båtnamnet förekommer i avskriften; registerkopplingen behöver källkontroll.',
+    auto_match: false,
+    note: 'Båtnamn från Båtregistret auto-matchas inte; kopplingen skapas först efter dokumentbunden källkontroll.',
   });
 }
 
@@ -299,7 +331,7 @@ for (const sourceFile of sourceFiles) {
   const text = await readFile(sourceFile, 'utf8');
   const meta = frontmatter(text);
   const sourcePath = relative(digitalRoot, sourceFile).split(sep).join('/');
-  if (!PUBLISHABLE_STATUSES.has(meta.avskriftsstatus)) {
+  if (!isPublishableStatus(meta.avskriftsstatus)) {
     excludedDocuments.push({ title: meta.titel || basename(sourceFile, ' – avskrift.md'), status: meta.avskriftsstatus || 'okänd', source_path: sourcePath });
     continue;
   }
@@ -307,8 +339,9 @@ for (const sourceFile of sourceFiles) {
   const transcription = transcript(text);
   const documentContentImages = await contentImages(transcription, sourceFile);
   includedContentImages.push(...documentContentImages);
-  const search = normalize(`${meta.titel || ''}\n${transcription}`);
-  const entityIds = entityRegistry.filter(entity => entity.aliases.some(alias => search.includes(normalize(alias)))).map(entity => entity.id);
+  const searchText = `${meta.titel || ''}\n${transcription}`.normalize('NFC');
+  const entityLinks = entityRegistry.map(entity => entityMention(searchText, entity)).filter(Boolean);
+  const entityIds = entityLinks.map(link => link.entity_id);
   entityIds.forEach(id => usedEntityIds.add(id));
   const date = meta.dokumentdatum || 'okänt';
   const year = date.match(/\d{4}/)?.[0] || null;
@@ -331,6 +364,7 @@ for (const sourceFile of sourceFiles) {
       source_path: sourcePath,
       transcript: transcription,
       entity_ids: entityIds,
+      entity_links: entityLinks,
       decade: year ? Math.floor(Number(year) / 10) * 10 : null,
       month: date.match(/^\d{4}-(\d{2})/)?.[1] || null,
       collection: collectionLabel(sourcePath, documentCategory),
