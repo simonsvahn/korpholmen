@@ -97,9 +97,9 @@ export class Repository {
     })));
   }
 
-  // Deterministiska länkar kan ha tombstonats tidigare. En ny användarhandling
-  // ska då återställa länken och skriva dess fält i samma lokala transaktion.
-  // Aktiva och helt nya entiteter får ingen onödig restore-operation.
+  // Deterministiska länkar kan ha tombstonats på en annan enhet utan att den
+  // lokala fliken ännu sett tombstonen. Varje upsert får därför en uttrycklig
+  // restore i samma commit, även när länken ser aktiv eller ny ut lokalt.
   upsertFields(entries) {
     this.assertReady();
     if (!Array.isArray(entries) || !entries.length) return Promise.resolve([]);
@@ -109,8 +109,7 @@ export class Repository {
       const key = `${entry.entityType}\u0000${entry.entityId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const current = this.state.getEntity(entry.entityType, entry.entityId, { includeDeleted: true });
-      if (current?.deleted) factories.push((seq, hlc) => createRestoreOperation({
+      factories.push((seq, hlc) => createRestoreOperation({
         deviceId: this.deviceId,
         seq,
         entityType: entry.entityType,

@@ -35,12 +35,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .family-model small { color: #d6e2ef; font: .64rem/1.2 Helvetica, Arial, sans-serif; }
 .eyebrow { margin: 0 0 .12rem; color: #b9cadb; font: 700 .63rem/1.2 Helvetica, Arial, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
 .sync-panel { display: flex; align-items: flex-end; gap: .38rem; flex-direction: column; font: .76rem/1.2 Helvetica, Arial, sans-serif; text-align: right; }
+.status-stack { display: grid; gap: .22rem; justify-items: end; }
 .sync-panel button { border: 1px solid #ffffff66; border-radius: 999px; padding: .45rem .75rem; background: #f8e7b4; color: #173c31; font-weight: 700; }
-#sync-status[data-tone="ok"] { color: #c8f5d9; }
-#sync-status[data-tone="warning"] { color: #ffe3a1; }
-#sync-status[data-tone="error"] { color: #ffb9b2; }
-#sync-status .undo-action { border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; padding: .2rem .55rem; font-weight: 800; cursor: pointer; }
-#sync-status .undo-action:disabled { opacity: .55; cursor: wait; }
+:is(#sync-status,#undo-status)[data-tone="ok"] { color: #c8f5d9; }
+:is(#sync-status,#undo-status)[data-tone="warning"] { color: #ffe3a1; }
+:is(#sync-status,#undo-status)[data-tone="error"] { color: #ffb9b2; }
+#undo-status .undo-action { border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; padding: .2rem .55rem; font-weight: 800; cursor: pointer; }
+#undo-status .undo-action:disabled { opacity: .55; cursor: wait; }
 
 .toolbar { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 96%, transparent); box-shadow: 0 2px 7px rgba(35, 28, 20, .08); }
 .toolbar-inner { max-width: 1500px; margin: auto; padding: .55rem 1rem; display: grid; grid-template-columns: minmax(15rem, 1.2fr) minmax(10rem, .65fr) auto auto minmax(7rem, .45fr) minmax(7rem, .45fr) minmax(10rem, .65fr) minmax(20rem, 1.4fr); gap: .5rem; align-items: end; }

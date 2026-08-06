@@ -167,10 +167,15 @@ await test('borttagningar kan ångras och granskningsköer har ett källbevarand
   for (const app of ['matrikel', 'batregister', 'kartdata']) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     const styles = await readFile(resolve(ROOT, 'apps', app, 'styles.css'), 'utf8');
+    const html = await readFile(resolve(ROOT, 'apps', app, 'index.html'), 'utf8');
     assert.match(source, /function offerUndo/);
     assert.match(source, /repository\.restoreEntities\(restoreEntries\)/);
     assert.match(source, /15_000/);
+    assert.match(source, /const undoNode = \$\('#undo-status'\)/);
+    assert.match(source, /undoNode\.append\(' · ', button\)/);
+    assert.doesNotMatch(source, /delete statusNode\.dataset\.undoAction/);
     assert.match(styles, /\.undo-action/);
+    assert.match(html, /id="undo-status" role="status" hidden/);
   }
   for (const app of ['korpholmenrunt', 'klubbhistorik']) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
