@@ -7,6 +7,6 @@
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "publicera": "node verktyg/publicera-dokumentarkiv.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
-    "test": "node test/harness.mjs"
+    "test": "node test/harness.mjs && node test/granskningsverktyg.mjs"
   }
 }

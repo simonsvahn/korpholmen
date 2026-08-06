@@ -286,6 +286,13 @@ button { color: inherit; }
 .oplacerade small { color: var(--svart-mjuk); display: block; font-size: 8px; margin-top: 3px; }
 
 .flodeskarta { align-items: center; display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr 28px 1fr; margin-bottom: 24px; }
+.granskningsverktyg { align-items: center; background: var(--hav); color: white; display: grid; gap: 28px; grid-template-columns: minmax(0,1fr) auto; margin-bottom: 24px; padding: 22px 24px; }
+.granskningsverktyg h3 { color: white; font-family: var(--serif); font-size: 24px; font-weight: 500; margin: 5px 0 7px; }
+.granskningsverktyg p:not(.overrad) { font-family: var(--serif); line-height: 1.5; margin: 0; max-width: 760px; }
+.granskningsverktyg small { color: #d4e0e2; display: block; line-height: 1.5; margin-top: 9px; }
+.granskningsverktyg code { color: #f3d59c; }
+.granskningsverktyg a { align-items: center; background: var(--guld); color: var(--hav-djupt); display: inline-flex; font-size: 10px; font-weight: 800; gap: 8px; justify-content: center; min-height: 46px; padding: 0 18px; text-decoration: none; text-transform: uppercase; white-space: nowrap; }
+.granskningsverktyg a:hover, .granskningsverktyg a:focus-visible { background: white; outline: 3px solid rgba(255,255,255,.28); outline-offset: 2px; }
 .flodeskarta article { background: white; border: 1px solid var(--linje); min-height: 150px; padding: 16px; position: relative; }
 .flodeskarta article > span { align-items: center; background: var(--hav); border-radius: 50%; color: white; display: flex; font-family: var(--serif); height: 26px; justify-content: center; position: absolute; right: 10px; top: 10px; width: 26px; }
 .flodeskarta article > strong { color: var(--hav); display: block; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
@@ -412,6 +419,8 @@ button { color: inherit; }
   .platskarta { min-height: 430px; }
   .kartnod { min-height: 58px; min-width: 58px; }
   .flodeskarta { grid-template-columns: 1fr 1fr; }
+  .granskningsverktyg { align-items: stretch; grid-template-columns: 1fr; padding: 19px; }
+  .granskningsverktyg a { white-space: normal; }
   .flodeskarta article { min-height: 125px; }
   .fragaform { padding: 18px; }
   .fragaform > div { grid-template-columns: 1fr; }

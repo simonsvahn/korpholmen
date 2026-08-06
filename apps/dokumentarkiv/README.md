@@ -22,6 +22,19 @@ IndexedDB. Inbäddade innehållsbilder lagras hashbaserat under
 Exakta registerträffar pekar på stabila ID:n i Matrikeln eller
 Båtregistret. Osäkra och saknade träffar markeras uttryckligen.
 
+## Lokalt granskningsverktyg
+
+Arbetskön länkar till granskningsverktyget på `http://127.0.0.1:4317/`.
+Verktyget måste först startas på samma dator med
+`Digitalisering 2026/Granskningsverktyg/Starta granskningsverktyget.command`.
+Det visar den redigerbara avskriften bredvid dokumentmappens beskurna
+läskopior och sparar rättningar i Markdown-källan med versionskopia och logg.
+
+Länken publiceras som en del av det datafria appskalet. Servern,
+Markdown-filerna, originalen och läskopiorna publiceras inte och lämnar inte
+`Digitalisering 2026`. Verktyget fungerar därför bara på en dator som har
+källmappen och den lokala servern igång.
+
 ## Kommandon
 
 - `npm run build:migration` bygger `privat/aktuell-startmaster` från samtliga
