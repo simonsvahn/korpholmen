@@ -10,19 +10,29 @@ Normaliserade tider, klasser och bankoder ligger bredvid råvärdena och kan
 kompletteras utan att ursprungsuppgiften skrivs över.
 
 Appen länkar båtar till Båtregistrets stabila ID och deltagare till Matrikelns
-person-ID. Endast entydiga träffar kopplas automatiskt. Möjliga och olösta
-träffar visas i appens granskningskö och kan avgöras manuellt.
+person-ID. En post är kopplad först när ett stabilt ID har valts. Möjliga
+träffar visas bara som förslag; de räknas inte som länkar och kan avgöras
+manuellt eller i bulk.
 Alla personer i ett resultat har samma roll, **tävlande**. Källans eventuella
 kolumnindelning används inte som kapten-/besättningsdata; originalraden finns
 fortfarande kvar för källkontroll.
 Det aktuella personnamnet läses skrivskyddat från Matrikel. Resultatets rånamn
 ligger kvar i tävlingsmastern och ändras inte när personen byter namn.
+På samma sätt läses hela den aktuella båtkatalogen skrivskyddat från
+Båtregister. Äldre `boat-ref`-poster är bara en offline-reserv och begränsar
+inte matchningslistan. En bekräftad felskrivning i tävlingskällan visas med det
+rättade båtnamnet medan originalvärdet bevaras som uttrycklig proveniens.
 
-Ofullständigt granskade analoga år kan publiceras som preliminära rader. De
-visas tydligt i resultatlistan och under **Granska & matcha**, där varje rad kan
-öppnas, rättas och godkännas. Preliminära eller tidsosäkra rader räknas inte i
-placeringar, topptider eller rekord förrän de har godkänts. Källans råvärden och
-granskningsfrågor bevaras även när den normaliserade posten ändras.
+Alla resultat visas alltid. De filtreras aldrig bort från resultatlistor,
+placeringar, topptider eller rekord på grund av gransknings- eller
+kopplingsläge. Varje resultatrad kan justeras direkt: klass, tid, båt och
+valfritt antal tävlande. Källans råvärden bevaras även när den normaliserade
+posten ändras.
+
+På sidan **År för år** kan det handskrivna originalet fällas ut under
+**Källmaterial**. Appen hämtar en icke-generativ JPEG-läskopia från den privata
+Dropbox-mastern och kontrollerar dess SHA-256 innan den visas. Bilden och dess
+metadata ingår aldrig i det datafria GitHub Pages-paketet.
 
 Den beslutade klassstandarden kan tillämpas på hela den levande mastern med
 ett knapptryck. Åtgärden fyller stabilt klass-ID och standardnamn, men lämnar
@@ -49,7 +59,10 @@ npm run migrate:tavlande -- --dry-run
 npm run migrate:med-flera
 npm test
 npm run build:publish
+node verktyg/bygg-kallbilder.mjs "/Users/.../Dropbox/Appar/Korpholmen" "/Users/.../Digitalisering 2026/01 Digitaliserade dokument"
+node verktyg/granska-batkopplingar.mjs "/Users/.../Dropbox/Appar/Korpholmen"
 node verktyg/standardisera-klasser.mjs "/Users/.../Dropbox/Appar/Korpholmen"
+node verktyg/ratta-homsan-till-mymlan.mjs "/Users/.../Dropbox/Appar/Korpholmen" --write
 ```
 
 På localhost kan den privata startmastern aktiveras i en tom lokal databas och

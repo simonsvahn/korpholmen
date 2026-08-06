@@ -5,7 +5,10 @@
   "scripts": {
     "build:migration": "node verktyg/bygg-startmaster.mjs && python3 verktyg/bygg-sqlite.py",
     "build:publish": "node verktyg/bygg-publicering.mjs",
+    "build:source-images": "node verktyg/bygg-kallbilder.mjs",
+    "audit:boats": "node verktyg/granska-batkopplingar.mjs",
     "migrate:med-flera": "node verktyg/strukturera-med-flera.mjs",
+    "migrate:homsan-mymlan": "node verktyg/ratta-homsan-till-mymlan.mjs",
     "migrate:tavlande": "node verktyg/migrera-tavlande-v3.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
     "test": "node test/harness.mjs"

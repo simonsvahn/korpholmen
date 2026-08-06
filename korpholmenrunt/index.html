@@ -13,9 +13,9 @@
   <meta property="og:image:height" content="630">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../icons/korpholmen-180.png">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-06-korpholmen-pwa-28">
-  <link rel="stylesheet" href="./matchning.css?v=2026-08-06-korpholmen-pwa-28">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-06-korpholmen-pwa-28">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-06-korpholmen-pwa-29">
+  <link rel="stylesheet" href="./matchning.css?v=2026-08-06-korpholmen-pwa-29">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-06-korpholmen-pwa-29">
   <title>Korpholmen runt – resultat & rekord</title>
 </head>
 <body class="app-korpholmenrunt">
@@ -66,20 +66,17 @@
         <label>Bana<select id="edit-course"><option value="">Okänd</option><option value="S">S</option><option value="L">L</option></select></label>
         <label>Tid<input id="edit-time" placeholder="19,01"></label>
         <label>Klass<input id="edit-class" placeholder="Kajak 1"></label>
-        <label>Granskningsläge<select id="edit-review-status"><option value="granskning krävs">Granskning krävs</option><option value="granskad">Granskad</option></select></label>
-        <label class="bred">Båtens namn i källan<input id="edit-boat-raw"></label>
+        <label class="bred">Båtnamn<input id="edit-boat-raw"></label>
         <label class="bred">Kopplad båt<select id="edit-boat-id"><option value="">Inte kopplad</option></select></label>
-        <fieldset class="tavlandegrupp"><legend>Tävlande</legend><label>Namn i källan<input id="edit-participant-1"></label><label>Kopplad i Matrikeln<select id="edit-person-1-id"><option value="">Inte kopplad</option></select></label></fieldset>
-        <fieldset class="tavlandegrupp"><legend>Ytterligare tävlande</legend><label>Namn i källan<input id="edit-participant-2"></label><label>Kopplad i Matrikeln<select id="edit-person-2-id"><option value="">Inte kopplad</option></select></label></fieldset>
-        <fieldset id="edit-participant-3-group" class="tavlandegrupp" hidden><legend>Ytterligare tävlande</legend><label>Namn i källan<input id="edit-participant-3"></label><label>Kopplad i Matrikeln<select id="edit-person-3-id"><option value="">Inte kopplad</option></select></label></fieldset>
-        <label class="bred">Oklara uppgifter, en per rad<textarea id="edit-review-issues" rows="3"></textarea></label>
+        <div id="edit-participants" class="bred deltagarredigering" aria-label="Tävlande"></div>
+        <button type="button" id="add-participant" class="sekundar lagg-till-tavlande">+ Lägg till tävlande</button>
         <label class="bred">Anteckning<textarea id="edit-notes" rows="3"></textarea></label>
       </div>
       <div class="dialogfot"><span>Ändringen sparas lokalt direkt och synkas som en ny operation.</span><button type="button" id="save-result" class="primar">Spara i mastern</button></div>
     </form>
   </dialog>
 
-  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-06-korpholmen-pwa-28"></script>
-  <script type="module" src="./src/app.js?v=2026-08-06-korpholmen-pwa-28"></script>
+  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-06-korpholmen-pwa-29"></script>
+  <script type="module" src="./src/app.js?v=2026-08-06-korpholmen-pwa-29"></script>
 </body>
 </html>
