@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -27,12 +28,15 @@ await test('startmastern innehåller hela det aktuella arkivet och giltiga opera
   assert.equal(new Set(documents.map(item=>item.id)).size,documents.length);
   assert.ok(documents.every(item=>item.title&&item.document_date&&item.transcript&&item.source_path));
   assert.ok(documents.every(item=>Array.isArray(item.entity_ids)));
+  assert.ok(documents.every(item=>Array.isArray(item.entity_links)));
+  assert.ok(documents.every(item=>item.entity_links.every(link=>link.relation==='nämns'&&link.source_label&&link.evidence_quote)));
+  assert.ok(documents.every(item=>JSON.stringify(item.entity_ids)===JSON.stringify(item.entity_links.map(link=>link.entity_id))));
   assert.ok(documents.every(item=>Array.isArray(item.story_track_ids)));
   assert.ok(documents.every(item=>Array.isArray(item.content_images)));
   assert.ok(documents.flatMap(item=>item.content_images).length>=6);
   assert.ok(documents.flatMap(item=>item.content_images).every(image=>/^\/dokumentarkiv\/bilder\/[a-f0-9]{64}\.(?:jpg|png|webp)$/.test(image.blob_path)));
   assert.ok(documents.every(item=>item.transcript_sha256&&Number.isInteger(item.word_count)));
-  assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)));
+  assert.ok(documents.every(item=>['färdig','kontroll behövs'].includes(item.status)||/^granskad(?:\s|\(|$)/iu.test(item.status)));
   assert.ok(documents.every(item=>![item.title,item.document_date,item.document_type,item.status].some(value=>/^(?:".*"|'.*')$/.test(value))));
   assert.equal(summary.total_documents,documents.length);
   assert.equal(summary.inbox_total_files,summary.inbox_referenced_files+summary.inbox_pending_files.length);
@@ -82,6 +86,44 @@ await test('registerkopplingar skiljer exakt träff, granskning och saknad entit
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:atlanta')));
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:gungafin')));
   assert.ok(documents.find(item=>item.title==='Protokoll från Korpholmens Båtklubbs årsmöte').entity_ids.includes('person:bibbihedström'));
+  const winterMeeting1954=documents.find(item=>item.document_date==='1954-01-29');
+  assert.ok(winterMeeting1954);
+  assert.equal(winterMeeting1954.entity_ids.includes('boat:dagen'),false);
+  assert.equal(documents.find(item=>item.document_date==='1967-10-05').entity_ids.includes('boat:ingenting'),false);
+});
+
+await test('verktyget för ersatta dokument kräver exakt antal och skriver först med --apply',async()=>{
+  const scratch=await mkdtemp(resolve(tmpdir(),'korpholmen-dokument-cleanup-'));
+  try {
+    const dropboxRoot=resolve(scratch,'Dropbox/Appar/Korpholmen');
+    const opsRoot=resolve(dropboxRoot,'dokumentarkiv/ops');
+    await mkdir(opsRoot,{recursive:true});
+    const clock=Math.max(...document.operations.map(operation=>Number(String(operation.hlc).split('-')[0])||0))+1000;
+    const staleOperation={
+      op_id:'cleanup-test-source:1',device_id:'cleanup-test-source',seq:1,
+      entity_type:'document',entity_id:'document:ersatt-test',field:'title',value:'Ersatt testdokument',
+      hlc:`${clock}-000001-cleanup-test-source`,schema_version:1,
+    };
+    await writeFile(resolve(opsRoot,'remote.json'),`${JSON.stringify({ops:[...document.operations,staleOperation]})}\n`);
+    const script=resolve(ROOT,'verktyg/aterkalla-ersatta-dokument.mjs');
+    const mismatch=spawnSync(process.execPath,[script,dropboxRoot,'--expected','2'],{encoding:'utf8'});
+    assert.notEqual(mismatch.status,0);
+    assert.match(mismatch.stderr,/fann 1 ersatta poster/);
+    const preview=spawnSync(process.execPath,[script,dropboxRoot,'--expected','1'],{encoding:'utf8'});
+    assert.equal(preview.status,0,preview.stderr);
+    assert.deepEqual(JSON.parse(preview.stdout).mode,'preview');
+    assert.deepEqual(await readdir(opsRoot),['remote.json']);
+    const applied=spawnSync(process.execPath,[script,dropboxRoot,'--expected','1','--apply'],{encoding:'utf8'});
+    assert.equal(applied.status,0,applied.stderr);
+    const report=JSON.parse(applied.stdout);
+    assert.equal(report.mode,'apply');
+    assert.equal(report.tombstones,1);
+    assert.ok(report.batch_file.includes('/dokumentarkiv/ops/'));
+    assert.ok(report.batch_file.includes('cleanup-dokumentarkiv-'));
+    assert.ok(report.batch_file.endsWith('.json'));
+  } finally {
+    await rm(scratch,{recursive:true,force:true});
+  }
 });
 
 await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async()=>{
