@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
-import { OBJECT_CLASSES, islandDeletionRefs, objectTypeLabel, stableEntityId } from '../src/model.js';
+import { OBJECT_CLASSES, islandDeletionRefs, nextEntryId, objectTypeLabel, stableEntityId } from '../src/model.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
@@ -118,6 +118,26 @@ await test('modellens typetiketter är rena och ö-ID:n stabila', () => {
   assert.equal(objectTypeLabel('byggnad', 'Gäststuga'), 'Byggnad: Gäststuga');
   assert.equal(objectTypeLabel('plats', null), 'Plats');
   assert.equal(stableEntityId('Stora Sviholmen'), 'stora-sviholmen');
+  assert.equal(nextEntryId(['K1', 'K161', { entity_id: 'K200' }, 'annat']), 'K201');
+});
+
+await test('nya kartobjekt får ett stabilt ID och skapas atomiskt med sina länkar', async () => {
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
+  assert.ok(html.includes('id="new-entry"'));
+  assert.ok(html.includes('id="new-entry" type="button" disabled'));
+  assert.ok(html.includes('Nytt kartobjekt'));
+  assert.ok(app.includes('openNewEntryDrawer'));
+  assert.ok(app.includes('newEntryButton.disabled = false'));
+  assert.ok(app.includes("repository.listEntities('data-entry', { includeDeleted: true })"));
+  assert.ok(app.includes('await repository.replaceEntities(newEntities)'));
+  assert.ok(app.includes("`${fields.name} ${isNew ? 'skapad' : 'uppdaterad'}`"));
+});
+
+await test('Kartdata och de två läsmastrarna synkas parallellt', async () => {
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(app.includes('const kartdataSync = new SyncEngine'));
+  assert.ok(app.includes('const [result] = await Promise.all(['));
+  assert.ok(app.includes('kartdataSync,'));
 });
 
 await test('fastigheter visas med nuvarande ägares unika efternamn', () => {
