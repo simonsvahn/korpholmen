@@ -112,6 +112,8 @@ Fastigheter. Namnlikhet används aldrig för identitetsmatchning.
 Fastighets-ID:t är stabilt, men det synliga namnet räknas fram som ID följt av
 de unika strukturerade efternamnen på parterna i nulägesbedömningen, exempelvis
 `Alsvik 3:79 (Bethge)`. Saknas en säker nulägesbedömning visas endast ID:t.
+Samma läsprojektion används i Fastigheter, Matrikel, Kartdata och
+Dokumentarkivets strukturerade fastighetsnoder.
 
 ```mermaid
 flowchart LR
@@ -123,7 +125,7 @@ flowchart LR
 ```
 
 Ett namnbyte görs alltså en gång i Matrikel. Båtregister, Fastigheter,
-Kartdata, Klubbhistorik och Korpholmen runt får det nya namnet vid nästa
+Kartdata, Dokumentarkiv, Klubbhistorik och Korpholmen runt får det nya namnet vid nästa
 skrivskyddade lässynk. Källans rånamn och historiska namnformer påverkas inte.
 
 ## Tre lager av namn

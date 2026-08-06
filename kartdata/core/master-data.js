@@ -72,7 +72,7 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
   return [...byId.values()];
 }
 
-export function resolveArchiveEntity(reference, { personMaster, boatMaster } = {}) {
+export function resolveArchiveEntity(reference, { personMaster, boatMaster, fastigheterMaster } = {}) {
   if (!reference || reference.match_status !== 'kopplad' || !reference.external_id) return reference;
   if (reference.entity_type === 'person') {
     const person = personMaster?.initialized ? personMaster.getEntity('person', reference.external_id)?.fields : null;
@@ -91,6 +91,12 @@ export function resolveArchiveEntity(reference, { personMaster, boatMaster } = {
       url: `../batregister/?boat=${encodeURIComponent(reference.external_id)}`,
       resolution: boat ? 'canonical-master' : 'cached-reference',
     };
+  }
+  if (reference.entity_type === 'fastighet') {
+    const property = fastigheterMaster?.getEntity?.('property', reference.external_id);
+    if (!property) return reference;
+    const name = resolvePropertyDisplayName(reference.external_id, fastigheterMaster);
+    return { ...reference, name, display_name: name, resolution: 'canonical-master', url: `../fastigheter/?property=${encodeURIComponent(reference.external_id)}` };
   }
   return reference;
 }
