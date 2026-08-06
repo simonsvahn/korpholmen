@@ -15,6 +15,13 @@ const normalizePath = value => {
 
 const parentPath = path => path.slice(0, path.lastIndexOf('/')) || '/';
 const childPath = (path, child) => path === '/' ? `/${child}` : `${path}/${child}`;
+export function dropboxUploadTimeoutMs(body, requestTimeoutMs = 45_000) {
+  if (requestTimeoutMs === 0) return 0;
+  const bytes = Number(body?.size ?? body?.byteLength ?? body?.length ?? 0);
+  if (!(bytes > 0)) return requestTimeoutMs;
+  const transferBudget = 30_000 + Math.ceil(bytes / (64 * 1024)) * 1000;
+  return Math.min(10 * 60_000, Math.max(requestTimeoutMs, transferBudget));
+}
 export const dropboxApiArg = value => JSON.stringify(value)
   .replace(/[\u007f-\uffff]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
@@ -236,7 +243,7 @@ export class DropboxTransport {
         'Dropbox-API-Arg': dropboxApiArg({ path, mode, autorename: false, mute: true, strict_conflict: true })
       },
       body
-    });
+    }, dropboxUploadTimeoutMs(body, this.requestTimeoutMs));
     if (!response.ok) return this.parseError(response);
     return response.json();
   }

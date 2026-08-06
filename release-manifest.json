@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-06-korpholmen-pwa-18",
+  "release": "2026-08-06-korpholmen-pwa-19",
   "generated_at": "2026-08-06",
   "pwa": {
     "id": "./",
@@ -47,6 +47,7 @@
     "./batregister/src/app.js",
     "./batregister/src/config.js",
     "./batregister/src/connection-filter.js",
+    "./batregister/src/image-pipeline.js",
     "./batregister/styles.css",
     "./batregister/sw.js",
     "./dokumentarkiv/core/data-layer.js",
