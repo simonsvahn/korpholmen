@@ -147,6 +147,7 @@ for (const assessment of source.current_owner_assessments || []) {
   requireProperty(assessment.property_id, 'bedömning av nuvarande ägare');
   sourcesValid(assessment.source_ids, `bedömning av nuvarande ägare ${assessment.property_id}`);
   if (!assessment.owners?.length) throw new Error(`Bedömningen saknar ägare: ${assessment.property_id}`);
+  for (const owner of assessment.owners) if (!source.party_display_surnames?.[owner]) throw new Error(`Visningsefternamn saknas för nuvarande ägare ${owner} på ${assessment.property_id}`);
   if (currentOwnerProperties.has(assessment.property_id)) throw new Error(`Flera nulägesbedömningar för ${assessment.property_id}`);
   currentOwnerProperties.add(assessment.property_id);
 }
@@ -198,11 +199,13 @@ function partyFor(name) {
   if (existing && existing.name !== name) throw new Error(`Part-id kolliderar även efter kontrollsumma: ${existing.name} / ${name}`);
   if (!existing) {
     const personId = source.person_links[name] || null;
+    const displaySurname = source.party_display_surnames?.[name] || null;
     parties.set(id, {
       id,
       name,
       party_type: /förening/i.test(name) ? 'organisation' : /dödsbo|arvingar/i.test(name) ? 'kollektiv' : 'person eller namngrupp',
       person_id: personId,
+      ...(displaySurname ? { display_surname: displaySurname } : {}),
       identity_status: personId ? 'kopplad till Matrikeln' : 'fristående part',
     });
   }

@@ -94,6 +94,8 @@ stabilt ö-ID genom `data-entry-island-link` och till Fastighetshistorikens
 fastighets-ID genom `data-entry-property-link`. Äldre `map-entry`, källfält,
 arbetsanteckningar och automatiska förslag ligger kvar som ett avskilt
 append-only-arkiv men läses inte av appen och ingår inte i exporten.
+Äldre karttexter av typen `ägaretikett` hör också till detta arkiv och är inte
+aktiva sakobjekt.
 
 Önamn ligger som separata `name-record`, så att föredraget, officiellt,
 historiskt och alternativt namn kan samexistera utan att ö-ID:t byts. En
@@ -106,6 +108,10 @@ länkad fastighet läser appen live eller ur en märkt offlinecache det granskad
 `owner_party_ids` till en part. Har parten `person_id` hämtas namnet från
 Matrikel; organisationer och ännu oupplösta namngrupper visas från
 Fastigheter. Namnlikhet används aldrig för identitetsmatchning.
+
+Fastighets-ID:t är stabilt, men det synliga namnet räknas fram som ID följt av
+de unika strukturerade efternamnen på parterna i nulägesbedömningen, exempelvis
+`Alsvik 3:79 (Bethge)`. Saknas en säker nulägesbedömning visas endast ID:t.
 
 ```mermaid
 flowchart LR

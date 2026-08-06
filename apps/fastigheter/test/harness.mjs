@@ -84,6 +84,10 @@ await test('nulägesbedömningen rättar ägare utan att skriva över historiken
   assert.equal(currentHumanParties.filter(party => party.person_id.startsWith('extern-fastighet-')).length, 24);
   assert.equal(parties.get('party-korpholmens-tomtagareforening').person_id, null);
   assert.deepEqual(state.listEntities('observation').find(item => item.fields.property_id === 'Alsvik 3:343').fields.owner_party_ids, ['party-kaj-gunder-boving']);
+  assert.ok(currentHumanParties.every(party => party.display_surname));
+  assert.equal(parties.get('party-inger-bethge').display_surname, 'Bethge');
+  assert.equal(parties.get('party-helena-maria-une-rameke').display_surname, 'Une Rameke');
+  assert.equal(parties.get('party-korpholmens-tomtagareforening').display_surname, 'Tomtägareföreningen');
 });
 await test('kända transaktionsdatum hålls isär efter datumroll', () => {
   const events = new Map(state.listEntities('event').map(item => [item.entity_id, item.fields]));
@@ -180,6 +184,8 @@ await test('webbappen har en ren tabell, läsbar tidslinje och hopfälld källfo
   assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'matrikel' })"));
   assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'kartdata' })"));
   assert.ok(app.includes('resolvePartyName(party, matrikelMaster)'));
+  assert.ok(app.includes('formatPropertyDisplayName'));
+  assert.ok(app.includes('propertyDisplayName(property)'));
   assert.ok(app.includes("recordList('current-owner-assessment')"));
   assert.ok(app.includes('Nuvarande ägare'));
   assert.ok(app.includes('Korten visar bara period, person och roll.'));

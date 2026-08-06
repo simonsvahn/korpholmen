@@ -10,6 +10,11 @@ visas enbart från Fastighetshistorikens granskade nulägesbedömning och
 länkas vidare till Matrikeln när ägarparten är en person. Kartdata lagrar
 varken ägare eller personnamn som egen masterdata.
 
+Fastigheter visas med en dynamisk ägarprojektion, till exempel
+`Alsvik 3:79 (Bethge)`. Efternamnen hämtas från Fastighetshistorikens granskade
+nulägesbedömning. Äldre `ägaretikett`-rader bevaras i råarkivet men är inte
+aktiva Kartdata-objekt.
+
 Den konkreta modellen finns i [`DATAMODELL.md`](DATAMODELL.md). Appfamiljens
 ansvarsgränser finns i [`../../ARKITEKTUR.md`](../../ARKITEKTUR.md).
 

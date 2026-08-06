@@ -31,6 +31,11 @@ vilka vi för närvarande tror är rätt ägare och används av Kartdata. Äldre
 registerobservationer och ägarkedjor ligger kvar som historik och skrivs aldrig
 över av nulägesbedömningen.
 
+Fastigheter visas som `fastighets-ID (unika efternamn på nuvarande ägare)`, till
+exempel `Alsvik 3:79 (Bethge)`. Efternamnen ligger strukturerat på ägarparterna
+och visningsnamnet räknas om från nulägesbedömningen; det är inte ett separat
+kartobjekt eller ett beständigt smeknamn.
+
 128 poster i den äldre råkedjan finns kvar ordagrant och är också
 normaliserade. Två felaktiga slutsatser har flyttats till `rejected-claim` med
 skäl och originalbelägg, så att de varken tappas bort eller fortsätter visas

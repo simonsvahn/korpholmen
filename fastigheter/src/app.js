@@ -15,7 +15,7 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../core/data-layer.js';
-import { resolvePartyName } from '../core/master-data.js';
+import { formatPropertyDisplayName, resolvePartyName } from '../core/master-data.js';
 import { ReadOnlyMaster } from '../core/read-only-master.js';
 import {
   buildClaimChain,
@@ -134,7 +134,13 @@ function currentOwners(propertyId) {
   const parties = partyMap();
   const owners = (assessment.owner_party_ids || []).map(id => {
     const party = parties.get(id);
-    return { id, personId: party?.person_id || null, name: resolvePartyName(party, matrikelMaster) || party?.name || id };
+    return {
+      id,
+      personId: party?.person_id || null,
+      name: resolvePartyName(party, matrikelMaster) || party?.name || id,
+      display_surname: party?.display_surname || null,
+      party_type: party?.party_type || null,
+    };
   });
   const confirmationSources = new Set(['FAST-1', 'FAST-2', 'BIO-SIMON', 'APP-DIREKT', 'MUNTLIG-ANN-BONNERSTIG-2021']);
   const confirmed = owners.length > 0 && (assessment.source_ids || []).some(id => confirmationSources.has(id));
@@ -143,6 +149,11 @@ function currentOwners(propertyId) {
     state: confirmed ? 'confirmed' : owners.length ? 'provisional' : 'missing',
     stateLabel: confirmed ? 'Bekräftad' : owners.length ? 'Behöver bekräftas' : 'Saknas',
   };
+}
+
+function propertyDisplayName(propertyOrId) {
+  const id = typeof propertyOrId === 'string' ? propertyOrId : propertyOrId?.id;
+  return formatPropertyDisplayName(id, currentOwners(id).owners);
 }
 
 function cleanHolder(value) {
@@ -165,7 +176,7 @@ function historyYears(propertyId) {
 
 function propertySearchText(property) {
   return [
-    property.id, propertyIslandName(property),
+    property.id, propertyDisplayName(property), propertyIslandName(property),
     ...currentOwners(property.id).owners.map(owner => owner.name),
     ...holdingClaimsFor(property.id).flatMap(claim => [claim.holder_text, claim.role, claim.period_text, claim.raw_text]),
     ...eventsFor(property.id).flatMap(event => [event.label, event.notes]),
@@ -210,7 +221,7 @@ function renderOverview() {
     const owners = currentOwners(property.id);
     const ownerHtml = owners.owners.length ? owners.owners.map(owner => personLink(owner.name, owner.personId)).join(', ') : '<span class="muted-text">Saknas</span>';
     return `<tr>
-      <td><button class="property-open" type="button" data-property-id="${escapeHtml(property.id)}"><b>${escapeHtml(property.id)}</b><span>Öppna tidslinje</span></button></td>
+      <td><button class="property-open" type="button" data-property-id="${escapeHtml(property.id)}"><b>${escapeHtml(propertyDisplayName(property))}</b><span>Öppna tidslinje</span></button></td>
       <td>${escapeHtml(propertyIslandName(property))}</td>
       <td>${ownerHtml}</td>
       <td><span class="state ${owners.state}">${owners.stateLabel}</span></td>
@@ -375,7 +386,7 @@ function renderCommunity(propertyId) {
 function renderRelations(propertyId) {
   const relations = relationsFor(propertyId);
   if (!relations.length) return '';
-  return `<details class="drawer-fold"><summary>Fastighetsbildning och föregångare <span>${relations.length}</span></summary><div class="fold-content"><ul>${relations.map(relation => `<li>${escapeHtml(relation.from_id)} → ${escapeHtml(relation.to_property_id)}: ${escapeHtml(relation.relation)}</li>`).join('')}</ul></div></details>`;
+  return `<details class="drawer-fold"><summary>Fastighetsbildning och föregångare <span>${relations.length}</span></summary><div class="fold-content"><ul>${relations.map(relation => `<li>${escapeHtml(propertyRecords().some(property => property.id === relation.from_id) ? propertyDisplayName(relation.from_id) : relation.from_id)} → ${escapeHtml(propertyDisplayName(relation.to_property_id))}: ${escapeHtml(relation.relation)}</li>`).join('')}</ul></div></details>`;
 }
 
 function renderOpenQuestions(propertyId) {
@@ -388,7 +399,7 @@ function renderDrawer(id) {
   const property = propertyRecords().find(item => item.id === id);
   if (!property) return closeDrawer();
   const current = currentOwners(id);
-  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">Fastighet</p><h2>${escapeHtml(property.id)}</h2><p>${escapeHtml(propertyIslandName(property))}</p></header>
+  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">Fastighet</p><h2>${escapeHtml(propertyDisplayName(property))}</h2><p>${escapeHtml(propertyIslandName(property))}</p></header>
     <section class="current-snapshot"><div><p class="snapshot-label">Nuvarande ägare</p><p class="snapshot-owners">${current.owners.length ? current.owners.map(owner => personLink(owner.name, owner.personId)).join(' · ') : 'Saknas'}</p></div><span class="state ${current.state}">${current.stateLabel}</span></section>
     ${renderPropertyTimeline(id)}
     <section class="drawer-lower">${renderRelations(id)}${renderOpenQuestions(id)}${renderCommunity(id)}${renderResearch(id)}</section>`;

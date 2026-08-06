@@ -16,6 +16,33 @@ export function resolvePartyName(party, personMaster) {
   return person?.display_name || party.name || party.id || '';
 }
 
+function inferredSurname(value) {
+  const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+  return parts.at(-1) || '';
+}
+
+export function ownerSurnameLabel(owner) {
+  if (!owner) return '';
+  const explicit = owner.display_surname || owner.surname || owner.last_name || owner.family_name;
+  if (explicit) return String(explicit).trim();
+  const name = owner.display_name || owner.name || owner.id || '';
+  if (owner.party_type === 'organisation') return String(name).trim();
+  return inferredSurname(name);
+}
+
+export function formatSwedishList(values) {
+  const items = [...new Set((values || []).map(value => String(value || '').trim()).filter(Boolean))];
+  if (items.length < 2) return items[0] || '';
+  if (items.length === 2) return `${items[0]} och ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} och ${items.at(-1)}`;
+}
+
+export function formatPropertyDisplayName(propertyId, owners = []) {
+  const id = String(propertyId || '').trim();
+  const ownerLabel = formatSwedishList(owners.map(ownerSurnameLabel));
+  return ownerLabel ? `${id} (${ownerLabel})` : id;
+}
+
 export function mergePersonReferences(references, personMaster, { includeUnreferenced = false } = {}) {
   const canonical = canonicalPersonMap(personMaster);
   const byId = new Map();
@@ -68,13 +95,13 @@ export function resolveArchiveEntity(reference, { personMaster, boatMaster } = {
   return reference;
 }
 
-export function resolvePropertyReferences(fastigheterMaster, fallbacks = []) {
+export function resolvePropertyReferences(fastigheterMaster, fallbacks = [], personMaster = null) {
   const canonical = rows(fastigheterMaster, 'property');
   if (!canonical.length) return [...fallbacks];
   return canonical.map(property => ({
     ...property,
     external_id: property.id,
-    display_name: property.display_name || property.id,
+    display_name: resolvePropertyDisplayName(property.id, fastigheterMaster, personMaster),
     url: `../fastigheter/?property=${encodeURIComponent(property.id)}`,
     source_master: 'fastigheter',
     resolution: 'canonical-master',
@@ -97,6 +124,7 @@ export function resolveCurrentOwners(propertyId, fastigheterMaster, personMaster
       owner_type: person ? 'person' : 'party',
       owner_id: person?.id || party.id,
       display_name: person?.display_name || party.name || party.id,
+      display_surname: party.display_surname || person?.surname || person?.last_name || person?.family_name || null,
       party_type: party.party_type || null,
       url: person ? `../matrikel/?person=${encodeURIComponent(person.id)}` : '#',
       source_master: person ? 'matrikel' : 'fastigheter',
@@ -105,4 +133,8 @@ export function resolveCurrentOwners(propertyId, fastigheterMaster, personMaster
       status: assessment.status || null,
     };
   }).filter(Boolean);
+}
+
+export function resolvePropertyDisplayName(propertyId, fastigheterMaster, personMaster = null) {
+  return formatPropertyDisplayName(propertyId, resolveCurrentOwners(propertyId, fastigheterMaster, personMaster));
 }

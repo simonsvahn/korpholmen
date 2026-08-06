@@ -51,6 +51,8 @@ import {
   relativeGenerationLabel,
   wouldCreateParentChildCycle,
 } from '../../../packages/core/family-context.js?v=2026-08-05-paket-3';
+import { resolvePropertyDisplayName } from '../../../packages/core/master-data.js?v=2026-08-06-property-owner-display';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js?v=2026-08-06-property-owner-display';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
 
@@ -87,6 +89,7 @@ const LEGACY_OPS_ROOT = '/ops';
 
 let repository;
 let store;
+let fastigheterMaster;
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
@@ -209,6 +212,7 @@ function relationRecords() {
 function propertyRecords() {
   return repository.listEntities('property')
     .map((entity) => ({ id: entity.entity_id, ...entity.fields }))
+    .map(property => ({ ...property, display_name: resolvePropertyDisplayName(property.id, fastigheterMaster) || property.id }))
     .sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
 }
 
@@ -362,7 +366,7 @@ function refreshControls() {
     for (const propertyId of propertyIds) propertyCounts.set(propertyId, (propertyCounts.get(propertyId) || 0) + 1);
   }
   propertyFilter.innerHTML = '<option value="">Alla fastigheter</option>'
-    + currentProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.id)} · ${propertyCounts.get(property.id) || 0}</option>`).join('')
+    + currentProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.display_name)} · ${propertyCounts.get(property.id) || 0}</option>`).join('')
     + `<option value="__none__">Utan fastighet · ${withoutProperty}</option>`;
   propertyFilter.value = ui.property && (ui.property === '__none__' || propertyById.has(ui.property)) ? ui.property : '';
 
@@ -580,7 +584,7 @@ function renderPropertyLandscape(visible, relatedIds) {
       ? unique(people.flatMap(islandNames)).join(' · ')
       : property.island;
     return `<section class="property-group" id="property-${slug(group.id)}">
-      <header class="property-header"><div><p class="property-kicker">${group.id === '__none__' ? 'Ofullständig koppling' : 'Fastighet'}</p><h2>${escapeHtml(group.id === '__none__' ? property.display_name : property.id)}</h2>${group.id !== '__none__' && property.label ? `<p>${escapeHtml(property.label)}</p>` : ''}</div><div class="property-meta">${people.length} personer${island ? ` · ${escapeHtml(island)}` : ''}</div></header>
+      <header class="property-header"><div><p class="property-kicker">${group.id === '__none__' ? 'Ofullständig koppling' : 'Fastighet'}</p><h2>${escapeHtml(property.display_name)}</h2></div><div class="property-meta">${people.length} personer${island ? ` · ${escapeHtml(island)}` : ''}</div></header>
       <div class="property-families">
         ${connected.map((component) => {
           const visibleIds = [...component].filter((id) => visible.has(id));
@@ -653,7 +657,7 @@ function render() {
 
 function filterLabel(key) {
   if (key === 'living') return ui.living === 'ja' ? 'Levande' : ui.living === 'nej' ? 'Avlidna' : 'Okänd livsstatus';
-  if (key === 'property') return ui.property === '__none__' ? 'Utan fastighet' : ui.property;
+  if (key === 'property') return ui.property === '__none__' ? 'Utan fastighet' : propertyById.get(ui.property)?.display_name || ui.property;
   if (key === 'generations') return 'Presentationsled ' + [...ui.generations].join(', ');
   if (key === 'year') return 'Levde år ' + ui.year;
   if (key === 'inlaws') return 'Utan ingifta';
@@ -782,7 +786,7 @@ function renderDrawer(personId) {
   const islands = unique([...currentProperties.map((property) => property.island), ...currentPeople.map((entry) => entry.legacy_island)].filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
   const propertyRows = propertyLinks.map((link) => {
     const property = propertyById.get(link.property_id);
-    return `<li class="property-link-row"><span><b>${escapeHtml(property.id)}</b>${property.island ? ` · ${escapeHtml(property.island)}` : ''}</span><button type="button" class="icon-button" data-delete-property-link="${escapeAttribute(link.id)}" aria-label="Ta bort fastighetskopplingen till ${escapeAttribute(property.id)}">×</button></li>`;
+    return `<li class="property-link-row"><span><b>${escapeHtml(property.display_name)}</b>${property.island ? ` · ${escapeHtml(property.island)}` : ''}</span><button type="button" class="icon-button" data-delete-property-link="${escapeAttribute(link.id)}" aria-label="Ta bort fastighetskopplingen till ${escapeAttribute(property.display_name)}">×</button></li>`;
   }).join('');
   drawerContent.innerHTML = `<h2>${escapeHtml(person.display_name)}</h2><p class="drawer-meta">${escapeHtml([person.club_name, years(person), ...islandNames(person)].filter(Boolean).join(' · '))}</p>
     <section class="belonging-card" aria-label="Personens tillhörigheter">
@@ -811,7 +815,7 @@ function renderDrawer(personId) {
       : 'Om personen har en fastighet hämtas ön automatiskt därifrån. Den manuella ön ligger kvar som reservuppgift.'}</p>
     <h3>Fastigheter</h3>
     <ul class="property-link-list">${propertyRows || '<li class="empty-note">Ingen fastighet registrerad</li>'}</ul>
-    <div class="add-property"><select data-new-property-id><option value="">Välj fastighet …</option>${availableProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.id)}${property.island ? ` · ${escapeHtml(property.island)}` : ''}</option>`).join('')}</select><button type="button" data-action="add-property">Lägg till</button></div>
+    <div class="add-property"><select data-new-property-id><option value="">Välj fastighet …</option>${availableProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.display_name)}${property.island ? ` · ${escapeHtml(property.island)}` : ''}</option>`).join('')}</select><button type="button" data-action="add-property">Lägg till</button></div>
     <h3>Nära familj</h3>
     <div class="close-family-grid">
       <section><h4>Föräldrar</h4><ul class="relation-list">${relationRows(closeFamily.parents)}</ul></section>
@@ -1110,7 +1114,8 @@ async function deletePropertyLink(id) {
   const link = currentPropertyLinks.find((entry) => entry.id === id);
   if (!link) return;
   const person = graph.byId.get(link.person_id)?.display_name || link.person_id;
-  if (!window.confirm(`Ta bort fastighetskopplingen mellan ${person} och ${link.property_id}?`)) return;
+  const propertyName = propertyById.get(link.property_id)?.display_name || link.property_id;
+  if (!window.confirm(`Ta bort fastighetskopplingen mellan ${person} och ${propertyName}?`)) return;
   const restoreEntries = [{ entityType: 'property-link', entityId: id }];
   if (await syncEdit(() => repository.deleteEntity('property-link', id))) offerUndo('Fastighetskopplingen borttagen', restoreEntries, 'Fastighetskopplingen återställd');
 }
@@ -1280,6 +1285,8 @@ async function syncNow() {
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
+    await fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true }));
+    refreshedRepositoryRevision = -1;
     render();
     familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
     if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
@@ -1517,6 +1524,7 @@ async function init() {
   const db = await openSlaktlandskapDB();
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
+  fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init();
   bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
   familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || personRecords().length === 0;
   connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
