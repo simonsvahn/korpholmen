@@ -1,5 +1,6 @@
 import { Materializer } from '../domain/materializer.js';
 import { DEFAULT_MAX_FUTURE_CLOCK_DRIFT_MS, createBatch, parseBatchPath, validateBatchEnvelope } from './batch.js';
+import { addBatchRange, contiguousSeq, createBatchProgress, hasBatchGaps, normalizeBatchProgress } from './batch-progress.js';
 import { CursorResetError, TransportError } from './errors.js';
 
 const isBatchPath = path => /\/ops\/.+\.json$/.test(path);
@@ -68,6 +69,8 @@ export class SyncEngine {
     this.sleep = sleep;
     this.keyPrefix = `sync:${transport.id || 'transport'}`;
     this.uploadedSeqKey = `${this.keyPrefix}:uploaded_seq:${repository.deviceId}`;
+    this.batchProgressKey = `${this.keyPrefix}:batch-progress-v1`;
+    this.quarantinePrefix = `${this.keyPrefix}:quarantine:`;
   }
 
   validateRemoteBatch(entry, batch) {
@@ -79,14 +82,67 @@ export class SyncEngine {
   }
 
   async quarantineBatch(entry, error) {
+    const key = `${this.quarantinePrefix}${encodeURIComponent(entry.path)}`;
+    const previous = await this.repository.store.getMeta(key);
+    const descriptor = parseBatchPath(entry.path, this.transport.opsRoot);
     const record = {
       path: entry.path,
       rev: entry.rev || null,
       reason: error?.message || 'Ogiltig batch',
+      device_id: descriptor?.deviceId || previous?.device_id || null,
+      from_seq: descriptor?.fromSeq || previous?.from_seq || null,
+      to_seq: descriptor?.toSeq || previous?.to_seq || null,
+      attempts: Number(previous?.attempts || 0) + 1,
+      first_quarantined_at: previous?.first_quarantined_at || previous?.quarantined_at || new Date(Number(this.now())).toISOString(),
       quarantined_at: new Date(Number(this.now())).toISOString(),
     };
-    await this.repository.store.putMeta(`${this.keyPrefix}:quarantine:${encodeURIComponent(entry.path)}`, record);
+    await this.repository.store.putMeta(key, record);
     return record;
+  }
+
+  async quarantineRows() {
+    if (typeof this.repository.store.listMeta !== 'function') return [];
+    return (await this.repository.store.listMeta(this.quarantinePrefix))
+      .filter(row => row?.value?.path)
+      .map(row => ({ key: row.key, record: row.value }));
+  }
+
+  async loadBatchProgress(quarantines) {
+    const stored = await this.repository.store.getMeta(this.batchProgressKey);
+    const progress = stored
+      ? normalizeBatchProgress(stored)
+      : createBatchProgress(this.repository.getWatermarks(), quarantines.map(item => item.record));
+    if (!stored) await this.repository.store.putMeta(this.batchProgressKey, progress);
+    return progress;
+  }
+
+  async retryQuarantines(progress) {
+    let downloadedOps = 0;
+    let downloadedBatches = 0;
+    for (const row of await this.quarantineRows()) {
+      const entry = { path: row.record.path, rev: row.record.rev || null };
+      let batch;
+      try {
+        batch = await this.withRateLimitRetry(() => this.transport.getJson(entry.path));
+      } catch (error) {
+        if (!(error instanceof TransportError) || error.code !== 'invalid_json') throw error;
+        await this.quarantineBatch(entry, error);
+        continue;
+      }
+      try {
+        this.validateRemoteBatch(entry, batch);
+      } catch (error) {
+        await this.quarantineBatch(entry, error);
+        continue;
+      }
+      await this.repository.applyRemoteOps(batch.ops);
+      addBatchRange(progress, parseBatchPath(entry.path, this.transport.opsRoot));
+      await this.repository.store.putMeta(this.batchProgressKey, progress);
+      await this.repository.store.deleteMeta(row.key);
+      downloadedOps += batch.ops.length;
+      downloadedBatches += 1;
+    }
+    return { downloadedOps, downloadedBatches };
   }
 
   async withRateLimitRetry(operation) {
@@ -174,11 +230,14 @@ export class SyncEngine {
       const detail = checkpoint.error ? `: ${checkpoint.error}` : '';
       throw new Error(`Privat snapshot saknas eller är skadad${detail}`);
     }
+    const initialQuarantines = await this.quarantineRows();
+    const batchProgress = await this.loadBatchProgress(initialQuarantines);
+    const retried = await this.retryQuarantines(batchProgress);
     let cursor = await this.repository.store.getMeta(`${this.keyPrefix}:cursor`);
-    let downloadedOps = 0;
-    let downloadedBatches = 0;
+    let downloadedOps = retried.downloadedOps;
+    let downloadedBatches = retried.downloadedBatches;
     let skippedBatches = 0;
-    const quarantinedBatches = [];
+    let quarantinedBatches = (await this.quarantineRows()).map(item => item.record);
     let resetUsed = false;
     while (true) {
       let page;
@@ -192,11 +251,10 @@ export class SyncEngine {
         }
         throw error;
       }
-      const watermarks = this.repository.getWatermarks();
       const entries = page.entries.filter(entry => {
         if (!isBatchPath(entry.path)) return false;
         const descriptor = parseBatchPath(entry.path, this.transport.opsRoot);
-        if (descriptor && descriptor.toSeq <= Number(watermarks[descriptor.deviceId] || 0)) {
+        if (descriptor && descriptor.toSeq <= contiguousSeq(batchProgress, descriptor.deviceId)) {
           skippedBatches += 1;
           return false;
         }
@@ -220,15 +278,22 @@ export class SyncEngine {
           }
         });
         const batches = downloaded.filter(item => item.batch).map(item => item.batch);
-        quarantinedBatches.push(...downloaded.filter(item => item.quarantine).map(item => item.quarantine));
+        const newlyQuarantined = downloaded.filter(item => item.quarantine).map(item => item.quarantine);
+        quarantinedBatches.push(...newlyQuarantined);
         // Operationer är idempotenta. Vi tillämpar en begränsad chunk i taget
         // men flyttar inte Dropbox-cursorn förrän hela sidan är klar. Ett avbrott
         // ger därför säker omhämtning utan att hundratals MB måste ligga i minnet.
         for (const batch of batches) {
           await this.repository.applyRemoteOps(batch.ops);
+          addBatchRange(batchProgress, {
+            deviceId: batch.device_id,
+            fromSeq: batch.from_seq,
+            toSeq: batch.to_seq,
+          });
           downloadedOps += batch.ops.length;
           downloadedBatches += 1;
         }
+        if (batches.length) await this.repository.store.putMeta(this.batchProgressKey, batchProgress);
         await onProgress?.({
           phase: 'batches',
           checkpointLoaded: checkpoint.loaded,
@@ -244,7 +309,9 @@ export class SyncEngine {
       await this.repository.store.putMeta(`${this.keyPrefix}:cursor`, cursor);
       if (!page.has_more) break;
     }
-    await this.repository.saveSnapshot();
+    quarantinedBatches = (await this.quarantineRows()).map(item => item.record);
+    const snapshotDeferred = quarantinedBatches.length > 0 || hasBatchGaps(batchProgress);
+    if (!snapshotDeferred) await this.repository.saveSnapshot();
     return {
       downloadedOps,
       downloadedBatches,
@@ -254,6 +321,7 @@ export class SyncEngine {
       cursorReset: resetUsed,
       checkpointLoaded: checkpoint.loaded,
       checkpointError: checkpoint.error || null,
+      snapshotDeferred,
     };
   }
 

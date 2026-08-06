@@ -188,10 +188,24 @@ await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', as
   assert.ok(release.shell_files.every(path => !path.includes('/privat/') && !path.includes('/apps/')));
 });
 
-await test('publicerade appmoduler pekar bara inom GitHub Pages-paketet', async () => {
+await test('publicerade appmoduler pekar bara inom GitHub Pages-paketet och alla importer finns', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, app, 'src/app.js'), 'utf8');
     assert.equal(source.includes('../../../packages/core/'), false, `${app} har en modulväg som lämnar GitHub Pages-projektet`);
+  }
+  const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
+  for (const path of release.shell_files.filter(value => value.endsWith('.js'))) {
+    const localPath = resolve(ROOT, path.replace(/^\.\//, ''));
+    const source = await readFile(localPath, 'utf8');
+    const imports = [...source.matchAll(/(?:from\s+|import\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g)].map(match => match[1]);
+    for (const specifier of imports) {
+      const target = resolve(dirname(localPath), specifier.split('?')[0]);
+      try {
+        assert.equal((await stat(target)).isFile(), true);
+      } catch {
+        assert.fail(`${path} importerar en fil som saknas: ${specifier}`);
+      }
+    }
   }
 });
 

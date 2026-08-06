@@ -37,6 +37,8 @@ import {
   syncAppFamily,
   unpackSnapshot,
 } from '../data-layer.js';
+import { addBatchRange, contiguousSeq, createBatchProgress, hasBatchGaps } from '../sync/batch-progress.js';
+import { TransportError } from '../sync/errors.js';
 
 let passed = 0;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -48,6 +50,24 @@ async function writableMaster(deviceId, remote) {
   const repository = await new Repository({ store: new MemoryStore(), deviceId }).init();
   return { repository, sync: () => new SyncEngine({ repository, transport: remote }).syncOnce() };
 }
+
+await test('batchframsteg flyttar bara vattenmärket över sammanhängande intervall', async () => {
+  const progress = createBatchProgress({ device: 6 }, [{ device_id: 'device', from_seq: 3, to_seq: 4 }]);
+  assert.equal(contiguousSeq(progress, 'device'), 2);
+  assert.deepEqual(progress.device.pending, [[5, 6]]);
+  assert.equal(hasBatchGaps(progress), true);
+  addBatchRange(progress, { deviceId: 'device', fromSeq: 3, toSeq: 4 });
+  assert.equal(contiguousSeq(progress, 'device'), 6);
+  assert.equal(hasBatchGaps(progress), false);
+
+  const outOfOrder = createBatchProgress();
+  addBatchRange(outOfOrder, { deviceId: 'device', fromSeq: 5, toSeq: 6 });
+  assert.equal(contiguousSeq(outOfOrder, 'device'), 0);
+  addBatchRange(outOfOrder, { deviceId: 'device', fromSeq: 1, toSeq: 2 });
+  assert.equal(contiguousSeq(outOfOrder, 'device'), 2);
+  addBatchRange(outOfOrder, { deviceId: 'device', fromSeq: 3, toSeq: 4 });
+  assert.equal(contiguousSeq(outOfOrder, 'device'), 6);
+});
 
 await test('en blockerad IndexedDB-uppgradering ger begriplig återkoppling i stället för att hänga', async () => {
   let request;
@@ -444,6 +464,116 @@ await test('en återställd enhet hämtar även sina egna saknade fjärrbatcher'
   assert.equal(restored.getEntity('person', 'p1').fields.name, 'Återhämtad');
 });
 
+await test('Dropbox skiljer ogiltig JSON från avbruten läsning av svarskroppen', async () => {
+  const bodyFailure = new DropboxTransport({
+    accessToken: 'test',
+    fetchImpl: async () => ({
+      ok: true,
+      text: async () => { throw new TypeError('nätverket bröts under läsningen'); },
+    }),
+  });
+  await assert.rejects(
+    bodyFailure.getJson('/ops/body-failure.json'),
+    error => error instanceof TypeError && !(error instanceof TransportError) && /nätverket/.test(error.message),
+  );
+
+  const invalidJson = new DropboxTransport({
+    accessToken: 'test',
+    fetchImpl: async () => ({ ok: true, text: async () => '{' }),
+  });
+  await assert.rejects(
+    invalidJson.getJson('/ops/invalid.json'),
+    error => error instanceof TransportError && error.code === 'invalid_json',
+  );
+});
+
+await test('isolerade JSON-batcher återförsöks och tas bort ur karantän när filen är hel', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'retry-source' }).init();
+  await source.setField('person', 'retry-person', 'name', 'Återläst');
+  const batch = createBatch(await sourceStore.getAllOps());
+  const root = '/retry/ops';
+  const path = batchPath(batch.device_id, batch.from_seq, batch.to_seq, root);
+  let listCall = 0;
+  let jsonCall = 0;
+  const transport = {
+    id: 'retry-test',
+    opsRoot: root,
+    putBatch: async () => {},
+    getCheckpoint: async () => null,
+    listChanges: async () => ({
+      entries: listCall++ === 0 ? [{ path, rev: 'rev-1' }] : [],
+      cursor: `retry-cursor-${listCall}`,
+      has_more: false,
+    }),
+    getJson: async () => {
+      jsonCall += 1;
+      if (jsonCall === 1) throw new TransportError('ofullständig JSON', { code: 'invalid_json' });
+      return batch;
+    },
+  };
+  const targetStore = new MemoryStore();
+  const target = await new Repository({ store: targetStore, deviceId: 'retry-target' }).init();
+  const engine = new SyncEngine({ repository: target, transport });
+  const first = await engine.downloadRemote();
+  assert.equal(first.quarantinedBatches.length, 1);
+  assert.equal(first.snapshotDeferred, true);
+  assert.equal(target.getEntity('person', 'retry-person'), null);
+
+  const second = await engine.downloadRemote();
+  assert.equal(second.downloadedBatches, 1);
+  assert.equal(second.quarantinedBatches.length, 0);
+  assert.equal(second.snapshotDeferred, false);
+  assert.equal(target.getEntity('person', 'retry-person').fields.name, 'Återläst');
+  assert.deepEqual(await targetStore.listMeta('sync:retry-test:quarantine:'), []);
+});
+
+await test('batchar efter en sekvenslucka kan tillämpas utan att luckan markeras som klar', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'gap-source' }).init();
+  await source.setFields(Array.from({ length: 6 }, (_, index) => ({
+    entityType: 'row', entityId: `gap-${index + 1}`, field: 'value', value: index + 1,
+  })));
+  const operations = await sourceStore.getAllOps();
+  const root = '/gap/ops';
+  const batches = [
+    createBatch(operations.slice(4, 6)),
+    createBatch(operations.slice(0, 2)),
+    createBatch(operations.slice(2, 4)),
+  ];
+  const paths = batches.map(batch => batchPath(batch.device_id, batch.from_seq, batch.to_seq, root));
+  let pageIndex = 0;
+  const transport = {
+    id: 'gap-test',
+    opsRoot: root,
+    putBatch: async () => {},
+    getCheckpoint: async () => null,
+    listChanges: async () => {
+      const index = pageIndex++;
+      return { entries: index < paths.length ? [{ path: paths[index] }] : [], cursor: `gap-cursor-${index}`, has_more: false };
+    },
+    getJson: async path => batches[paths.indexOf(path)],
+  };
+  const targetStore = new MemoryStore();
+  const target = await new Repository({ store: targetStore, deviceId: 'gap-target' }).init();
+  const engine = new SyncEngine({ repository: target, transport });
+
+  const afterTail = await engine.downloadRemote();
+  assert.equal(afterTail.snapshotDeferred, true);
+  assert.equal((await targetStore.getMeta('sync:gap-test:batch-progress-v1'))['gap-source'].contiguous, 0);
+  assert.equal(await targetStore.getMeta('latest_snapshot'), null);
+
+  const afterHead = await engine.downloadRemote();
+  assert.equal(afterHead.snapshotDeferred, true);
+  assert.equal((await targetStore.getMeta('sync:gap-test:batch-progress-v1'))['gap-source'].contiguous, 2);
+
+  const afterGap = await engine.downloadRemote();
+  assert.equal(afterGap.snapshotDeferred, false);
+  assert.equal((await targetStore.getMeta('sync:gap-test:batch-progress-v1'))['gap-source'].contiguous, 6);
+  assert.ok(await targetStore.getMeta('latest_snapshot'));
+  assert.equal(target.listEntities('row').length, 6);
+});
+
 await test('ogiltiga och orimligt framtidsdaterade batcher isoleras utan att stoppa sidan', async () => {
   const now = Date.UTC(2026, 7, 5, 12, 0, 0);
   const makeBatch = async (deviceId, wallTime, name) => {
@@ -500,6 +630,42 @@ await test('skrivskyddade referensmastrar passerar också en isolerad batch', as
   assert.equal(result.downloadedBatches, 1);
   assert.equal(result.quarantinedBatches.length, 1);
   assert.equal(reader.getEntity('person', 'valid-reference').fields.name, 'Giltig referens');
+});
+
+await test('skrivskyddade referensmastrar återförsöker sin karantän vid nästa synk', async () => {
+  const sourceStore = new MemoryStore();
+  const source = await new Repository({ store: sourceStore, deviceId: 'reference-retry-source' }).init();
+  await source.setField('person', 'reference-retry', 'name', 'Tillgänglig igen');
+  const batch = createBatch(await sourceStore.getAllOps());
+  const root = '/reference-retry/ops';
+  const path = batchPath(batch.device_id, batch.from_seq, batch.to_seq, root);
+  let listCall = 0;
+  let jsonCall = 0;
+  const transport = {
+    id: 'reference-retry',
+    opsRoot: root,
+    listChanges: async () => ({
+      entries: listCall++ === 0 ? [{ path, rev: 'rev-1' }] : [],
+      cursor: `reference-retry-${listCall}`,
+      has_more: false,
+    }),
+    getJson: async () => {
+      jsonCall += 1;
+      if (jsonCall === 1) throw new TransportError('ofullständig JSON', { code: 'invalid_json' });
+      return batch;
+    },
+  };
+  const store = new MemoryStore();
+  const reader = await new ReadOnlyMaster({ store, cacheKey: 'reference-retry' }).init();
+  const first = await reader.sync(transport);
+  assert.equal(first.quarantinedBatches.length, 1);
+  assert.equal(reader.getEntity('person', 'reference-retry'), null);
+
+  const second = await reader.sync(transport);
+  assert.equal(second.downloadedBatches, 1);
+  assert.equal(second.quarantinedBatches.length, 0);
+  assert.equal(reader.getEntity('person', 'reference-retry').fields.name, 'Tillgänglig igen');
+  assert.deepEqual(await store.listMeta('read-only-master:reference-retry:quarantine:'), []);
 });
 
 await test('tombstonade deterministiska länkar återställs atomiskt vid upsert', async () => {
