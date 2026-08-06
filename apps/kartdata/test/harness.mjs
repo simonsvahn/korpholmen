@@ -20,7 +20,7 @@ const state = materialize(document.operations);
 const rows = type => state.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 
 await test('alla JavaScript-filer har giltig syntax', async () => {
-  for (const file of ['src/app.js', 'src/model.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-lokal-bootstrap.mjs', 'verktyg/bygg-publicering.mjs']) {
+  for (const file of ['src/app.js', 'src/model.js', 'src/property-selection.js', 'src/config.js', 'sw.js', 'verktyg/bygg-ren-v2.mjs', 'verktyg/skriv-dropbox-ren-v2.mjs', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-lokal-bootstrap.mjs', 'verktyg/bygg-publicering.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr}`);
   }
@@ -125,6 +125,8 @@ await test('fastigheter väljs en i taget utan en lång krysslista', async () =>
   assert.ok(app.includes('data-action="add-property"'));
   assert.ok(app.includes('data-action="remove-property"'));
   assert.ok(app.includes('type="hidden" name="property_ids"'));
+  assert.ok(app.includes('Okänd fastighet'));
+  assert.ok(app.includes('validatePropertySelection'));
   assert.ok(!app.includes('propertyChecklist'));
   assert.ok(!css.includes('.property-checklist'));
 });

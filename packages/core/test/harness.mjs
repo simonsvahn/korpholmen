@@ -694,6 +694,25 @@ await test('tombstonade deterministiska länkar återställs atomiskt vid upsert
   });
 });
 
+await test('varje deterministisk upsert återställer även när länken ser ny eller aktiv ut lokalt', async () => {
+  const repository = await new Repository({ store: new MemoryStore(), deviceId: 'upsert-restore-test' }).init();
+  const created = await repository.upsertFields([
+    { entityType: 'test-link', entityId: 'new-link', field: 'role', value: 'ägare' },
+    { entityType: 'test-link', entityId: 'new-link', field: 'confidence', value: 'godkänd' },
+  ]);
+  assert.equal(created.length, 3);
+  assert.equal(created[0].field, DELETE_FIELD);
+  assert.equal(created[0].value, false);
+
+  const updated = await repository.upsertFields([
+    { entityType: 'test-link', entityId: 'new-link', field: 'role', value: 'tidigare ägare' },
+  ]);
+  assert.equal(updated.length, 2);
+  assert.equal(updated[0].field, DELETE_FIELD);
+  assert.equal(updated[0].value, false);
+  assert.equal(repository.getEntity('test-link', 'new-link').fields.role, 'tidigare ägare');
+});
+
 await test('en sammansatt borttagning kan ångras atomiskt utan att fält eller historik förloras', async () => {
   const store = new MemoryStore();
   const repository = await new Repository({ store, deviceId: 'undo-test' }).init();

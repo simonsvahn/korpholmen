@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-06-korpholmen-pwa-19",
+  "release": "2026-08-06-korpholmen-pwa-20",
   "generated_at": "2026-08-06",
   "pwa": {
     "id": "./",
@@ -144,6 +144,7 @@
     "./kartdata/src/app.js",
     "./kartdata/src/config.js",
     "./kartdata/src/model.js",
+    "./kartdata/src/property-selection.js",
     "./kartdata/styles.css",
     "./kartdata/sw.js",
     "./klubbhistorik/boat-reference.css",

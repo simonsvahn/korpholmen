@@ -54,6 +54,7 @@ const drawer = $('#boat-drawer');
 const drawerContent = $('#drawer-content');
 const backdrop = $('#backdrop');
 const statusNode = $('#sync-status');
+const undoNode = $('#undo-status');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
 const connectionFilter = $('#connection-filter');
@@ -115,36 +116,43 @@ async function mapConcurrent(values, limit, mapper) {
 }
 
 function setStatus(text, tone = '') {
-  delete statusNode.dataset.undoAction;
   statusNode.textContent = text;
   statusNode.className = tone ? `status-${tone}` : '';
 }
 
+function setUndoStatus(text, tone = '') {
+  undoNode.hidden = !text;
+  undoNode.textContent = text;
+  undoNode.className = tone ? `status-${tone}` : '';
+}
+
 function offerUndo(message, restoreEntries, restoredMessage) {
   const actionId = crypto.randomUUID();
-  setStatus(message, 'warning');
-  statusNode.dataset.undoAction = actionId;
+  setUndoStatus(message, 'warning');
+  undoNode.dataset.undoAction = actionId;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'undo-action';
   button.textContent = 'Ångra';
   button.addEventListener('click', async () => {
-    if (statusNode.dataset.undoAction !== actionId) return;
+    if (undoNode.dataset.undoAction !== actionId) return;
+    delete undoNode.dataset.undoAction;
     button.disabled = true;
-    setStatus('Återställer…');
+    setUndoStatus('Återställer…', 'warning');
     try {
       await repository.restoreEntities(restoreEntries);
       render();
       try { await syncNow(); } catch (_) { /* Lokalt återställd; synken försöker igen senare. */ }
-      setStatus(restoredMessage, 'ok');
+      setUndoStatus(restoredMessage, 'ok');
     } catch (error) {
-      setStatus(`Kunde inte återställa · ${error.message}`, 'error');
+      setUndoStatus(`Kunde inte återställa · ${error.message}`, 'error');
     }
   }, { once: true });
-  statusNode.append(' · ', button);
+  undoNode.append(' · ', button);
   window.setTimeout(() => {
-    if (statusNode.dataset.undoAction === actionId) {
-      setStatus(`${message} · återställningshistoriken är bevarad`, 'ok');
+    if (undoNode.dataset.undoAction === actionId) {
+      delete undoNode.dataset.undoAction;
+      setUndoStatus(`${message} · återställningshistoriken är bevarad`, 'ok');
     }
   }, 15_000);
 }

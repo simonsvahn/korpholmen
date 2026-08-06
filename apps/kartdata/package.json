@@ -11,6 +11,7 @@
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
     "seed:clean-v2": "node verktyg/skriv-dropbox-ren-v2.mjs /Users/simon/Dropbox/Appar/Korpholmen",
     "seed:current-owners": "node verktyg/skriv-dropbox-aktuella-agare.mjs /Users/simon/Dropbox/Appar/Korpholmen",
-    "test": "node test/harness.mjs"
+    "test": "npm run test:selection && node test/harness.mjs",
+    "test:selection": "node test/property-selection.mjs"
   }
 }

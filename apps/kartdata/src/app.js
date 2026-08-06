@@ -28,6 +28,7 @@ import {
   splitList,
   stableEntityId,
 } from './model.js?v=2026-08-04-2';
+import { propertySelectionState, validatePropertySelection } from './property-selection.js';
 
 const $ = selector => document.querySelector(selector);
 const content = $('#content');
@@ -36,6 +37,7 @@ const drawer = $('#entry-drawer');
 const drawerContent = $('#drawer-content');
 const backdrop = $('#backdrop');
 const statusNode = $('#sync-status');
+const undoNode = $('#undo-status');
 const connectButton = $('#connect-dropbox');
 const bootstrapButton = $('#bootstrap-local');
 const isSourceTree = location.pathname.includes('/apps/kartdata/');
@@ -72,17 +74,18 @@ const legacyPersonRefs = () => recordList('person-ref');
 const legacyExternalParties = () => recordList('external-party');
 const placeRelations = () => recordList('place-relation');
 const oldPropertyLinks = () => recordList('object-property-link');
-function setStatus(text, tone = '') { delete statusNode.dataset.undoAction; statusNode.textContent = text; statusNode.className = tone ? `status-${tone}` : ''; }
+function setStatus(text, tone = '') { statusNode.textContent = text; statusNode.className = tone ? `status-${tone}` : ''; }
+function setUndoStatus(text, tone = '') { undoNode.hidden = !text; undoNode.textContent = text; undoNode.className = tone ? `status-${tone}` : ''; }
 function offerUndo(message, restoreEntries, restoredMessage) {
-  const actionId = crypto.randomUUID(); setStatus(message, 'warning'); statusNode.dataset.undoAction = actionId;
+  const actionId = crypto.randomUUID(); setUndoStatus(message, 'warning'); undoNode.dataset.undoAction = actionId;
   const button = document.createElement('button'); button.type = 'button'; button.className = 'undo-action'; button.textContent = 'Ångra';
   button.addEventListener('click', async () => {
-    if (statusNode.dataset.undoAction !== actionId) return; button.disabled = true; setStatus('Återställer…');
-    try { await repository.restoreEntities(restoreEntries); render(); try { await syncNow(); } catch (_) { /* Lokalt återställd. */ } setStatus(restoredMessage, 'ok'); }
-    catch (error) { setStatus(`Kunde inte återställa · ${error.message}`, 'error'); }
+    if (undoNode.dataset.undoAction !== actionId) return; delete undoNode.dataset.undoAction; button.disabled = true; setUndoStatus('Återställer…', 'warning');
+    try { await repository.restoreEntities(restoreEntries); render(); try { await syncNow(); } catch (_) { /* Lokalt återställd. */ } setUndoStatus(restoredMessage, 'ok'); }
+    catch (error) { setUndoStatus(`Kunde inte återställa · ${error.message}`, 'error'); }
   }, { once: true });
-  statusNode.append(' · ', button);
-  window.setTimeout(() => { if (statusNode.dataset.undoAction === actionId) setStatus(`${message} · återställningshistoriken är bevarad`, 'ok'); }, 15_000);
+  undoNode.append(' · ', button);
+  window.setTimeout(() => { if (undoNode.dataset.undoAction === actionId) { delete undoNode.dataset.undoAction; setUndoStatus(`${message} · återställningshistoriken är bevarad`, 'ok'); } }, 15_000);
 }
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:kartdata-device-id', prefix: 'kartdata-web-' });
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
@@ -218,22 +221,24 @@ function closeDrawer() { selectedEntryId = null; selectedIslandId = null; drawer
 function propertySelectionRow(property) {
   return `<div class="selected-property" data-property-id="${escapeAttribute(property.external_id)}"><input type="hidden" name="property_ids" value="${escapeAttribute(property.external_id)}"><a href="${escapeAttribute(property.url || '#')}">${escapeHtml(property.external_id)}</a><button type="button" data-action="remove-property" aria-label="Ta bort ${escapeAttribute(property.external_id)}">Ta bort</button></div>`;
 }
+function unknownPropertySelectionRow(propertyId) {
+  return `<div class="selected-property unknown" data-property-id="${escapeAttribute(propertyId)}"><input type="hidden" name="property_ids" value="${escapeAttribute(propertyId)}"><span><strong>Okänd fastighet</strong><small>${escapeHtml(propertyId)} · länken behålls tills du tar bort den</small></span><button type="button" data-action="remove-property" aria-label="Ta bort okänd fastighet ${escapeAttribute(propertyId)}">Ta bort</button></div>`;
+}
+function propertySelectionMarkup(selected) {
+  return selected.length ? selected.map(item => item.known ? propertySelectionRow(item.property) : unknownPropertySelectionRow(item.id)).join('') : '<p>Ingen fastighet vald</p>';
+}
 function propertyPicker(selectedIds) {
-  const selected = new Set(selectedIds);
-  const selectedProperties = propertyRefs().filter(property => selected.has(property.external_id));
-  const available = propertyRefs().filter(property => !selected.has(property.external_id));
-  return `<div class="property-picker" data-property-picker><div class="selected-properties" data-selected-properties>${selectedProperties.length ? selectedProperties.map(propertySelectionRow).join('') : '<p>Ingen fastighet vald</p>'}</div><div class="property-add"><select data-property-select aria-label="Lägg till fastighet"><option value="">Välj fastighet …</option>${available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}</select><button type="button" data-action="add-property" ${available.length ? '' : 'disabled'}>Lägg till</button></div><small>De flesta objekt hör till en fastighet. Lägg bara till fler när det verkligen behövs.</small></div>`;
+  const state = propertySelectionState(selectedIds, propertyRefs());
+  return `<div class="property-picker" data-property-picker><div class="selected-properties" data-selected-properties>${propertySelectionMarkup(state.selected)}</div><div class="property-add"><select data-property-select aria-label="Lägg till fastighet"><option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}</select><button type="button" data-action="add-property" ${state.available.length ? '' : 'disabled'}>Lägg till</button></div><small>De flesta objekt hör till en fastighet. Lägg bara till fler när det verkligen behövs.</small></div>`;
 }
 function updatePropertyPicker(form, propertyIds) {
   const picker = form.querySelector('[data-property-picker]'); if (!picker) return;
-  const selected = unique(propertyIds).filter(id => propertyRefs().some(property => property.external_id === id));
-  const selectedProperties = selected.map(propertyRefById).filter(Boolean);
-  const available = propertyRefs().filter(property => !selected.includes(property.external_id));
-  picker.querySelector('[data-selected-properties]').innerHTML = selectedProperties.length ? selectedProperties.map(propertySelectionRow).join('') : '<p>Ingen fastighet vald</p>';
+  const state = propertySelectionState(propertyIds, propertyRefs());
+  picker.querySelector('[data-selected-properties]').innerHTML = propertySelectionMarkup(state.selected);
   const select = picker.querySelector('[data-property-select]');
-  select.innerHTML = `<option value="">Välj fastighet …</option>${available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}`;
-  picker.querySelector('[data-action="add-property"]').disabled = !available.length;
-  const owners = form.querySelector('[data-owner-preview-list]'); if (owners) owners.innerHTML = ownerChipsForProperties(selected);
+  select.innerHTML = `<option value="">Välj fastighet …</option>${state.available.map(property => `<option value="${escapeAttribute(property.external_id)}">${escapeHtml(property.external_id)}</option>`).join('')}`;
+  picker.querySelector('[data-action="add-property"]').disabled = !state.available.length;
+  const owners = form.querySelector('[data-owner-preview-list]'); if (owners) owners.innerHTML = ownerChipsForProperties(state.selected.map(item => item.id));
 }
 function renderEntryDrawer() {
   const entry = entryRecords().find(item => item.id === selectedEntryId); if (!entry) return closeDrawer();
@@ -275,7 +280,7 @@ async function replaceEntryLinks(entryId, islandId, propertyIds) {
 async function saveEntry(form) {
   const data = new FormData(form); const objectType = data.get('object_type'); if (!OBJECT_CLASSES.includes(objectType)) throw new Error('Otillåten objekttyp');
   const islandId = String(data.get('island_id') || ''); if (islandId && !islandRecords().some(island => island.id === islandId)) throw new Error('Den valda ön finns inte');
-  const propertyIds = data.getAll('property_ids').map(String); if (propertyIds.some(id => !propertyRefs().some(property => property.external_id === id))) throw new Error('En vald fastighet saknas i Fastighetshistorik');
+  const propertyIds = validatePropertySelection({ selectedIds: data.getAll('property_ids'), propertyReferences: propertyRefs(), existingIds: propertyIdsForEntry(selectedEntryId) });
   const fields = { name: String(data.get('name') || '').trim(), object_type: objectType, subtype: String(data.get('subtype') || '').trim() || null, review_status: data.get('review_status') };
   if (!fields.name) throw new Error('Namn saknas');
   await syncEdit(async () => { await repository.setFields(Object.entries(fields).map(([field, value]) => ({ entityType: 'data-entry', entityId: selectedEntryId, field, value }))); await replaceEntryLinks(selectedEntryId, islandId, propertyIds); }, `${fields.name} uppdaterad`);
