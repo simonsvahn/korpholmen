@@ -128,7 +128,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   const [html,app,styles,matchingStyles,serviceWorker]=await Promise.all(['index.html','src/app.js','styles.css','matchning.css','sw.js'].map(file=>readFile(resolve(ROOT,file),'utf8')));
   const sharedServiceWorkerClient=await readFile(resolve(REPO,'packages/core/pwa/korpholmen-service-worker.js'),'utf8');
   for(const label of ['Översikt','Alla resultat','Topptider','Människor & båtar','Öduellen','Granska &amp; matcha'])assert.ok(html.includes(label));
-  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','bulkCompanionNames','bulkPersonCard','confirmPersonBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
+  for(const capability of ['saveResult','exportCsv','renderRecords','renderProfiles','renderDuel','renderMatching','reviewPending','boatRegisterCell','participantRegisterCell','boatCandidateControls','personCandidateControls','confirmBoatCandidate','confirmPersonCandidate','exactRawNameGroups','bulkCompanionNames','bulkBoatGroups','bulkPersonCard','confirmPersonBulk','personConfirmationEntries','splitParticipantSortNames','participantSplitOptions','participantMayBeMerged','participantSplitControls','splitParticipantLink','participantSourceNote','orderedParticipantLinks','participantSortEntries','participantPlaceholderConnected','participantLinkResolved','participantPlaceholders','preservesPlaceholder','parseRaceTime','bootstrapLocal','sortResults','sortResultRows','sortHeader','updateInlineBoat','updateInlinePerson','updateInlineClass','inlineTargetReady','runInlineUpdate','classStandardizationPlan','applyClassStandard'])assert.ok(app.includes(capability));
   for(const control of ['edit-review-status','edit-review-issues','edit-participant-1','edit-participant-2','edit-participant-3','edit-person-1-id','edit-person-2-id','edit-person-3-id'])assert.ok(html.includes(control));
   assert.ok(app.includes('review_status:reviewStatus'));
   assert.ok(app.includes("review_issues:reviewStatus==='granskad'?[]:reviewIssues"));
@@ -195,12 +195,17 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.equal(app.includes('data-person-select'),false);
   assert.equal(app.includes('data-action="confirm-person"'),false);
   assert.equal(app.includes('keepPersonUnlinked'),false);
-  assert.ok(app.includes('Varje förekomst visar båt, ägar-/anknytningsuppgift och övriga tävlande före beslutet'));
+  assert.ok(app.includes('Varje person ordnas per båt'));
   assert.ok(app.includes('registeredBoat?.owner_text'));
-  assert.ok(app.includes('Ägare/anknytning:'));
+  assert.ok(app.includes('const boatGroups=bulkBoatGroups(group.items)'));
+  assert.ok(app.includes('const classes=[...new Set(items.map(item=>item.result?.class_name)'));
+  assert.ok(app.includes('<b>Källnamn:</b>'));
   assert.ok(app.includes('Båten är inte säkert kopplad till Båtregistret'));
   assert.ok(app.includes('Övriga tävlande:'));
   assert.ok(matchingStyles.includes('.bulkkort'));
+  assert.ok(matchingStyles.includes('.bulkbatgrupp'));
+  assert.ok(matchingStyles.includes('.bulkbatshuvud'));
+  assert.ok(matchingStyles.includes('.bulkresultat'));
   assert.ok(matchingStyles.includes('.bulkforekomst'));
   assert.ok(matchingStyles.includes('.bulkforekomsttext'));
   assert.ok(matchingStyles.includes('.sortknapp'));

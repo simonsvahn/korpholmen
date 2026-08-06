@@ -102,8 +102,39 @@
   border-bottom: 1px solid var(--linje);
   border-top: 1px solid var(--linje);
   display: grid;
-  gap: 0;
-  padding: 4px 0;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.bulkbatgrupp {
+  display: grid;
+  gap: 5px;
+}
+
+.bulkbatgrupp + .bulkbatgrupp {
+  border-top: 1px solid var(--linje);
+  padding-top: 16px;
+}
+
+.bulkbatshuvud h4 {
+  color: var(--text);
+  font: 650 15px var(--serif);
+  line-height: 1.35;
+  margin: 0 4px;
+}
+
+.bulkbatshuvud h4 > span {
+  color: var(--guld);
+  font-weight: 650;
+}
+
+.bulkbatshuvud h4 > small {
+  color: var(--mjuk);
+  font: 600 11px var(--sans);
+}
+
+.bulkresultat {
+  display: grid;
 }
 
 .bulkforekomst {
@@ -116,7 +147,7 @@
   padding: 7px 4px;
 }
 
-.bulkforekomst + .bulkforekomst {
+.bulkresultat .bulkforekomst + .bulkforekomst {
   border-top: 1px dotted var(--linje);
 }
 
