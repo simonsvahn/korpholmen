@@ -30,6 +30,21 @@ await test('Korpholmen är den enda installerbara PWA:n och omfattar alla appar'
   }
 });
 
+await test('alla publicerade ingångssidor avråder sökmotorer från indexering', async () => {
+  const entryPages = [
+    resolve(ROOT, 'index.html'),
+    ...APPS.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')]),
+  ];
+  for (const path of entryPages) {
+    const html = await readFile(path, 'utf8');
+    assert.match(
+      html,
+      /<meta name="robots" content="[^"]*\bnoindex\b[^"]*">/,
+      `${path} saknar noindex`,
+    );
+  }
+});
+
 await test('alla appar registrerar rotens service worker och inte en egen', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
