@@ -51,7 +51,7 @@ import {
   relativeGenerationLabel,
   wouldCreateParentChildCycle,
 } from '../../../packages/core/family-context.js?v=2026-08-05-paket-3';
-import { resolvePropertyDisplayName } from '../../../packages/core/master-data.js?v=2026-08-06-property-owner-display';
+import { resolvePropertyReferences } from '../../../packages/core/master-data.js?v=2026-08-07-property-master';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js?v=2026-08-06-property-owner-display';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
@@ -210,9 +210,18 @@ function relationRecords() {
 }
 
 function propertyRecords() {
-  return repository.listEntities('property')
-    .map((entity) => ({ id: entity.entity_id, ...entity.fields }))
-    .map(property => ({ ...property, display_name: resolvePropertyDisplayName(property.id, fastigheterMaster) || property.id }))
+  const fallbacks = repository.listEntities('property')
+    .map((entity) => ({ id: entity.entity_id, external_id: entity.entity_id, ...entity.fields }));
+  return resolvePropertyReferences(
+    fastigheterMaster,
+    fallbacks,
+    null,
+    { includeOwnerLabel: false },
+  )
+    .map((property) => {
+      const id = property.external_id || property.id;
+      return { ...property, id, display_name: id };
+    })
     .sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
 }
 

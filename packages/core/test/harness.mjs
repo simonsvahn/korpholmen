@@ -36,6 +36,7 @@ import {
   resolveDeviceId,
   resolveCurrentOwners,
   resolvePropertyDisplayName,
+  resolvePropertyReferences,
   revokeDropboxAccessToken,
   sharedDropboxDisconnectedKey,
   sha256Hex,
@@ -810,6 +811,18 @@ await test('fastighetens visningsnamn byggs av unika efternamn på nuvarande äg
     },
   };
   assert.equal(resolvePropertyDisplayName('Alsvik 3:79', fastigheter), 'Alsvik 3:79 (Bethge)');
+  assert.equal(resolvePropertyReferences(fastigheter)[0].display_name, 'Alsvik 3:79 (Bethge)');
+  assert.deepEqual(
+    resolvePropertyReferences(fastigheter, [], null, { includeOwnerLabel: false }),
+    [{
+      id: 'Alsvik 3:79',
+      display_name: 'Alsvik 3:79',
+      external_id: 'Alsvik 3:79',
+      url: '../fastigheter/?property=Alsvik%203%3A79',
+      source_master: 'fastigheter',
+      resolution: 'canonical-master',
+    }],
+  );
 });
 
 await test('Dokumentarkivets kopplade namn, båtlänkar och fastigheter löses från ägarmastrarna', async () => {
