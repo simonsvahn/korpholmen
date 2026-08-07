@@ -147,7 +147,7 @@ await test('appen har redigering, rekord, profiler, duell, export och matchnings
   assert.ok(app.includes("opsRoot:'/korpholmenrunt/ops'"));
   assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
   assert.ok(app.includes("opsRoot:'/batregister/ops',readOnly:true"));
-  assert.ok(app.includes('mergePersonReferences(storedPeople(),matrikelMaster)'));
+  assert.ok(app.includes('mergePersonReferences(storedPeople(),matrikelMaster,{includeUnreferenced:true})'));
   assert.ok(app.includes('mergeBoatReferences(storedBoats(),batregisterMaster,{includeUnreferenced:true})'));
   assert.ok(app.includes("cacheKey:'batregister'"));
   assert.ok(app.includes("boat?.owner_text||boat?.period"));

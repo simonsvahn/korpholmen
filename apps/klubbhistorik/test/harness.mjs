@@ -521,6 +521,16 @@ await test('personnamn löses skrivskyddat från Matrikel utan att källformer �
   assert.ok(app.includes('person_name_raw'));
 });
 
+await test('båtnamn och nya val löses skrivskyddat från Båtregister',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  assert.ok(app.includes('mergeBoatReferences(recordList(\'boat-ref\'),batregisterMaster,{includeUnreferenced:true})'));
+  assert.ok(app.includes("opsRoot:'/batregister/ops',readOnly:true"));
+  assert.ok(app.includes("new ReadOnlyMaster({store,cacheKey:'batregister'})"));
+  assert.ok(app.includes("item.resolution==='canonical-master'"));
+  assert.ok(app.includes('selectOptions(selectableBoatRefs()'));
+  assert.ok(app.includes('boat_name_raw'));
+});
+
 await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
   const appReadmePaths=['matrikel','batregister','fastigheter','dokumentarkiv','korpholmenrunt','klubbhistorik'].map(name=>resolve(REPO,'apps',name,'README.md'));
   const [architecture,localArchitecture,rootReadme,localModel,...appReadmes]=await Promise.all([

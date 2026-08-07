@@ -140,6 +140,14 @@ await test('Kartdata och de två läsmastrarna synkas parallellt', async () => {
   assert.ok(app.includes('kartdataSync,'));
 });
 
+await test('Kartdata kan öppna länkade objekt och öar direkt från andra appar', async () => {
+  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(app.includes("params.get('entry')"));
+  assert.ok(app.includes("params.get('island')"));
+  assert.ok(app.includes('openDrawer(entryId)'));
+  assert.ok(app.includes('openIslandDrawer(islandId)'));
+});
+
 await test('fastigheter visas med nuvarande ägares unika efternamn', () => {
   assert.equal(preview.properties.find(property => property.id === 'Alsvik 3:79')?.display_name, 'Alsvik 3:79 (Bethge)');
   assert.equal(preview.properties.find(property => property.id === 'Alsvik 3:26')?.display_name, 'Alsvik 3:26 (Ilveus, Lindblom och Granath)');

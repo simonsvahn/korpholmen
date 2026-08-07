@@ -481,6 +481,14 @@ await test('fastighetslistan läses skrivskyddat från Fastigheter och visar bet
   assert.ok(appSource.includes('${escapeHtml(property.display_name)}'));
 });
 
+await test('fastigheternas öetiketter läses skrivskyddat från Kartdata', async () => {
+  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
+  assert.ok(appSource.includes("new ReadOnlyMaster({ store, cacheKey: 'kartdata' })"));
+  assert.ok(appSource.includes("opsRoot: '/kartdata/ops', readOnly: true"));
+  assert.ok(appSource.includes('resolvePropertyIslandNames(id, kartdataMaster'));
+  assert.ok(appSource.includes("island: islandNames.join(' / ')"));
+});
+
 await test('Dropbox-knappen synkar befintlig anslutning och tom master rapporteras ärligt', async () => {
   const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
   assert.ok(appSource.includes("connectButton.addEventListener('click', () => connectOrSyncDropbox()"));

@@ -38,5 +38,6 @@ export {
   resolveCurrentOwners,
   resolvePartyName,
   resolvePropertyDisplayName,
+  resolvePropertyIslandNames,
   resolvePropertyReferences
 } from './master-data.js';

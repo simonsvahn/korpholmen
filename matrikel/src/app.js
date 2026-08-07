@@ -51,7 +51,7 @@ import {
   relativeGenerationLabel,
   wouldCreateParentChildCycle,
 } from '../core/family-context.js?v=2026-08-05-paket-3';
-import { resolvePropertyReferences } from '../core/master-data.js?v=2026-08-07-property-master';
+import { resolvePropertyIslandNames, resolvePropertyReferences } from '../core/master-data.js?v=2026-08-07-master-integrations';
 import { ReadOnlyMaster } from '../core/read-only-master.js?v=2026-08-06-property-owner-display';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
@@ -90,6 +90,7 @@ const LEGACY_OPS_ROOT = '/ops';
 let repository;
 let store;
 let fastigheterMaster;
+let kartdataMaster;
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
@@ -220,7 +221,8 @@ function propertyRecords() {
   )
     .map((property) => {
       const id = property.external_id || property.id;
-      return { ...property, id, display_name: id };
+      const islandNames = resolvePropertyIslandNames(id, kartdataMaster, { fallback: [property.island] });
+      return { ...property, id, display_name: id, island: islandNames.join(' / '), island_names: islandNames };
     })
     .sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
 }
@@ -1294,7 +1296,10 @@ async function syncNow() {
     const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
     const engine = new SyncEngine({ repository, transport });
     const result = await engine.syncOnce();
-    await fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true }));
+    await Promise.all([
+      fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
+      kartdataMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata-read', opsRoot: '/kartdata/ops', readOnly: true })),
+    ]);
     refreshedRepositoryRevision = -1;
     render();
     familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
@@ -1534,6 +1539,7 @@ async function init() {
   store = new IndexedDBStore(db);
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
   fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init();
+  kartdataMaster = await new ReadOnlyMaster({ store, cacheKey: 'kartdata' }).init();
   bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
   familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || personRecords().length === 0;
   connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
