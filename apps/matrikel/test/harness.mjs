@@ -470,11 +470,14 @@ await test('Dropbox-namnrymden placerar Matrikeln i matrikel/ops', async () => {
   assert.ok(appSource.includes('LEGACY_MIGRATION_META'));
 });
 
-await test('fastighetsnamn läses skrivskyddat från Fastigheter och visar nuvarande ägares efternamn', async () => {
+await test('fastighetslistan läses skrivskyddat från Fastigheter och visar beteckningen utan ägarsuffix', async () => {
   const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
   assert.ok(appSource.includes("new ReadOnlyMaster({ store, cacheKey: 'fastigheter' })"));
   assert.ok(appSource.includes("opsRoot: '/fastigheter/ops', readOnly: true"));
-  assert.ok(appSource.includes('resolvePropertyDisplayName(property.id, fastigheterMaster)'));
+  assert.ok(appSource.includes('resolvePropertyReferences('));
+  assert.ok(appSource.includes('fastigheterMaster,\n    fallbacks,'));
+  assert.ok(appSource.includes('{ includeOwnerLabel: false }'));
+  assert.equal(appSource.includes('resolvePropertyDisplayName(property.id, fastigheterMaster)'), false);
   assert.ok(appSource.includes('${escapeHtml(property.display_name)}'));
 });
 
