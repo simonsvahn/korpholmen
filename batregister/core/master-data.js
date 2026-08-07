@@ -154,13 +154,20 @@ export function resolveArchiveEntity(reference, { personMaster, boatMaster, fast
   return reference;
 }
 
-export function resolvePropertyReferences(fastigheterMaster, fallbacks = [], personMaster = null) {
+export function resolvePropertyReferences(
+  fastigheterMaster,
+  fallbacks = [],
+  personMaster = null,
+  { includeOwnerLabel = true } = {},
+) {
   const canonical = rows(fastigheterMaster, 'property');
   if (!canonical.length) return [...fallbacks];
   return canonical.map(property => ({
     ...property,
     external_id: property.id,
-    display_name: resolvePropertyDisplayName(property.id, fastigheterMaster, personMaster),
+    display_name: includeOwnerLabel
+      ? resolvePropertyDisplayName(property.id, fastigheterMaster, personMaster)
+      : property.id,
     url: `../fastigheter/?property=${encodeURIComponent(property.id)}`,
     source_master: 'fastigheter',
     resolution: 'canonical-master',
