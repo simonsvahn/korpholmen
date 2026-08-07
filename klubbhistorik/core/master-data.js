@@ -82,6 +82,20 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
 
 const textValues = values => [...new Set((values || []).flat().map(value => String(value || '').trim()).filter(Boolean))];
 
+export function resolvePropertyIslandNames(propertyId, kartdataMaster, { fallback = [] } = {}) {
+  const fallbackNames = textValues(fallback);
+  const places = rows(kartdataMaster, 'place').filter(place => place.subtype === 'ö');
+  if (!places.length) return fallbackNames;
+  const entryIds = new Set(rows(kartdataMaster, 'data-entry-property-link')
+    .filter(link => link.property_id === propertyId)
+    .map(link => link.entry_id));
+  const islandIds = textValues(rows(kartdataMaster, 'data-entry-island-link')
+    .filter(link => entryIds.has(link.entry_id))
+    .map(link => link.island_id));
+  const placesById = new Map(places.map(place => [place.id, place]));
+  return textValues(islandIds.map(id => placesById.get(id)?.preferred_name));
+}
+
 function boatAliases(boat) {
   return textValues([
     boat?.dopnamn,
@@ -125,7 +139,7 @@ export function mergeBoatReferences(references, boatMaster, { includeUnreference
   return [...byId.values()];
 }
 
-export function resolveArchiveEntity(reference, { personMaster, boatMaster, fastigheterMaster } = {}) {
+export function resolveArchiveEntity(reference, { personMaster, boatMaster, fastigheterMaster, kartdataMaster } = {}) {
   if (!reference || reference.match_status !== 'kopplad' || !reference.external_id) return reference;
   if (reference.entity_type === 'person') {
     const person = personMaster?.initialized ? personMaster.getEntity('person', reference.external_id)?.fields : null;
@@ -150,6 +164,21 @@ export function resolveArchiveEntity(reference, { personMaster, boatMaster, fast
     if (!property) return reference;
     const name = resolvePropertyDisplayName(reference.external_id, fastigheterMaster);
     return { ...reference, name, display_name: name, resolution: 'canonical-master', url: `../fastigheter/?property=${encodeURIComponent(reference.external_id)}` };
+  }
+  if (reference.entity_type === 'plats' || reference.entity_type === 'hus') {
+    const externalType = reference.external_entity_type || (reference.entity_type === 'hus' ? 'data-entry' : 'place');
+    if (!['place', 'data-entry'].includes(externalType)) return reference;
+    const target = kartdataMaster?.getEntity?.(externalType, reference.external_id)?.fields;
+    if (!target) return reference;
+    const name = externalType === 'place' ? target.preferred_name : target.name;
+    const parameter = externalType === 'place' ? 'island' : 'entry';
+    return {
+      ...reference,
+      name: name || reference.name,
+      app: 'Kartdata',
+      resolution: 'canonical-master',
+      url: `../kartdata/?${parameter}=${encodeURIComponent(reference.external_id)}`,
+    };
   }
   return reference;
 }

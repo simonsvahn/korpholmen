@@ -46,7 +46,7 @@ const editions=()=>viewCache('editions',()=>[...recordList('race-edition')].sort
 const raceSources=()=>recordList('race-source');
 const sourceNotes=()=>recordList('source-note');
 const storedPeople=()=>recordList('person-ref');
-const people=()=>viewCache('people',()=>mergePersonReferences(storedPeople(),matrikelMaster).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')));
+const people=()=>viewCache('people',()=>mergePersonReferences(storedPeople(),matrikelMaster,{includeUnreferenced:true}).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')));
 const storedBoats=()=>recordList('boat-ref');
 const boats=()=>viewCache('boats',()=>mergeBoatReferences(storedBoats(),batregisterMaster,{includeUnreferenced:true}).sort((a,b)=>a.name.localeCompare(b.name,'sv')||a.external_id.localeCompare(b.external_id,'sv')));
 const selectableBoats=()=>viewCache('selectable-boats',()=>{const all=boats();const canonical=all.filter(boat=>boat.resolution==='canonical-master');return canonical.length?canonical:all});

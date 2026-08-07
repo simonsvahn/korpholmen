@@ -36,6 +36,7 @@ import {
   resolveDeviceId,
   resolveCurrentOwners,
   resolvePropertyDisplayName,
+  resolvePropertyIslandNames,
   resolvePropertyReferences,
   revokeDropboxAccessToken,
   sharedDropboxDisconnectedKey,
@@ -825,7 +826,7 @@ await test('fastighetens visningsnamn byggs av unika efternamn på nuvarande äg
   );
 });
 
-await test('Dokumentarkivets kopplade namn, båtlänkar och fastigheter löses från ägarmastrarna', async () => {
+await test('Dokumentarkivets kopplade namn, båtlänkar, fastigheter och platser löses från ägarmastrarna', async () => {
   const personMaster = {
     initialized: true,
     getEntity: (type, id) => type === 'person' && id === 'p1' ? { fields: { display_name: 'Anna Holm' } } : null,
@@ -843,17 +844,50 @@ await test('Dokumentarkivets kopplade namn, båtlänkar och fastigheter löses f
       return [];
     },
   };
-  const person = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Anna Neretnieks', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
-  const boat = resolveArchiveEntity({ entity_type: 'båt', external_id: 'b1', name: 'Äldre båtnamn', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
-  const property = resolveArchiveEntity({ entity_type: 'fastighet', external_id: 'Alsvik 3:79', name: 'Alsvik 3:79', match_status: 'kopplad' }, { personMaster, boatMaster, fastigheterMaster });
+  const kartdataMaster = {
+    initialized: true,
+    getEntity(type, id) {
+      if (type === 'place' && id === 'korpholmen') return { fields: { preferred_name: 'Korpholmen' } };
+      if (type === 'data-entry' && id === 'K99') return { fields: { name: 'Korpholmsmuseet' } };
+      return null;
+    },
+  };
+  const masters = { personMaster, boatMaster, fastigheterMaster, kartdataMaster };
+  const person = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Anna Neretnieks', match_status: 'kopplad' }, masters);
+  const boat = resolveArchiveEntity({ entity_type: 'båt', external_id: 'b1', name: 'Äldre båtnamn', match_status: 'kopplad' }, masters);
+  const property = resolveArchiveEntity({ entity_type: 'fastighet', external_id: 'Alsvik 3:79', name: 'Alsvik 3:79', match_status: 'kopplad' }, masters);
+  const place = resolveArchiveEntity({ entity_type: 'plats', external_entity_type: 'place', external_id: 'korpholmen', name: 'Gammalt önamn', match_status: 'kopplad' }, masters);
+  const house = resolveArchiveEntity({ entity_type: 'hus', external_entity_type: 'data-entry', external_id: 'K99', name: 'Gammalt husnamn', match_status: 'kopplad' }, masters);
   assert.equal(person.name, 'Anna Holm');
   assert.equal(person.url, '../matrikel/?person=p1');
   assert.equal(boat.name, 'Fadersfriden');
   assert.equal(boat.url, '../batregister/?boat=b1');
   assert.equal(property.name, 'Alsvik 3:79 (Bethge)');
   assert.equal(property.url, '../fastigheter/?property=Alsvik%203%3A79');
+  assert.equal(place.name, 'Korpholmen');
+  assert.equal(place.url, '../kartdata/?island=korpholmen');
+  assert.equal(house.name, 'Korpholmsmuseet');
+  assert.equal(house.url, '../kartdata/?entry=K99');
   const unresolved = resolveArchiveEntity({ entity_type: 'person', external_id: 'p1', name: 'Osäker Anna', match_status: 'granska' }, { personMaster, boatMaster });
   assert.equal(unresolved.name, 'Osäker Anna');
+});
+
+await test('fastigheters öetiketter härleds från Kartdatas godkända länkar', async () => {
+  const kartdataMaster = {
+    initialized: true,
+    listEntities(type) {
+      if (type === 'place') return [
+        { entity_id: 'korpholmen', fields: { subtype: 'ö', preferred_name: 'Korpholmen' } },
+        { entity_id: 'hamnen', fields: { subtype: 'område', preferred_name: 'Hamnen' } },
+      ];
+      if (type === 'data-entry-property-link') return [{ entity_id: 'property-link', fields: { entry_id: 'K24', property_id: 'Alsvik 3:377' } }];
+      if (type === 'data-entry-island-link') return [{ entity_id: 'island-link', fields: { entry_id: 'K24', island_id: 'korpholmen' } }];
+      return [];
+    },
+  };
+  assert.deepEqual(resolvePropertyIslandNames('Alsvik 3:377', kartdataMaster, { fallback: ['Sahlskär'] }), ['Korpholmen']);
+  assert.deepEqual(resolvePropertyIslandNames('Alsvik 3:199', kartdataMaster, { fallback: ['Äldre etikett'] }), []);
+  assert.deepEqual(resolvePropertyIslandNames('Alsvik 3:85', null, { fallback: ['Svanö'] }), ['Svanö']);
 });
 
 await test('skrivskyddad Dropbox-transport avvisar uppladdning', async () => {

@@ -55,6 +55,7 @@ let accessTokenExpiresAt = 0;
 let syncPromise = null;
 let selectedEntryId = null;
 let selectedIslandId = null;
+let requestedDeepLinkApplied = false;
 let creatingEntry = false;
 const ui = { search: '', island: '', objectClass: '', subtype: '', property: '', status: '', sort: 'name', view: 'atlas' };
 const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${fastigheterMaster?.revision || 0}:${matrikelMaster?.revision || 0}`);
@@ -227,6 +228,23 @@ function openDrawer(entryId) { creatingEntry = false; selectedIslandId = null; s
 function openNewEntryDrawer() { creatingEntry = true; selectedIslandId = null; selectedEntryId = null; renderEntryDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
 function openIslandDrawer(islandId = null) { creatingEntry = false; selectedEntryId = null; selectedIslandId = islandId; renderIslandDrawer(); drawer.setAttribute('aria-hidden', 'false'); backdrop.hidden = false; }
 function closeDrawer() { creatingEntry = false; selectedEntryId = null; selectedIslandId = null; drawer.setAttribute('aria-hidden', 'true'); backdrop.hidden = true; }
+function applyRequestedDeepLink() {
+  if (requestedDeepLinkApplied) return false;
+  const params = new URLSearchParams(location.search);
+  const entryId = params.get('entry');
+  const islandId = params.get('island');
+  if (entryId && entryRecords().some(entry => entry.id === entryId)) {
+    requestedDeepLinkApplied = true;
+    openDrawer(entryId);
+    return true;
+  }
+  if (islandId && islandRecords().some(island => island.id === islandId)) {
+    requestedDeepLinkApplied = true;
+    openIslandDrawer(islandId);
+    return true;
+  }
+  return false;
+}
 
 function propertySelectionRow(property) {
   return `<div class="selected-property" data-property-id="${escapeAttribute(property.external_id)}"><input type="hidden" name="property_ids" value="${escapeAttribute(property.external_id)}"><a href="${escapeAttribute(property.url || '#')}">${escapeHtml(propertyDisplayName(property.external_id))}</a><button type="button" data-action="remove-property" aria-label="Ta bort ${escapeAttribute(propertyDisplayName(property.external_id))}">Ta bort</button></div>`;
@@ -379,7 +397,7 @@ async function syncNow() {
     kartdataSync,
     fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
     matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
-  ]); render(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned · ägare från Fastigheter`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
+  ]); render(); applyRequestedDeepLink(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned · ägare från Fastigheter`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
 }
 async function connectDropbox() { sessionStorage.setItem('korpholmen:oauth-return', new URL('kartdata/', redirectUri()).pathname); const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES }); location.assign(attempt.url); }
 async function bootstrapCleanV2({ force = false } = {}) {
@@ -427,6 +445,6 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {})); window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; newEntryButton.disabled = false; render(); if (isSourceTree && !entryRecords().length) await bootstrapCleanV2(); await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; newEntryButton.disabled = false; render(); applyRequestedDeepLink(); if (isSourceTree && !entryRecords().length) { await bootstrapCleanV2(); applyRequestedDeepLink(); } await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });
