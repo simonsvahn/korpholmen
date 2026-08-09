@@ -68,6 +68,20 @@ function setStatus(text, tone = '') {
   statusNode.className = tone ? `status-${tone}` : '';
 }
 
+function updateDocumentUrl(id) {
+  const url = new URL(location.href);
+  if (id) url.searchParams.set('document', id); else url.searchParams.delete('document');
+  history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function applyRequestedDocument() {
+  const requestedDocumentId = new URL(location.href).searchParams.get('document');
+  if (!requestedDocumentId || !documentRecords().some(document => document.id === requestedDocumentId)) return false;
+  ui.selectedId = requestedDocumentId;
+  ui.view = 'reader';
+  return true;
+}
+
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:dokumentarkiv-device-id', prefix: 'dokumentarkiv-web-' });
 
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
@@ -510,7 +524,7 @@ async function syncNow() {
     for (const failure of referenceFailures) console.warn('En referensmaster kunde inte uppdateras; markerad lokal cache används', failure.reason);
     await refreshHistory();
     const images = await syncContentImages(transport);
-    render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned · ${referenceFailures.length ? 'referensnamn från lokal cache' : 'namn från Matrikel, Båtregister, Fastigheter och Kartdata'}`, referenceFailures.length ? 'warning' : 'ok');
+    applyRequestedDocument(); render(); setStatus(`Synkad · ${documentRecords().length} handlingar · ${images.total} innehållsbilder · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned · ${referenceFailures.length ? 'referensnamn från lokal cache' : 'namn från Matrikel, Båtregister, Fastigheter och Kartdata'}`, referenceFailures.length ? 'warning' : 'ok');
     return result;
   })().catch(error => {
     console.error(error);
@@ -563,6 +577,7 @@ $('#view-tabs').addEventListener('click', event => {
   const button = event.target.closest('[data-view]');
   if (!button) return;
   ui.view = button.dataset.view;
+  updateDocumentUrl('');
   render();
   window.scrollTo({ top: $('#search-band').offsetTop, behavior: 'smooth' });
 });
@@ -572,7 +587,7 @@ appNode.addEventListener('submit', event => {
 });
 appNode.addEventListener('click', event => {
   const documentButton = event.target.closest('[data-document-id]');
-  if (documentButton) { ui.selectedId = documentButton.dataset.documentId; ui.sourceOpen = false; ui.compareHlc = ''; ui.view = 'reader'; render(); requestAnimationFrame(() => $('#reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); return; }
+  if (documentButton) { ui.selectedId = documentButton.dataset.documentId; ui.sourceOpen = false; ui.compareHlc = ''; ui.view = 'reader'; updateDocumentUrl(ui.selectedId); render(); requestAnimationFrame(() => $('#reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); return; }
   const decadeButton = event.target.closest('[data-decade]');
   if (decadeButton) { ui.period = `decade:${decadeButton.dataset.decade}`; if (decadeButton.dataset.categoryJump) ui.categories = new Set([decadeButton.dataset.categoryJump]); ui.view = 'reader'; render(); return; }
   const yearButton = event.target.closest('[data-year]');
@@ -616,6 +631,7 @@ async function init() {
   await refreshHistory();
   await loadCachedContentImages();
   bootstrapButton.hidden = !isSourceTree;
+  applyRequestedDocument();
   render();
   await completeOAuthCallbackIfNeeded();
   await syncNow();

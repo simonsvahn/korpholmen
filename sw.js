@@ -1,4 +1,4 @@
-const RELEASE = '2026-08-07-korpholmen-pwa-33';
+const RELEASE = '2026-08-09-korpholmen-pwa-34';
 const CACHE_PREFIX = 'korpholmen-family-shell-';
 const CACHE = `${CACHE_PREFIX}${RELEASE}`;
 const LEGACY_PREFIXES = ['slaktlandskap-shell-', 'korpholmen-matrikel-', 'korpholmen-batregister-', 'korpholmen-fastigheter-', 'korpholmen-dokumentarkiv-', 'korpholmen-runt-', 'kbk-klubbhistorik-', 'korpholmen-kartdata-'];

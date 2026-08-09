@@ -10,8 +10,8 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/korpholmen.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/korpholmen-180.png">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-07-korpholmen-pwa-33">
-  <link rel="stylesheet" href="./app-switcher.css?v=2026-08-07-korpholmen-pwa-33">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-09-korpholmen-pwa-34">
+  <link rel="stylesheet" href="./app-switcher.css?v=2026-08-09-korpholmen-pwa-34">
 </head>
 <body class="app-hub">
   <a class="skip-to-content" href="#hub-content">Hoppa till innehåll</a>
@@ -24,13 +24,14 @@
     <a class="app-switch" href="./korpholmenrunt/">05 Korpholmen runt</a>
     <a class="app-switch" href="./klubbhistorik/">06 Klubbhistorik</a>
     <a class="app-switch" href="./kartdata/">07 Kartdata</a>
+    <a class="app-switch" href="./explorer/">08 Explorer</a>
   </nav>
   <main class="hub" id="hub-content">
     <section class="hub-intro">
       <div>
         <p class="eyebrow">Korpholmen</p>
         <h1>Klubbens appar</h1>
-        <p class="lead">En installerad app, en Dropbox-inloggning och sju tydligt avgränsade register.</p>
+        <p class="lead">En installerad app, en Dropbox-inloggning och sju tydligt avgränsade register – med Explorer som gemensam läsvy.</p>
       </div>
       <aside class="family-sync" aria-labelledby="family-sync-title">
         <p class="eyebrow" id="family-sync-title">Den här enheten</p>
@@ -41,6 +42,12 @@
         <small>Bilder hämtas vid behov i Båtregister och Dokumentarkiv.</small>
       </aside>
     </section>
+
+    <h2 class="domain-label">Utforska</h2>
+    <p class="domain-desc">Sök på tvären utan att skapa en ny master</p>
+    <div class="app-grid">
+      <a class="app-card" href="./explorer/"><span class="number">08</span><h2>Explorer</h2><p>Samlad, skrivskyddad sökning och personsidor med djuplänkar till varje ägarapp.</p><span class="app-card-status">Läser de sju registrens lokala data</span><b>Öppna Explorer →</b></a>
+    </div>
 
     <h2 class="domain-label">Klubben</h2>
     <p class="domain-desc">Medlemmar, båtar, tävlingar, handlingar och historik</p>
@@ -58,6 +65,6 @@
       <a class="app-card" href="./kartdata/"><span class="number">07</span><h2>Kartdata</h2><p>Visuell granskning av kartans namn, byggnader, platser och fastighetskopplingar.</p><span class="app-card-status" data-sync-status="kartdata">Kontrollerar lokal synk…</span><b>Öppna Kartdata →</b></a>
     </div>
   </main>
-  <script type="module" src="./src/app.js?v=2026-08-07-korpholmen-pwa-33"></script>
+  <script type="module" src="./src/app.js?v=2026-08-09-korpholmen-pwa-34"></script>
 </body>
 </html>

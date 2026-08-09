@@ -1,0 +1,9 @@
+{
+  "name": "korpholmen-explorer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:publish": "node verktyg/bygg-publicering.mjs",
+    "test": "node test/harness.mjs"
+  }
+}
