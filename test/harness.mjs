@@ -9,6 +9,8 @@ import { createBatch, decodeCheckpointPayload, Materializer } from '../packages/
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APPS = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
+const PROJECTIONS = ['explorer'];
+const SURFACES = [...APPS, ...PROJECTIONS];
 let passed = 0;
 async function test(name, action) { await action(); passed += 1; console.log(`✓ ${name}`); }
 
@@ -28,12 +30,15 @@ await test('Korpholmen är den enda installerbara PWA:n och omfattar alla appar'
     assert.match(html, /rel="manifest" href="\.\.\/\.\.\/manifest\.webmanifest"/, `${app} måste peka på rotmanifestet`);
     assert.match(html, /src="\.\.\/\.\.\/src\/app-family-bootstrap\.js/, `${app} måste starta den gemensamma synken`);
   }
+  const explorerHtml = await readFile(resolve(ROOT, 'apps/explorer/index.html'), 'utf8');
+  assert.match(explorerHtml, /rel="manifest" href="\.\.\/\.\.\/manifest\.webmanifest"/);
+  assert.match(explorerHtml, /src="\.\.\/\.\.\/src\/app-family-bootstrap\.js/);
 });
 
 await test('alla publicerade ingångssidor avråder sökmotorer från indexering', async () => {
   const entryPages = [
     resolve(ROOT, 'index.html'),
-    ...APPS.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')]),
+    ...SURFACES.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')]),
   ];
   for (const path of entryPages) {
     const html = await readFile(path, 'utf8');
@@ -204,12 +209,13 @@ await test('borttagningar kan ångras och granskningsköer har ett källbevarand
 await test('publiceringsmanifestet innehåller bara datafria appskalsvägar', async () => {
   const release = JSON.parse(await readFile(resolve(ROOT, 'release-manifest.json'), 'utf8'));
   assert.deepEqual(release.apps, APPS);
+  assert.deepEqual(release.projections, PROJECTIONS);
   assert.ok(release.shell_files.length >= 8);
   assert.ok(release.shell_files.every(path => !path.includes('/privat/') && !path.includes('/apps/')));
 });
 
 await test('publicerade appmoduler pekar bara inom GitHub Pages-paketet och alla importer finns', async () => {
-  for (const app of APPS) {
+  for (const app of SURFACES) {
     const source = await readFile(resolve(ROOT, app, 'src/app.js'), 'utf8');
     assert.equal(source.includes('../../../packages/core/'), false, `${app} har en modulväg som lämnar GitHub Pages-projektet`);
   }
@@ -237,7 +243,7 @@ await test('en releasesanning styr service worker, manifest och HTML-cachebrytar
   assert.equal(release.generated_at, config.generated_at);
   assert.ok(worker.includes(`const RELEASE = '${config.release}'`));
   assert.ok(!worker.includes('__KORPHOLMEN_RELEASE__'));
-  for (const path of [resolve(ROOT, 'index.html'), ...APPS.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')])]) {
+  for (const path of [resolve(ROOT, 'index.html'), ...SURFACES.flatMap(app => [resolve(ROOT, 'apps', app, 'index.html'), resolve(ROOT, app, 'index.html')])]) {
     const html = await readFile(path, 'utf8');
     const versions = [...html.matchAll(/\?v=([^"'\s<>&]+)/g)].map(match => match[1]);
     assert.ok(versions.length, `${path} saknar versionsbundna skalfiler`);
@@ -255,7 +261,7 @@ await test('offlinepaketet har riktiga appfallbacks, querymatchning och inga OG-
   assert.ok(worker.includes('Promise.allSettled'));
   assert.ok(client.includes('reloadOnUpdate = false'));
   assert.ok(release.shell_files.every(path => !/\/og\.png$/i.test(path)));
-  for (const app of APPS) assert.ok(release.shell_files.includes(`./${app}/index.html`));
+  for (const app of SURFACES) assert.ok(release.shell_files.includes(`./${app}/index.html`));
   for (const path of release.shell_files) {
     const localPath = resolve(ROOT, path.replace(/^\.\//, '').split('?')[0]);
     assert.equal((await stat(localPath)).isFile(), true, `${path} saknas på disk`);
@@ -263,7 +269,7 @@ await test('offlinepaketet har riktiga appfallbacks, querymatchning och inga OG-
 });
 
 await test('alla publiceringsbyggare vägrar oväntade filer och arbetsmaterial är ignorerat', async () => {
-  for (const app of APPS) {
+  for (const app of SURFACES) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'verktyg/bygg-publicering.mjs'), 'utf8');
     assert.ok(source.includes('assertExactPublicationFiles'), `${app} saknar exakt-fil-vakten`);
   }

@@ -155,6 +155,8 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(app.includes('fastigheterMaster, kartdataMaster }'));
   assert.ok(app.includes("location.pathname.includes('/apps/dokumentarkiv/')"));
   assert.ok(app.includes("new URL('dokumentarkiv/', redirectUri())"));
+  assert.ok(app.includes("searchParams.get('document')"));
+  assert.ok(app.includes("searchParams.set('document', id)"));
   assert.ok(app.includes('categories: new Set()'));
   assert.ok(app.includes('ui.categories.has(document.category)'));
   assert.ok(app.includes('ui.categories.add(category)'));
