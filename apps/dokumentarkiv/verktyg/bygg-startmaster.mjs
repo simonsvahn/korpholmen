@@ -237,6 +237,32 @@ function transcript(text) {
   return (end < 0 ? body : body.slice(0, end)).trim();
 }
 
+const sourceMimeType = extension => ({
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.pdf': 'application/pdf',
+})[extension.toLocaleLowerCase('sv')] || null;
+
+const unavailableProvenanceFile = value => !String(value || '').trim() || /^[-—](?:\s|$)/.test(String(value).trim());
+const unwrapCodeCell = value => String(value || '').trim().replace(/^`([\s\S]*)`$/, '$1');
+
+function provenanceRows(text) {
+  const start = text.indexOf('\n## Ursprungliga filer\n');
+  if (start < 0) return [];
+  const section = text.slice(start + '\n## Ursprungliga filer\n'.length)
+    .split(/\n## /)[0]
+    .split(/\n### Härledda innehållsbilder/)[0];
+  return section.split('\n')
+    .filter(line => /^\|\s*`/.test(line))
+    .map(line => line.trim().replace(/^\||\|$/g, '').split('|').map(unwrapCodeCell))
+    .map(cells => cells.length === 3
+      ? { original_filename: cells[0], canonical_original: cells[1], reading_copy: null, original_sha256: cells[2] }
+      : { original_filename: cells[0], canonical_original: cells[1], reading_copy: cells[2], original_sha256: cells[3] });
+}
+
 const imageMimeType = extension => ({
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -321,11 +347,63 @@ function documentId(sourcePath, title) {
   return `document:${value.slice(0, 207).replace(/-+$/g, '')}-${suffix}`;
 }
 const sourceFiles = (await findTranscripts(documentRoot)).sort((a, b) => a.localeCompare(b, 'sv'));
+const packageFilesByName = new Map();
+for (const path of await findFiles(documentRoot)) {
+  const key = normalize(basename(path));
+  if (!packageFilesByName.has(key)) packageFilesByName.set(key, []);
+  packageFilesByName.get(key).push(path);
+}
 const documents = [];
 const includedSourceFiles = [];
 const includedContentImages = [];
+const includedArchiveFiles = [];
 const excludedDocuments = [];
 const usedEntityIds = new Set();
+
+async function archiveAsset(sourceFile, filename, expectedSha256, role) {
+  if (unavailableProvenanceFile(filename)) return null;
+  const extension = extname(filename).toLocaleLowerCase('sv');
+  const mimeType = sourceMimeType(extension);
+  if (!mimeType) throw new Error(`Källfilen har ett format som Dokumentarkivet inte stöder: ${filename}`);
+  const direct = resolve(dirname(sourceFile), filename);
+  const candidates = [...new Set([direct, ...(packageFilesByName.get(normalize(filename)) || [])])];
+  for (const candidate of candidates) {
+    let bytes;
+    try { bytes = await readFile(candidate); }
+    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (expectedSha256 && sha256 !== expectedSha256.toLocaleLowerCase('sv')) continue;
+    const normalizedExtension = extension === '.jpeg' ? '.jpg' : extension;
+    const blobPath = `/dokumentarkiv/kallor/${role === 'original' ? 'original' : 'laskopior'}/${sha256}${normalizedExtension}`;
+    const asset = { filename, sha256, mime_type: mimeType, blob_path: blobPath, source_file: candidate, role };
+    includedArchiveFiles.push(asset);
+    return asset;
+  }
+  const hashNote = expectedSha256 ? ` med SHA-256 ${expectedSha256}` : '';
+  throw new Error(`Kunde inte hitta ${filename}${hashNote} för ${sourceFile}`);
+}
+
+async function sourceFileRecords(text, sourceFile) {
+  const records = [];
+  const rows = provenanceRows(text);
+  for (const [index, row] of rows.entries()) {
+    if (unavailableProvenanceFile(row.canonical_original)) continue;
+    if (!/^[a-f0-9]{64}$/i.test(row.original_sha256 || '')) throw new Error(`Ogiltig originalhash i ${sourceFile}: ${row.original_filename}`);
+    const original = await archiveAsset(sourceFile, row.canonical_original, row.original_sha256, 'original');
+    const readingCopy = unavailableProvenanceFile(row.reading_copy)
+      ? null
+      : await archiveAsset(sourceFile, row.reading_copy, null, 'laskopia');
+    if (!readingCopy && original.mime_type !== 'application/pdf') throw new Error(`Bildoriginalet saknar beskuren läskopia i ${sourceFile}: ${row.original_filename}`);
+    const publicAsset = ({ source_file, role, ...asset }) => asset;
+    records.push({
+      order: index + 1,
+      original_filename: row.original_filename,
+      original: publicAsset(original),
+      reading_copy: readingCopy ? publicAsset(readingCopy) : null,
+    });
+  }
+  return { records, originalNames: rows.map(row => row.original_filename) };
+}
 
 for (const sourceFile of sourceFiles) {
   const text = await readFile(sourceFile, 'utf8');
@@ -345,9 +423,7 @@ for (const sourceFile of sourceFiles) {
   entityIds.forEach(id => usedEntityIds.add(id));
   const date = meta.dokumentdatum || 'okänt';
   const year = date.match(/\d{4}/)?.[0] || null;
-  const provenanceStart = text.indexOf('\n## Ursprungliga filer\n');
-  const provenance = provenanceStart < 0 ? '' : text.slice(provenanceStart).split(/\n### Härledda innehållsbilder/)[0];
-  const originalNames = [...provenance.matchAll(/^\|\s*`([^`]+)`\s*\|/gm)].map(match => match[1]);
+  const { records: archiveFiles, originalNames } = await sourceFileRecords(text, sourceFile);
   const documentType = meta.dokumenttyp || 'okänd';
   const documentCategory = category(documentType);
   documents.push({
@@ -373,6 +449,7 @@ for (const sourceFile of sourceFiles) {
       word_count: transcription.split(/\s+/).filter(Boolean).length,
       has_uncertainty: /\[(?:osäker|osäkert|oläsligt)/i.test(transcription),
       original_filenames: originalNames,
+      source_files: archiveFiles,
       content_images: documentContentImages.map(({ source_file, ...image }) => image),
     },
   });
@@ -447,6 +524,9 @@ for (const sourceFile of includedSourceFiles) sourceHash.update(await readFile(s
 for (const image of [...new Map(includedContentImages.map(item => [item.sha256, item])).values()].sort((a, b) => a.sha256.localeCompare(b.sha256))) {
   sourceHash.update(await readFile(image.source_file));
 }
+for (const file of [...new Map(includedArchiveFiles.map(item => [item.blob_path, item])).values()].sort((a, b) => a.blob_path.localeCompare(b.blob_path, 'sv'))) {
+  sourceHash.update(`${file.role}:${file.sha256}:${file.filename}\n`);
+}
 for (const inboxFile of inboxFiles.map(path => relative(inboxRoot, path).split(sep).join('/')).sort((a, b) => a.localeCompare(b, 'sv'))) sourceHash.update(inboxFile);
 await mkdir(OUT, { recursive: true });
 await writeFile(resolve(OUT, 'initial-ops.json'), `${JSON.stringify({
@@ -463,5 +543,10 @@ await writeFile(resolve(OUT, 'innehållsbilder.json'), `${JSON.stringify({
   images: [...new Map(includedContentImages.map(image => [image.sha256, image])).values()]
     .sort((a, b) => a.blob_path.localeCompare(b.blob_path, 'sv')),
 }, null, 2)}\n`);
+await writeFile(resolve(OUT, 'källfiler.json'), `${JSON.stringify({
+  version: 1,
+  files: [...new Map(includedArchiveFiles.map(file => [file.blob_path, file])).values()]
+    .sort((a, b) => a.blob_path.localeCompare(b.blob_path, 'sv')),
+}, null, 2)}\n`);
 
-console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${includedContentImages.length} innehållsbilder, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);
+console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${includedContentImages.length} innehållsbilder, ${includedArchiveFiles.length} källfilsreferenser, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);

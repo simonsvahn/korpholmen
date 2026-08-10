@@ -15,8 +15,10 @@ if(!dropboxRoot.endsWith('/Dropbox/Appar/Korpholmen'))throw new Error(`Avbryter:
 
 const document=JSON.parse(await readFile(resolve(PRIVATE,'initial-ops.json'),'utf8'));
 const imageDocument=JSON.parse(await readFile(resolve(PRIVATE,'innehållsbilder.json'),'utf8'));
+const archiveDocument=JSON.parse(await readFile(resolve(PRIVATE,'källfiler.json'),'utf8'));
 if(imageDocument.version!==1||!Array.isArray(imageDocument.images))throw new Error('Manifestet för innehållsbilder har fel format');
-const counters={batches_written:0,batches_identical:0,images_written:0,images_identical:0};
+if(archiveDocument.version!==1||!Array.isArray(archiveDocument.files))throw new Error('Manifestet för källfiler har fel format');
+const counters={batches_written:0,batches_identical:0,images_written:0,images_identical:0,source_files_written:0,source_files_identical:0};
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 
 async function writeImmutableJson(path,value){
@@ -53,12 +55,33 @@ async function writeImmutableImage(image){
   }
 }
 
+async function writeImmutableSourceFile(file){
+  if(!/^\/dokumentarkiv\/kallor\/(?:original|laskopior)\/[a-f0-9]{64}\.(?:heic|heif|jpg|png|pdf)$/.test(file.blob_path)||file.blob_path.includes('..'))throw new Error(`Ogiltig källfilsväg: ${file.blob_path}`);
+  const source=await realpath(file.source_file);
+  const sourceBytes=await readFile(source);
+  if(sha256(sourceBytes)!==file.sha256)throw new Error(`Källfilens hash stämmer inte: ${source}`);
+  const target=resolve(dropboxRoot,file.blob_path.replace(/^\//,''));
+  await mkdir(dirname(target),{recursive:true});
+  try{
+    await copyFile(source,target,constants.COPYFILE_EXCL);
+    const written=await readFile(target);
+    if(sha256(written)!==file.sha256)throw new Error(`Kopierad källfil fick fel hash: ${target}`);
+    counters.source_files_written+=1;
+  }catch(error){
+    if(error.code!=='EEXIST')throw error;
+    const existing=await readFile(target);
+    if(sha256(existing)!==file.sha256)throw new Error(`Befintlig källfil skiljer sig och skrivs inte över: ${target}`);
+    counters.source_files_identical+=1;
+  }
+}
+
 for(let index=0;index<document.operations.length;index+=250){
   const batch=createBatch(document.operations.slice(index,index+250));
   const relative=batchPath(batch.device_id,batch.from_seq,batch.to_seq,'/dokumentarkiv/ops').replace(/^\//,'');
   await writeImmutableJson(resolve(dropboxRoot,relative),batch);
 }
 for(const image of imageDocument.images)await writeImmutableImage(image);
+for(const file of archiveDocument.files)await writeImmutableSourceFile(file);
 
 const state=materialize(document.operations);
 console.log(JSON.stringify({
@@ -67,5 +90,6 @@ console.log(JSON.stringify({
   documents:state.listEntities('document').length,
   archive_entities:state.listEntities('archive-entity').length,
   content_images:imageDocument.images.length,
+  source_files:archiveDocument.files.length,
   ...counters,
 },null,2));
