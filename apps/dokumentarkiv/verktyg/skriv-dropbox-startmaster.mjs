@@ -56,21 +56,21 @@ async function writeImmutableImage(image){
 }
 
 async function writeImmutableSourceFile(file){
-  if(!/^\/dokumentarkiv\/kallor\/(?:original|laskopior)\/[a-f0-9]{64}\.(?:heic|heif|jpg|png|pdf)$/.test(file.blob_path)||file.blob_path.includes('..'))throw new Error(`Ogiltig källfilsväg: ${file.blob_path}`);
+  if(!/^\/dokumentarkiv\/kallor\/laskopior\/[a-f0-9]{64}\.(?:jpg|pdf)$/.test(file.blob_path)||file.blob_path.includes('..'))throw new Error(`Ogiltig sökväg för visningskopia: ${file.blob_path}`);
   const source=await realpath(file.source_file);
   const sourceBytes=await readFile(source);
-  if(sha256(sourceBytes)!==file.sha256)throw new Error(`Källfilens hash stämmer inte: ${source}`);
+  if(sha256(sourceBytes)!==file.sha256)throw new Error(`Visningskopians hash stämmer inte: ${source}`);
   const target=resolve(dropboxRoot,file.blob_path.replace(/^\//,''));
   await mkdir(dirname(target),{recursive:true});
   try{
     await copyFile(source,target,constants.COPYFILE_EXCL);
     const written=await readFile(target);
-    if(sha256(written)!==file.sha256)throw new Error(`Kopierad källfil fick fel hash: ${target}`);
+    if(sha256(written)!==file.sha256)throw new Error(`Kopierad visningskopia fick fel hash: ${target}`);
     counters.source_files_written+=1;
   }catch(error){
     if(error.code!=='EEXIST')throw error;
     const existing=await readFile(target);
-    if(sha256(existing)!==file.sha256)throw new Error(`Befintlig källfil skiljer sig och skrivs inte över: ${target}`);
+    if(sha256(existing)!==file.sha256)throw new Error(`Befintlig visningskopia skiljer sig och skrivs inte över: ${target}`);
     counters.source_files_identical+=1;
   }
 }

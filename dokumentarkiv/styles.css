@@ -179,8 +179,8 @@ button { color: inherit; }
 .kallruta code { overflow-wrap: anywhere; }
 .kallruta p { margin: 8px 0 0; }
 .dokumentverktyg { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-.dokumentverktyg .visa-original { background: var(--hav); border: 0; border-radius: 999px; color: white; cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 9px 13px; text-transform: uppercase; }
-.dokumentverktyg .visa-original:hover { background: var(--rod); }
+.dokumentverktyg .visa-kallbilder { background: var(--hav); border: 0; border-radius: 999px; color: white; cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 9px 13px; text-transform: uppercase; }
+.dokumentverktyg .visa-kallbilder:hover { background: var(--rod); }
 .dokumentverktyg > span { color: var(--svart-mjuk); font-size: 8px; line-height: 1.4; max-width: 240px; }
 .kallfilsvisare { background: #f3eddf; border: 1px solid rgba(18,60,70,.18); margin: 30px -34px 38px; padding: 18px; }
 .kallfilsvisare > header { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; }
@@ -205,12 +205,6 @@ button { color: inherit; }
 .kallfilplatshallare button { background: var(--hav); border: 0; border-radius: 999px; color: white; cursor: pointer; font-size: 9px; font-weight: 800; margin-top: 4px; padding: 8px 12px; text-transform: uppercase; }
 .kallfilspinner { animation: kallfilrotation .8s linear infinite; border: 2px solid rgba(18,60,70,.18); border-radius: 50%; border-top-color: var(--hav); height: 26px; width: 26px; }
 @keyframes kallfilrotation { to { transform: rotate(360deg); } }
-.kallfilsverktyg { align-items: center; background: white; border-top: 1px solid var(--linje); display: flex; gap: 18px; justify-content: space-between; padding: 13px 12px; }
-.kallfilsverktyg > div { min-width: 0; }
-.kallfilsverktyg span, .kallfilsverktyg small { color: var(--svart-mjuk); display: block; font-size: 7px; letter-spacing: .05em; text-transform: uppercase; }
-.kallfilsverktyg strong { display: block; font-family: var(--serif); font-size: 11px; margin: 3px 0; overflow-wrap: anywhere; }
-.kallfilsverktyg button { background: var(--rod); border: 0; border-radius: 999px; color: white; cursor: pointer; flex: 0 0 auto; font-size: 8px; font-weight: 800; padding: 9px 12px; text-transform: uppercase; }
-.kallfilsverktyg button:disabled { cursor: wait; opacity: .62; }
 .versionshistorik { align-items: center; border-top: 1px solid var(--linje); display: flex; gap: 20px; justify-content: space-between; margin-top: 28px; padding-top: 20px; }
 .versionshistorik h3 { color: var(--hav); font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 0; }
 .versioner { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
@@ -447,7 +441,6 @@ button { color: inherit; }
   .kallfilsvisare > header { flex-direction: column; gap: 8px; }
   .kallfilplatshallare { aspect-ratio: auto; width: 100%; }
   .kallfilsbild iframe { min-height: 430px; }
-  .kallfilsverktyg { align-items: flex-start; flex-direction: column; }
   .avskriftstext { font-size: 17px; line-height: 1.68; }
   .avskriftstext pre { font-size: 11px; margin-left: -12px; margin-right: -12px; padding: 15px; }
   .tabellram { margin-left: -18px; margin-right: -18px; }

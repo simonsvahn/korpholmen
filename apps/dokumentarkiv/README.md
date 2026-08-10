@@ -19,12 +19,12 @@ registerkopplingar lagras som immutabla operationer i den gemensamma privata
 Dropbox App Foldern under `/dokumentarkiv/ops` och materialiseras lokalt i
 IndexedDB. Inbäddade innehållsbilder lagras hashbaserat under
 `/dokumentarkiv/bilder`, hämtas vid synk och bevaras lokalt för offlinevisning.
-Dokumentens beskurna läskopior och bytebevarade original publiceras privat,
-hashbaserat under `/dokumentarkiv/kallor`. De förhämtas aldrig: först när
-användaren väljer `Visa original` hämtas den valda handlingens valda sida.
-Övriga sidor och handlingar lämnas orörda i Dropbox. Det bytebevarade
-originalet hämtas separat på uttrycklig begäran. Exakta registerträffar pekar
-på stabila ID:n i Matrikeln eller
+Dokumentens beskurna JPG-läskopior och PDF-kopior publiceras privat,
+hashbaserat under `/dokumentarkiv/kallor/laskopior`. De förhämtas aldrig: först
+när användaren väljer `Visa källbilder` hämtas den valda handlingens valda
+sida. Övriga sidor och handlingar lämnas orörda i Dropbox. HEIC/HEIF och andra
+råoriginal publiceras inte. Exakta registerträffar pekar på stabila ID:n i
+Matrikeln eller
 Båtregistret. Osäkra och saknade träffar markeras uttryckligen.
 
 ## Lokalt granskningsverktyg
@@ -35,8 +35,9 @@ Verktyget måste först startas på samma dator med
 Det visar den redigerbara avskriften bredvid dokumentmappens beskurna
 läskopior och sparar rättningar i Markdown-källan med versionskopia och logg.
 
-Länken publiceras som en del av det datafria appskalet. Servern,
-Markdown-filerna, originalen och läskopiorna publiceras inte och lämnar inte
+Länken publiceras som en del av det datafria appskalet. Servern och
+Markdown-filerna publiceras inte. Dropbox får endast kopior av de beskurna
+JPG-filerna och PDF:erna; samtliga källfiler ligger kvar orörda i
 `Digitalisering 2026`. Verktyget fungerar därför bara på en dator som har
 källmappen och den lokala servern igång.
 
@@ -47,16 +48,18 @@ källmappen och den lokala servern igång.
 - `npm test` kontrollerar data, kopplingar och det datafria appskalet.
 - `npm run build:publish` bygger publiceringspaketet i `/dokumentarkiv`.
 - `npm run seed:dropbox -- "/Users/.../Dropbox/Appar/Korpholmen"` skriver
-  startmastern till Dropbox utan att skriva över en befintlig, avvikande batch.
+  startmastern och visningskopiorna till Dropbox utan att flytta källfiler eller
+  skriva över en befintlig, avvikande batch.
 - `npm run publicera -- "/Users/.../Dropbox/Appar/Korpholmen"` är det normala
   enstegsflödet: hashkontroll och arkivering av behandlade inkorgsoriginal,
   ny versionsmaster, tester samt publicering av operationer, innehållsbilder
-  och privata källfiler.
+  och privata JPG-/PDF-visningskopior.
 
 Källbilder, beskurna läskopior och avskriftsfiler ligger kvar orörda i
 `Digitalisering 2026`. Dokumentarkivet läser bara Markdown-avskrifterna när en
 ny privat startmaster byggs. Behandlade kopior i `00 Inkorg` flyttas av
-enstegsflödet till `02 Arkiverade inkorgsoriginal` först när filnamn, SHA-256
+enstegsflödet inom `Digitalisering 2026` till `02 Arkiverade inkorgsoriginal`
+först när filnamn, SHA-256
 och en byte-identisk kanonisk originalfil i dokumentpaketet har verifierats.
 Filer som ännu inte har ett färdigt dokumentpaket lämnas kvar i inkorgen.
 

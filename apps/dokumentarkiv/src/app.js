@@ -36,7 +36,7 @@ const STOP_WORDS = new Set('och eller men att det den de som när var vad hur ve
 const ui = {
   view: 'overview', search: '', categories: new Set(), entityType: 'alla', status: 'alla', period: '',
   selectedId: '', selectedTrack: '', selectedEntityId: '', selectedPlaceId: '', sourceOpen: false,
-  compareHlc: '', question: '', originalDocumentId: '', sourcePage: 0,
+  compareHlc: '', question: '', sourceDocumentId: '', sourcePage: 0,
 };
 let store;
 let repository;
@@ -282,9 +282,7 @@ function comparisonHtml(selected) {
 }
 
 function sourcePreviewAsset(sourceFile) {
-  if (sourceFile?.reading_copy) return sourceFile.reading_copy;
-  if (sourceFile?.original?.mime_type === 'application/pdf') return sourceFile.original;
-  return null;
+  return sourceFile?.display_copy || null;
 }
 
 function sourceAssetState(asset) {
@@ -293,19 +291,18 @@ function sourceAssetState(asset) {
 
 function sourceViewerHtml(selected) {
   const sourceFiles = selected.source_files || [];
-  if (!sourceFiles.length || ui.originalDocumentId !== selected.id) return '';
+  if (!sourceFiles.length || ui.sourceDocumentId !== selected.id) return '';
   const pageIndex = Math.max(0, Math.min(ui.sourcePage, sourceFiles.length - 1));
   const sourceFile = sourceFiles[pageIndex];
   const preview = sourcePreviewAsset(sourceFile);
   const previewState = sourceAssetState(preview);
-  const originalState = sourceAssetState(sourceFile.original);
   const previewUrl = preview ? sourceFileUrls.get(preview.sha256) : '';
-  const pageLabel = sourceFiles.length === 1 ? '1 källa' : `${sourceFiles.length} sidor eller filer`;
+  const pageLabel = sourceFiles.length === 1 ? '1 sida eller fil' : `${sourceFiles.length} sidor eller filer`;
   let previewHtml;
   if (previewUrl && preview.mime_type === 'application/pdf') {
-    previewHtml = `<iframe src="${escapeAttribute(previewUrl)}" title="Original-PDF: ${escapeAttribute(selected.title)}"></iframe>`;
+    previewHtml = `<iframe src="${escapeAttribute(previewUrl)}" title="Käll-PDF: ${escapeAttribute(selected.title)}"></iframe>`;
   } else if (previewUrl) {
-    previewHtml = `<img src="${escapeAttribute(previewUrl)}" alt="Beskuren läskopia för ${escapeAttribute(selected.title)}, sida ${pageIndex + 1}">`;
+    previewHtml = `<img src="${escapeAttribute(previewUrl)}" alt="Källbild för ${escapeAttribute(selected.title)}, sida ${pageIndex + 1}">`;
   } else if (previewState.status === 'loading') {
     previewHtml = '<div class="kallfilplatshallare" role="status"><span class="kallfilspinner" aria-hidden="true"></span><strong>Hämtar den valda sidan…</strong><small>Inga andra handlingar hämtas.</small></div>';
   } else {
@@ -319,9 +316,8 @@ function sourceViewerHtml(selected) {
     const status = loaded ? 'hämtad' : state.status === 'loading' ? 'hämtas' : 'ej hämtad';
     return `<button type="button" data-action="source-page" data-source-page="${index}" class="${index === pageIndex ? 'aktiv' : ''}" aria-pressed="${index === pageIndex}"><span>${index + 1}</span><small>${escapeHtml(status)}</small></button>`;
   }).join('');
-  const previewKind = sourceFile.reading_copy ? 'Beskuren, icke-generativ läskopia' : 'Bytebevarat digitalt PDF-original';
-  const downloadLabel = originalState.status === 'loading' ? 'Hämtar bevarat original…' : 'Hämta bevarat original';
-  return `<section class="kallfilsvisare" aria-label="Originalhandling"><header><div><p class="overrad">Originalhandling</p><h3>${escapeHtml(pageLabel)}</h3><p>Endast den sida du väljer hämtas. Övriga sidor och handlingar ligger kvar i Dropbox.</p></div><button type="button" data-action="close-original">Stäng original</button></header><nav class="kallfilssidor" aria-label="Välj sida eller källfil">${pageButtons}</nav><figure class="kallfilsbild">${previewHtml}<figcaption><strong>${escapeHtml(previewKind)}</strong><span>${escapeHtml(preview?.filename || sourceFile.original?.filename || sourceFile.original_filename)}</span></figcaption></figure><div class="kallfilsverktyg"><div><span>Inkommande fil</span><strong>${escapeHtml(sourceFile.original_filename)}</strong><small>SHA-256 ${escapeHtml(String(sourceFile.original?.sha256 || '').slice(0, 16))}…</small></div><button type="button" data-action="download-original" data-source-page="${pageIndex}" ${originalState.status === 'loading' ? 'disabled' : ''}>${escapeHtml(downloadLabel)}</button></div></section>`;
+  const previewKind = preview?.mime_type === 'application/pdf' ? 'PDF-kopia' : 'Beskuren JPG-läskopia';
+  return `<section class="kallfilsvisare" aria-label="Källbilder"><header><div><p class="overrad">Källkopia</p><h3>${escapeHtml(pageLabel)}</h3><p>Endast den sida du väljer hämtas. Övriga sidor och handlingar ligger kvar i Dropbox.</p></div><button type="button" data-action="close-sources">Stäng källbilder</button></header><nav class="kallfilssidor" aria-label="Välj sida eller källfil">${pageButtons}</nav><figure class="kallfilsbild">${previewHtml}<figcaption><strong>${escapeHtml(previewKind)}</strong><span>${escapeHtml(preview?.filename || '')}</span></figcaption></figure></section>`;
 }
 
 function versionHistoryHtml(selected) {
@@ -337,9 +333,9 @@ function readerHtml(selected, map) {
   if (!selected) return emptyState('Ingen handling hittades', 'Prova ett annat ord eller rensa något av filtren.', '⌕');
   const entities = (selected.entity_ids || []).map(id => map.get(id)).filter(Boolean);
   const sourceFiles = selected.source_files || [];
-  const originalOpen = ui.originalDocumentId === selected.id;
-  const originalAction = sourceFiles.length ? `<button type="button" class="visa-original" data-action="${originalOpen ? 'close-original' : 'show-original'}">${originalOpen ? 'Dölj original' : `Visa original · ${sourceFiles.length}`}</button>` : '';
-  return `<article class="papper"><div class="halslagskant" aria-hidden="true"><i></i><i></i><i></i></div><header class="dokumenthuvud"><div class="dokumentmeta"><span>${escapeHtml(typeLabel(selected.document_type))}</span><span class="status ${selected.status === 'färdig' ? 'klar' : 'kontroll'}">${escapeHtml(selected.status)}</span></div><p class="dokumentdatum">${escapeHtml(dateLabel(selected.document_date))}</p><h2>${escapeHtml(selected.title)}</h2><p class="ingress">Ordagrann avskrift från ${plural(selected.image_count || 0, 'bild eller sida', 'bilder eller sidor')}. Stavning, interpunktion och dokumentets egen ton är bevarade.</p><div class="dokumentverktyg">${originalAction}<span>Inga källbilder hämtas innan du väljer att visa dem.</span></div><div class="entitetsrad">${entities.map(entityBadge).join('')}</div></header>${sourceViewerHtml(selected)}<div class="ornament" aria-hidden="true"><span>§</span></div><div class="avskriftstext">${markdown(selected.transcript, selected)}</div><footer class="dokumentfot"><button type="button" data-action="source">${ui.sourceOpen ? 'Dölj källuppgift' : 'Visa källuppgift'}</button><span>Avskrift · Digitalisering 2026</span></footer>${ui.sourceOpen ? `<div class="kallruta"><strong>Källfil</strong><code>${escapeHtml(selected.source_path)}</code><p>Datering: ${escapeHtml(selected.dating)}. Avskriften visas utan modernisering.</p><p>Textfingeravtryck: <code>${escapeHtml(String(selected.transcript_sha256 || '').slice(0, 16))}…</code></p></div>` : ''}${versionHistoryHtml(selected)}</article>`;
+  const sourcesOpen = ui.sourceDocumentId === selected.id;
+  const sourceAction = sourceFiles.length ? `<button type="button" class="visa-kallbilder" data-action="${sourcesOpen ? 'close-sources' : 'show-sources'}">${sourcesOpen ? 'Dölj källbilder' : `Visa källbilder · ${sourceFiles.length}`}</button>` : '';
+  return `<article class="papper"><div class="halslagskant" aria-hidden="true"><i></i><i></i><i></i></div><header class="dokumenthuvud"><div class="dokumentmeta"><span>${escapeHtml(typeLabel(selected.document_type))}</span><span class="status ${selected.status === 'färdig' ? 'klar' : 'kontroll'}">${escapeHtml(selected.status)}</span></div><p class="dokumentdatum">${escapeHtml(dateLabel(selected.document_date))}</p><h2>${escapeHtml(selected.title)}</h2><p class="ingress">Ordagrann avskrift från ${plural(selected.image_count || 0, 'bild eller sida', 'bilder eller sidor')}. Stavning, interpunktion och dokumentets egen ton är bevarade.</p><div class="dokumentverktyg">${sourceAction}<span>Inga källbilder hämtas innan du väljer att visa dem.</span></div><div class="entitetsrad">${entities.map(entityBadge).join('')}</div></header>${sourceViewerHtml(selected)}<div class="ornament" aria-hidden="true"><span>§</span></div><div class="avskriftstext">${markdown(selected.transcript, selected)}</div><footer class="dokumentfot"><button type="button" data-action="source">${ui.sourceOpen ? 'Dölj källuppgift' : 'Visa källuppgift'}</button><span>Avskrift · Digitalisering 2026</span></footer>${ui.sourceOpen ? `<div class="kallruta"><strong>Källfil</strong><code>${escapeHtml(selected.source_path)}</code><p>Datering: ${escapeHtml(selected.dating)}. Avskriften visas utan modernisering.</p><p>Textfingeravtryck: <code>${escapeHtml(String(selected.transcript_sha256 || '').slice(0, 16))}…</code></p></div>` : ''}${versionHistoryHtml(selected)}</article>`;
 }
 
 function entityListHtml(documents, map) {
@@ -555,7 +551,7 @@ async function loadSourcePage(documentId, pageIndex) {
   const index = Math.max(0, Math.min(Number(pageIndex) || 0, sourceFiles.length - 1));
   const asset = sourcePreviewAsset(sourceFiles[index]);
   if (!documentRecord || !sourceFiles.length || !asset) throw new Error('Den valda handlingen saknar en visningsbar källfil.');
-  ui.originalDocumentId = documentId;
+  ui.sourceDocumentId = documentId;
   ui.sourcePage = index;
   sourceFileStates.set(asset.sha256, { status: 'loading', error: '' });
   render();
@@ -566,32 +562,7 @@ async function loadSourcePage(documentId, pageIndex) {
     sourceFileStates.set(asset.sha256, { status: 'error', error: error.message });
     throw error;
   } finally {
-    if (ui.originalDocumentId === documentId && ui.sourcePage === index) render();
-  }
-}
-
-async function downloadSourceOriginal(documentId, pageIndex) {
-  const documentRecord = documentRecords().find(item => item.id === documentId);
-  const sourceFile = documentRecord?.source_files?.[Number(pageIndex) || 0];
-  const asset = sourceFile?.original;
-  if (!asset) throw new Error('Den valda handlingen saknar ett bevarat original.');
-  sourceFileStates.set(asset.sha256, { status: 'loading', error: '' });
-  render();
-  try {
-    const url = await requestSourceFile(asset);
-    sourceFileStates.set(asset.sha256, { status: 'loaded', error: '' });
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = asset.filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setStatus(`${documentRecord.title} · det bevarade originalet hämtades`, 'ok');
-  } catch (error) {
-    sourceFileStates.set(asset.sha256, { status: 'error', error: error.message });
-    throw error;
-  } finally {
-    if (ui.originalDocumentId === documentId) render();
+    if (ui.sourceDocumentId === documentId && ui.sourcePage === index) render();
   }
 }
 
@@ -714,7 +685,7 @@ appNode.addEventListener('submit', event => {
 });
 appNode.addEventListener('click', event => {
   const documentButton = event.target.closest('[data-document-id]');
-  if (documentButton) { ui.selectedId = documentButton.dataset.documentId; ui.sourceOpen = false; ui.compareHlc = ''; ui.originalDocumentId = ''; ui.sourcePage = 0; ui.view = 'reader'; updateDocumentUrl(ui.selectedId); render(); requestAnimationFrame(() => $('#reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); return; }
+  if (documentButton) { ui.selectedId = documentButton.dataset.documentId; ui.sourceOpen = false; ui.compareHlc = ''; ui.sourceDocumentId = ''; ui.sourcePage = 0; ui.view = 'reader'; updateDocumentUrl(ui.selectedId); render(); requestAnimationFrame(() => $('#reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); return; }
   const decadeButton = event.target.closest('[data-decade]');
   if (decadeButton) { ui.period = `decade:${decadeButton.dataset.decade}`; if (decadeButton.dataset.categoryJump) ui.categories = new Set([decadeButton.dataset.categoryJump]); ui.view = 'reader'; render(); return; }
   const yearButton = event.target.closest('[data-year]');
@@ -735,10 +706,9 @@ appNode.addEventListener('click', event => {
   const actionNode = event.target.closest('[data-action]');
   const action = actionNode?.dataset.action;
   if (action === 'source') { ui.sourceOpen = !ui.sourceOpen; render(); }
-  if (action === 'show-original') loadSourcePage(ui.selectedId, 0).catch(error => setStatus(error.message, 'error'));
+  if (action === 'show-sources') loadSourcePage(ui.selectedId, 0).catch(error => setStatus(error.message, 'error'));
   if (action === 'source-page') loadSourcePage(ui.selectedId, actionNode.dataset.sourcePage).catch(error => setStatus(error.message, 'error'));
-  if (action === 'download-original') downloadSourceOriginal(ui.selectedId, actionNode.dataset.sourcePage).catch(error => setStatus(error.message, 'error'));
-  if (action === 'close-original') { ui.originalDocumentId = ''; ui.sourcePage = 0; render(); }
+  if (action === 'close-sources') { ui.sourceDocumentId = ''; ui.sourcePage = 0; render(); }
   if (action === 'close-compare') { ui.compareHlc = ''; render(); }
   if (action === 'clear') clearFilters({ includeSearch: true });
   if (action === 'connect') connectDropbox().catch(error => setStatus(error.message, 'error'));
