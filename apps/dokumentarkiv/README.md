@@ -19,7 +19,12 @@ registerkopplingar lagras som immutabla operationer i den gemensamma privata
 Dropbox App Foldern under `/dokumentarkiv/ops` och materialiseras lokalt i
 IndexedDB. Inbäddade innehållsbilder lagras hashbaserat under
 `/dokumentarkiv/bilder`, hämtas vid synk och bevaras lokalt för offlinevisning.
-Exakta registerträffar pekar på stabila ID:n i Matrikeln eller
+Dokumentens beskurna läskopior och bytebevarade original publiceras privat,
+hashbaserat under `/dokumentarkiv/kallor`. De förhämtas aldrig: först när
+användaren väljer `Visa original` hämtas den valda handlingens valda sida.
+Övriga sidor och handlingar lämnas orörda i Dropbox. Det bytebevarade
+originalet hämtas separat på uttrycklig begäran. Exakta registerträffar pekar
+på stabila ID:n i Matrikeln eller
 Båtregistret. Osäkra och saknade träffar markeras uttryckligen.
 
 ## Lokalt granskningsverktyg
@@ -45,7 +50,8 @@ källmappen och den lokala servern igång.
   startmastern till Dropbox utan att skriva över en befintlig, avvikande batch.
 - `npm run publicera -- "/Users/.../Dropbox/Appar/Korpholmen"` är det normala
   enstegsflödet: hashkontroll och arkivering av behandlade inkorgsoriginal,
-  ny versionsmaster, tester samt publicering av operationer och innehållsbilder.
+  ny versionsmaster, tester samt publicering av operationer, innehållsbilder
+  och privata källfiler.
 
 Källbilder, beskurna läskopior och avskriftsfiler ligger kvar orörda i
 `Digitalisering 2026`. Dokumentarkivet läser bara Markdown-avskrifterna när en

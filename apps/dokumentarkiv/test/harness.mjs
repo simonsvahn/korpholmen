@@ -14,6 +14,7 @@ let passed=0;
 async function test(name,action){try{await action();passed+=1;console.log(`✓ ${name}`)}catch(error){console.error(`✗ ${name}`);throw error}}
 
 const document=await readJson(resolve(PRIVATE,'initial-ops.json'));
+const sourceManifest=await readJson(resolve(PRIVATE,'källfiler.json'));
 const state=materialize(document.operations);
 const documents=state.listEntities('document').map(entity=>({id:entity.entity_id,...entity.fields}));
 const entities=state.listEntities('archive-entity').map(entity=>({id:entity.entity_id,...entity.fields}));
@@ -33,6 +34,14 @@ await test('startmastern innehåller hela det aktuella arkivet och giltiga opera
   assert.ok(documents.every(item=>JSON.stringify(item.entity_ids)===JSON.stringify(item.entity_links.map(link=>link.entity_id))));
   assert.ok(documents.every(item=>Array.isArray(item.story_track_ids)));
   assert.ok(documents.every(item=>Array.isArray(item.content_images)));
+  assert.ok(documents.every(item=>Array.isArray(item.source_files)&&item.source_files.length>0));
+  assert.ok(documents.flatMap(item=>item.source_files).every(file=>file.original&&file.original.sha256&&file.original.blob_path));
+  assert.ok(documents.flatMap(item=>item.source_files).every(file=>file.reading_copy||file.original.mime_type==='application/pdf'));
+  assert.ok(documents.flatMap(item=>item.source_files).flatMap(file=>[file.original,file.reading_copy].filter(Boolean)).every(file=>/^\/dokumentarkiv\/kallor\/(?:original|laskopior)\/[a-f0-9]{64}\.(?:heic|heif|jpg|png|pdf)$/.test(file.blob_path)));
+  assert.equal(sourceManifest.version,1);
+  assert.ok(sourceManifest.files.length>800);
+  assert.equal(new Set(sourceManifest.files.map(file=>file.blob_path)).size,sourceManifest.files.length);
+  assert.ok(sourceManifest.files.every(file=>file.source_file&&file.sha256&&file.mime_type));
   assert.ok(documents.flatMap(item=>item.content_images).length>=6);
   assert.ok(documents.flatMap(item=>item.content_images).every(image=>/^\/dokumentarkiv\/bilder\/[a-f0-9]{64}\.(?:jpg|png|webp)$/.test(image.blob_path)));
   assert.ok(documents.every(item=>item.transcript_sha256&&Number.isInteger(item.word_count)));
@@ -146,6 +155,13 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(app.includes('renderQuestion'));
   assert.ok(app.includes('transcriptVersions'));
   assert.ok(app.includes('syncContentImages'));
+  assert.ok(app.includes('requestSourceFile'));
+  assert.ok(app.includes('loadSourcePage'));
+  assert.ok(app.includes('downloadSourceOriginal'));
+  assert.ok(app.includes("action === 'show-original'"));
+  assert.ok(app.includes('Endast den sida du väljer hämtas'));
+  assert.equal(app.includes('syncSourceFiles'),false);
+  assert.equal(app.includes('loadCachedSourceFiles'),false);
   assert.ok(app.includes("document.addEventListener('visibilitychange'"));
   assert.ok(app.includes("opsRoot: '/dokumentarkiv/ops'"));
   assert.ok(app.includes("opsRoot: '/fastigheter/ops', readOnly: true"));
@@ -167,6 +183,7 @@ await test('webbgränssnittet söker, filtrerar och visar hela avskriften',async
   assert.ok(styles.includes('.sambandskarta'));
   assert.ok(styles.includes('.platskarta'));
   assert.ok(styles.includes('.innehallsbild'));
+  assert.ok(styles.includes('.kallfilsvisare'));
   assert.ok(styles.includes('@media print'));
 });
 
@@ -181,6 +198,8 @@ await test('enstegsflödet planerar säker arkivering och hashbaserad bildpublic
   assert.ok(archiver.includes('Hash ändrades vid flytt'));
   assert.ok(archiver.includes('02 Arkiverade inkorgsoriginal'));
   assert.ok(seed.includes('innehållsbilder.json'));
+  assert.ok(seed.includes('källfiler.json'));
+  assert.ok(seed.includes('dokumentarkiv\\/kallor'));
   assert.ok(seed.includes('COPYFILE_EXCL'));
 });
 

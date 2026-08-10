@@ -178,6 +178,39 @@ button { color: inherit; }
 .kallruta strong { color: var(--hav); display: block; font-size: 9px; letter-spacing: .12em; margin-bottom: 5px; text-transform: uppercase; }
 .kallruta code { overflow-wrap: anywhere; }
 .kallruta p { margin: 8px 0 0; }
+.dokumentverktyg { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.dokumentverktyg .visa-original { background: var(--hav); border: 0; border-radius: 999px; color: white; cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 9px 13px; text-transform: uppercase; }
+.dokumentverktyg .visa-original:hover { background: var(--rod); }
+.dokumentverktyg > span { color: var(--svart-mjuk); font-size: 8px; line-height: 1.4; max-width: 240px; }
+.kallfilsvisare { background: #f3eddf; border: 1px solid rgba(18,60,70,.18); margin: 30px -34px 38px; padding: 18px; }
+.kallfilsvisare > header { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; }
+.kallfilsvisare > header h3 { color: var(--hav); font-family: var(--serif); font-size: 25px; font-weight: 500; margin: 1px 0 4px; }
+.kallfilsvisare > header p:not(.overrad) { color: var(--svart-mjuk); font-family: var(--serif); font-size: 12px; line-height: 1.45; margin: 0; max-width: 470px; }
+.kallfilsvisare > header button { background: none; border: 0; color: var(--rod); cursor: pointer; flex: 0 0 auto; font-size: 9px; font-weight: 800; padding: 3px 0; text-transform: uppercase; }
+.kallfilssidor { display: flex; gap: 6px; margin: 16px 0 10px; overflow-x: auto; padding-bottom: 3px; }
+.kallfilssidor button { align-items: center; background: white; border: 1px solid var(--linje); cursor: pointer; display: flex; flex: 0 0 auto; gap: 7px; min-width: 72px; padding: 7px 9px; text-align: left; }
+.kallfilssidor button.aktiv { background: var(--hav); border-color: var(--hav); color: white; }
+.kallfilssidor button span { font-family: var(--serif); font-size: 16px; }
+.kallfilssidor button small { color: var(--svart-mjuk); font-size: 7px; text-transform: uppercase; }
+.kallfilssidor button.aktiv small { color: rgba(255,255,255,.72); }
+.kallfilsbild { background: #ddd5c5; border: 1px solid rgba(18,60,70,.16); margin: 0; }
+.kallfilsbild img { background: #d6d0c4; display: block; height: auto; max-height: 78vh; object-fit: contain; width: 100%; }
+.kallfilsbild iframe { background: white; border: 0; display: block; height: min(78vh,820px); min-height: 560px; width: 100%; }
+.kallfilsbild figcaption { align-items: baseline; background: white; color: var(--svart-mjuk); display: flex; flex-wrap: wrap; font-size: 9px; gap: 7px 12px; line-height: 1.4; padding: 10px 12px; }
+.kallfilsbild figcaption strong { color: var(--hav); text-transform: uppercase; }
+.kallfilsbild figcaption span { overflow-wrap: anywhere; }
+.kallfilplatshallare { align-items: center; aspect-ratio: 4/3; background: linear-gradient(135deg,rgba(18,60,70,.08),rgba(189,148,81,.15)); color: var(--svart-mjuk); display: flex; flex-direction: column; gap: 8px; justify-content: center; min-height: 280px; padding: 28px; text-align: center; }
+.kallfilplatshallare strong { font-family: var(--serif); font-size: 15px; font-weight: 500; }
+.kallfilplatshallare small { font-size: 8px; text-transform: uppercase; }
+.kallfilplatshallare button { background: var(--hav); border: 0; border-radius: 999px; color: white; cursor: pointer; font-size: 9px; font-weight: 800; margin-top: 4px; padding: 8px 12px; text-transform: uppercase; }
+.kallfilspinner { animation: kallfilrotation .8s linear infinite; border: 2px solid rgba(18,60,70,.18); border-radius: 50%; border-top-color: var(--hav); height: 26px; width: 26px; }
+@keyframes kallfilrotation { to { transform: rotate(360deg); } }
+.kallfilsverktyg { align-items: center; background: white; border-top: 1px solid var(--linje); display: flex; gap: 18px; justify-content: space-between; padding: 13px 12px; }
+.kallfilsverktyg > div { min-width: 0; }
+.kallfilsverktyg span, .kallfilsverktyg small { color: var(--svart-mjuk); display: block; font-size: 7px; letter-spacing: .05em; text-transform: uppercase; }
+.kallfilsverktyg strong { display: block; font-family: var(--serif); font-size: 11px; margin: 3px 0; overflow-wrap: anywhere; }
+.kallfilsverktyg button { background: var(--rod); border: 0; border-radius: 999px; color: white; cursor: pointer; flex: 0 0 auto; font-size: 8px; font-weight: 800; padding: 9px 12px; text-transform: uppercase; }
+.kallfilsverktyg button:disabled { cursor: wait; opacity: .62; }
 .versionshistorik { align-items: center; border-top: 1px solid var(--linje); display: flex; gap: 20px; justify-content: space-between; margin-top: 28px; padding-top: 20px; }
 .versionshistorik h3 { color: var(--hav); font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 0; }
 .versioner { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
@@ -409,6 +442,12 @@ button { color: inherit; }
   .papper::before { left: 20px; right: 20px; }
   .halslagskant { display: none; }
   .dokumenthuvud h2 { font-size: 32px; }
+  .dokumentverktyg { align-items: flex-start; flex-direction: column; }
+  .kallfilsvisare { margin-left: -16px; margin-right: -16px; padding: 13px; }
+  .kallfilsvisare > header { flex-direction: column; gap: 8px; }
+  .kallfilplatshallare { aspect-ratio: auto; width: 100%; }
+  .kallfilsbild iframe { min-height: 430px; }
+  .kallfilsverktyg { align-items: flex-start; flex-direction: column; }
   .avskriftstext { font-size: 17px; line-height: 1.68; }
   .avskriftstext pre { font-size: 11px; margin-left: -12px; margin-right: -12px; padding: 15px; }
   .tabellram { margin-left: -18px; margin-right: -18px; }
@@ -428,7 +467,7 @@ button { color: inherit; }
 }
 @media print {
   body { background: white; }
-  .sidhuvud, .vynavigering, .sokband, .dokumentlista, .samband, .entitetsrad, .dokumentfot, .halslagskant, .versionshistorik, .versionsjamforelse { display: none; }
+  .sidhuvud, .vynavigering, .sokband, .dokumentlista, .samband, .entitetsrad, .dokumentverktyg, .kallfilsvisare, .dokumentfot, .halslagskant, .versionshistorik, .versionsjamforelse { display: none; }
   .appvy, .lasvy { display: block; padding: 0; }
   .papper { box-shadow: none; max-width: none; padding: 1.5cm; }
 }

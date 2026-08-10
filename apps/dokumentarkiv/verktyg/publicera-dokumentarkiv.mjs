@@ -47,7 +47,7 @@ try{
   };
   run('Bygger aktuell arkivmaster',['verktyg/bygg-startmaster.mjs'],env);
   run('Validerar Dokumentarkivet',['test/harness.mjs'],env);
-  run('Publicerar privat master och innehållsbilder till Dropbox',['verktyg/skriv-dropbox-startmaster.mjs',dropboxRoot],env);
+  run('Publicerar privat master, innehållsbilder och källfiler till Dropbox',['verktyg/skriv-dropbox-startmaster.mjs',dropboxRoot],env);
   await skrivArkiveringslogg(moved,archivePlan.paths.archiveRoot);
   console.log(JSON.stringify({
     migration_tag:migrationTag,
