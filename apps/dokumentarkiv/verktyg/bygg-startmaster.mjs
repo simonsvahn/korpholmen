@@ -238,11 +238,8 @@ function transcript(text) {
 }
 
 const sourceMimeType = extension => ({
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
   '.pdf': 'application/pdf',
 })[extension.toLocaleLowerCase('sv')] || null;
 
@@ -360,7 +357,7 @@ const includedArchiveFiles = [];
 const excludedDocuments = [];
 const usedEntityIds = new Set();
 
-async function archiveAsset(sourceFile, filename, expectedSha256, role) {
+async function archiveAsset(sourceFile, filename, expectedSha256) {
   if (unavailableProvenanceFile(filename)) return null;
   const extension = extname(filename).toLocaleLowerCase('sv');
   const mimeType = sourceMimeType(extension);
@@ -374,8 +371,8 @@ async function archiveAsset(sourceFile, filename, expectedSha256, role) {
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     if (expectedSha256 && sha256 !== expectedSha256.toLocaleLowerCase('sv')) continue;
     const normalizedExtension = extension === '.jpeg' ? '.jpg' : extension;
-    const blobPath = `/dokumentarkiv/kallor/${role === 'original' ? 'original' : 'laskopior'}/${sha256}${normalizedExtension}`;
-    const asset = { filename, sha256, mime_type: mimeType, blob_path: blobPath, source_file: candidate, role };
+    const blobPath = `/dokumentarkiv/kallor/laskopior/${sha256}${normalizedExtension}`;
+    const asset = { filename, sha256, mime_type: mimeType, blob_path: blobPath, source_file: candidate, role: 'visningskopia' };
     includedArchiveFiles.push(asset);
     return asset;
   }
@@ -389,17 +386,18 @@ async function sourceFileRecords(text, sourceFile) {
   for (const [index, row] of rows.entries()) {
     if (unavailableProvenanceFile(row.canonical_original)) continue;
     if (!/^[a-f0-9]{64}$/i.test(row.original_sha256 || '')) throw new Error(`Ogiltig originalhash i ${sourceFile}: ${row.original_filename}`);
-    const original = await archiveAsset(sourceFile, row.canonical_original, row.original_sha256, 'original');
-    const readingCopy = unavailableProvenanceFile(row.reading_copy)
-      ? null
-      : await archiveAsset(sourceFile, row.reading_copy, null, 'laskopia');
-    if (!readingCopy && original.mime_type !== 'application/pdf') throw new Error(`Bildoriginalet saknar beskuren läskopia i ${sourceFile}: ${row.original_filename}`);
+    const hasReadingCopy = !unavailableProvenanceFile(row.reading_copy);
+    const displayCopy = await archiveAsset(
+      sourceFile,
+      hasReadingCopy ? row.reading_copy : row.canonical_original,
+      hasReadingCopy ? null : row.original_sha256,
+    );
+    if (!hasReadingCopy && displayCopy.mime_type !== 'application/pdf') throw new Error(`Bildoriginalet saknar beskuren JPG-läskopia i ${sourceFile}: ${row.original_filename}`);
     const publicAsset = ({ source_file, role, ...asset }) => asset;
     records.push({
       order: index + 1,
       original_filename: row.original_filename,
-      original: publicAsset(original),
-      reading_copy: readingCopy ? publicAsset(readingCopy) : null,
+      display_copy: publicAsset(displayCopy),
     });
   }
   return { records, originalNames: rows.map(row => row.original_filename) };
@@ -549,4 +547,4 @@ await writeFile(resolve(OUT, 'källfiler.json'), `${JSON.stringify({
     .sort((a, b) => a.blob_path.localeCompare(b.blob_path, 'sv')),
 }, null, 2)}\n`);
 
-console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${includedContentImages.length} innehållsbilder, ${includedArchiveFiles.length} källfilsreferenser, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);
+console.log(`Dokumentarkivets startmaster byggd: ${documents.length} dokument, ${usedEntityIds.size} entiteter, ${includedContentImages.length} innehållsbilder, ${includedArchiveFiles.length} visningskopiereferenser, ${pendingInboxFiles.length} väntande inkorgsfiler, ${operations.length} operationer.`);

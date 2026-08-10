@@ -14,6 +14,7 @@ assert.match(app, /const LOCAL_REVIEW_URL = 'http:\/\/127\.0\.0\.1:4317\/';/);
 assert.match(app, /data-local-review-link/);
 assert.match(app, /Starta granskningsverktyget\.command/);
 assert.match(styles, /\.granskningsverktyg/);
-assert.match(readme, /Markdown-filerna, originalen och läskopiorna publiceras inte/);
+assert.match(readme, /Dropbox får endast kopior av de beskurna/);
+assert.match(readme, /samtliga källfiler ligger kvar orörda/);
 
 console.log('✓ Dokumentarkivet publicerar en datafri länk till det lokala granskningsverktyget.');
