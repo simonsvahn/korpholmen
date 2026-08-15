@@ -1,12 +1,12 @@
 # Aktuellt läge
 
-Senast kontrollerad: 2026-08-15.
+Senast kontrollerad: 2026-08-16.
 
 | Master | Aktiv generation 2 | Skrivläge | Nästa steg |
 |---|---:|---|---|
 | Personer och familjer | revision 21 | Skrivskyddad | Den vanliga appen läser nu V2 direkt; separat writer-byte planeras först när ett enkelt personformulär finns |
 | Matrikel | revision 10 | Aktiv writer | Fortsatt normal användning och logikkontroll |
-| Båtregister | revision 4 | Aktiv writer | Arbeta vidare och granska direkt i den vanliga V2-appen; generation 1 är fryst och bevarad som arkiv |
+| Båtregister | revision 5 | Aktiv writer | Arbeta vidare och granska direkt i den vanliga V2-appen; generation 1 och revision 4 är bevarade som återställningspunkter |
 | Fastigheter | revision 22 | Aktiv writer | Fortsatt normal användning och kontroll av ändringskvitton |
 | Dokumentarkiv | revision 4 | Skrivskyddad | Den vanliga appen läser nu V2; fortsätt dokumentgranskning och gör writer-byte senare |
 | Kartdata | revision 1 | Skrivskyddad | Den vanliga appen läser nu V2 och Fastighetsmaster; writer-byte senare |
@@ -49,6 +49,17 @@ orörd och en separat fullbackup finns från före korrigeringen. Båtappen
 försöker först med den lokala läskopian och hämtar annars den SHA-refererade
 bilden från `/batregister/bilder`; webbläsartestet visar 122 av 122
 bildförsedda båtar utan en trasig bild.
+
+Revision 5 är aktiv efter en separat källkontroll mot de fulla båtbladen. Sex
+felaktiga länkar från utsnitt av tvåbåtsblad har tagits bort och tre korrekta
+utsnitt har lagts till för Igor, Gösta Jansson och Snabbt ut till öarna. Linje
+3 behåller sitt redan korrekta utsnitt. Appen kontrollerar dessutom varje
+cachad bildblobbs SHA-256 före visning, så en gammal felbild kan inte längre
+återanvändas för en ny eller rättad bildpost.
+
+Backupen före revision 5 finns i:
+
+`/Users/simon/Dropbox/AI/Projekt/9 Arkiv/Korpholmen säkerhetskopior/2026-08-16 före bildreparation Båtregister`
 
 ## Båtregistrets äldre läskomplement
 

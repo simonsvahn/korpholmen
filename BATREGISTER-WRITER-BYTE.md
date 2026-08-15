@@ -60,6 +60,20 @@ skapade aktiv revision 4 med 140 bildposter för 122 båtar. Ingen generation
 1-post ändrades. Före korrigeringen skapades en separat fullbackup i
 Korpholmens säkerhetskopiearkiv.
 
+Den 16 augusti kontrollerades bildkopplingarna även mot de fulla båtbladen,
+inte bara de beskurna bildfilerna. Där framgick att flera blad innehåller två
+båtar och att några automatiskt namngivna utsnitt hade hämtats från fel halva.
+Revision 5 tog därför bort sex felaktiga bildlänkar för Linje 3, Igor, Gösta
+Jansson och Snabbt ut till öarna. Tre nya källnära utsnitt skapades ur de fulla
+PDF-bladen för de båtar som annars skulle sakna korrekt bild. Öskaret och
+Sviholmen I delar avsiktligt bild eftersom samma fotografi visar båda; Piff och
+Puff delar avsiktligt en gemensam bild.
+
+Appen verifierar nu den hämtade eller lokalt cachade bildblobben mot bildpostens
+SHA-256 innan den visas. En gammal blob med rätt sökväg men fel innehåll kastas
+och ersätts, vilket hindrar att en tidigare felkoppling lever kvar i
+webbläsarcachen efter att mastern har rättats.
+
 ## Återställning
 
 Säkerhetskopian ligger utanför projektet i den daterade arkivmapp som anges som

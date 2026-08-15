@@ -4,6 +4,18 @@ const DEFAULT_MAX_FILE_BYTES = 40 * 1024 * 1024;
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
+export async function imageBlobSha256(blob, subtle = globalThis.crypto?.subtle) {
+  if (!(blob instanceof Blob)) throw new TypeError('Bildkontrollen kräver en Blob');
+  if (!subtle?.digest) throw new Error('Webbläsaren saknar stöd för SHA-256');
+  const bytes = new Uint8Array(await subtle.digest('SHA-256', await blob.arrayBuffer()));
+  return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function imageBlobMatchesSha256(blob, expectedSha256, subtle = globalThis.crypto?.subtle) {
+  if (!expectedSha256) return true;
+  return await imageBlobSha256(blob, subtle) === String(expectedSha256).toLowerCase();
+}
+
 export function fitImageDimensions(width, height, maxDimension = DEFAULT_MAX_DIMENSION) {
   const safeWidth = Number(width);
   const safeHeight = Number(height);

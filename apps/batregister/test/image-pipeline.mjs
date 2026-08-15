@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { MemoryStore } from '../../../packages/core/data-layer.js';
 import {
   fitImageDimensions,
+  imageBlobMatchesSha256,
+  imageBlobSha256,
   prepareImageForStorage,
   uploadPendingImageBlobs,
 } from '../src/image-pipeline.js';
@@ -17,6 +19,15 @@ async function test(name, action) {
 await test('bilddimensioner skalas proportionellt och förstoras aldrig', () => {
   assert.deepEqual(fitImageDimensions(5000, 2500, 2500), { width: 2500, height: 1250, resized: true });
   assert.deepEqual(fitImageDimensions(800, 600, 2500), { width: 800, height: 600, resized: false });
+});
+
+await test('bildblobbar identifieras och avvisas när kontrollsumman inte stämmer', async () => {
+  const blob = new Blob(['Atterbom']);
+  const digest = await imageBlobSha256(blob);
+  assert.equal(digest, '4c52fcb34d380ffb5cfd6f446e93e132754d98b6d3fd7df3208022f16270d634');
+  assert.equal(await imageBlobMatchesSha256(blob, digest), true);
+  assert.equal(await imageBlobMatchesSha256(blob, '0'.repeat(64)), false);
+  assert.equal(await imageBlobMatchesSha256(blob, ''), true);
 });
 
 await test('stora bilder orienteras, skalas ned och kodas om före lagring', async () => {
@@ -96,6 +107,8 @@ await test('operationssynken körs före bildfaserna och startbildsframsteg spar
   assert.ok(operations >= 0 && operations < bootstrapImages && bootstrapImages < queuedImages);
   assert.match(source, /completed_paths:\[\.\.\.completed\]/);
   assert.match(source, /failures\.push\(\{path:file\.dropbox_path/);
+  assert.match(source, /data-image-sha256/);
+  assert.match(source, /imageBlobMatchesSha256\(blob, expectedSha256\)/);
 });
 
 console.log(`\n${passed} bildpipeline-kontrakt godkända.`);

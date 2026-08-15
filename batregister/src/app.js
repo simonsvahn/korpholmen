@@ -38,10 +38,11 @@ import {
   searchPeopleForConnection,
 } from './connection-filter.js?v=2026-08-05-paket-3';
 import {
+  imageBlobMatchesSha256,
   prepareImageForStorage,
   uploadBlobWithRetry,
   uploadPendingImageBlobs,
-} from './image-pipeline.js';
+} from './image-pipeline.js?v=2026-08-16-batregister-v2-2';
 import {
   boatDisplayHeading,
   boatDisplayName,
@@ -89,9 +90,9 @@ import {
   removeSpecReviewDecision,
   saveSpecReviewDecision,
 } from './spec-review-decisions.js?v=2026-08-06-spec-review-3';
-import { createBatregisterActiveRuntime } from './batregister-runtime.js?v=2026-08-15-batregister-v2-1';
-import { createBatregisterV2Controller } from './batregister-v2-ui.js?v=2026-08-15-batregister-v2-1';
-import { createBatregisterWriter } from './batregister-writer.js?v=2026-08-15-batregister-v2-1';
+import { createBatregisterActiveRuntime } from './batregister-runtime.js?v=2026-08-16-batregister-v2-2';
+import { createBatregisterV2Controller } from './batregister-v2-ui.js?v=2026-08-16-batregister-v2-2';
+import { createBatregisterWriter } from './batregister-writer.js?v=2026-08-16-batregister-v2-2';
 import {
   DROPBOX_CLIENT_ID,
   DROPBOX_SCOPES,
@@ -567,7 +568,7 @@ function imageElement(boat, image, role, className, index = 0) {
   const label = imageKindLabel(image.kind);
   const visibleName = boat.display_name || boatDisplayName(boat);
   return `<figure class="boat-media ${escapeHtml(image.kind || 'boat-photo')}">
-    <img class="${className}" alt="${escapeHtml(`${visibleName}${index ? `, bild ${index + 1}` : ''}`)}" ${source ? `src="${escapeHtml(source)}"` : ''} data-image-path="${escapeHtml(ref.dropbox_path || '')}" style="${image.focus ? `object-position:${escapeHtml(image.focus)}` : ''}">
+    <img class="${className}" alt="${escapeHtml(`${visibleName}${index ? `, bild ${index + 1}` : ''}`)}" ${source ? `src="${escapeHtml(source)}"` : ''} data-image-path="${escapeHtml(ref.dropbox_path || '')}" data-image-sha256="${escapeHtml(ref.sha256 || '')}" style="${image.focus ? `object-position:${escapeHtml(image.focus)}` : ''}">
     ${label ? `<figcaption>${escapeHtml(label)}${image.caption ? ` · ${escapeHtml(image.caption)}` : ''}</figcaption>` : ''}
   </figure>`;
 }
@@ -601,18 +602,23 @@ function card(boat) {
     </span></button>`;
 }
 
-async function cachedBlob(path, transport = null) {
+async function cachedBlob(path, transport = null, expectedSha256 = '') {
   if (!path) return null;
-  if (imageLoads.has(path)) return imageLoads.get(path);
+  const loadKey = `${path}|${expectedSha256}`;
+  if (imageLoads.has(loadKey)) return imageLoads.get(loadKey);
   const promise = (async () => {
     let blob = await store.getBlob(path);
+    if (blob && !await imageBlobMatchesSha256(blob, expectedSha256)) blob = null;
     if (!blob && transport) {
       blob = await transport.getBlob(path);
+      if (!await imageBlobMatchesSha256(blob, expectedSha256)) {
+        throw new Error(`Bildfilens kontrollsumma stämmer inte: ${path}`);
+      }
       await store.putBlob(path, blob);
     }
     return blob;
-  })().finally(() => imageLoads.delete(path));
-  imageLoads.set(path, promise);
+  })().finally(() => imageLoads.delete(loadKey));
+  imageLoads.set(loadKey, promise);
   return promise;
 }
 
@@ -641,13 +647,17 @@ async function hydrateImages(scope = document) {
     : null;
   const loadRemote = async node => {
     const path = node.dataset.imagePath;
+    const expectedSha256 = node.dataset.imageSha256 || '';
     try {
-      let blob = await cachedBlob(path);
+      let blob = await cachedBlob(path, null, expectedSha256);
       if (!blob) {
         blob = await localImageBlob(path);
+        if (blob && !await imageBlobMatchesSha256(blob, expectedSha256)) {
+          throw new Error(`Den lokala bildfilens kontrollsumma stämmer inte: ${path}`);
+        }
         if (blob) await store.putBlob(path, blob);
       }
-      if (!blob && transport) blob = await cachedBlob(path, transport);
+      if (!blob && transport) blob = await cachedBlob(path, transport, expectedSha256);
       if (blob && node.isConnected) node.src = objectUrl(path, blob);
     } catch (error) {
       if (!isOfflineError(error)) node.alt = `Bild kunde inte hämtas: ${error.message}`;
@@ -666,25 +676,29 @@ async function hydrateImages(scope = document) {
   await mapConcurrent(allNodes.filter(node => !node.src), 6, loadRemote);
 }
 
-function allImagePaths() {
-  return unique(boatRecords().flatMap(boat => (boat.images || []).flatMap(image => [image.thumb?.dropbox_path, image.full?.dropbox_path])));
+function allImageRefs() {
+  return [...new Map(boatRecords().flatMap(boat => (boat.images || []).flatMap(image => [image.thumb, image.full]))
+    .filter(ref => ref?.dropbox_path)
+    .map(ref => [ref.dropbox_path, ref])).values()];
 }
 
 async function cacheAllBoatImages(transport) {
-  const paths = allImagePaths();
+  const refs = allImageRefs();
   let downloaded = 0;
   const failures = [];
-  await mapConcurrent(paths, 4, async path => {
+  await mapConcurrent(refs, 4, async ref => {
+    const path = ref.dropbox_path;
     try {
-      if (await store.getBlob(path)) return;
-      await cachedBlob(path, transport);
+      const cached = await cachedBlob(path, null, ref.sha256 || '');
+      if (cached) return;
+      await cachedBlob(path, transport, ref.sha256 || '');
       downloaded += 1;
       if (downloaded === 1 || downloaded % 10 === 0) setStatus(`Säkrar bilder för offline-läge · ${downloaded}/${paths.length}`);
     } catch (error) {
       failures.push({ path, error, message: error?.message || String(error) });
     }
   });
-  return { total: paths.length, downloaded, failures };
+  return { total: refs.length, downloaded, failures };
 }
 
 function closeOptionsPanels() {
