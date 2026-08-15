@@ -15,7 +15,9 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
+import { GenerationCutoverGuard } from '../../../packages/core/generation-cutover.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js';
 import {
   FAMILY_UNIT_TYPE,
   KIN_GROUP_TYPE,
@@ -87,6 +89,9 @@ import {
   removeSpecReviewDecision,
   saveSpecReviewDecision,
 } from './spec-review-decisions.js?v=2026-08-06-spec-review-3';
+import { createBatregisterActiveRuntime } from './batregister-runtime.js?v=2026-08-15-batregister-v2-1';
+import { createBatregisterV2Controller } from './batregister-v2-ui.js?v=2026-08-15-batregister-v2-1';
+import { createBatregisterWriter } from './batregister-writer.js?v=2026-08-15-batregister-v2-1';
 import {
   DROPBOX_CLIENT_ID,
   DROPBOX_SCOPES,
@@ -159,6 +164,11 @@ let localSourceManifest = null;
 let sourceManifestRevision = 0;
 let ownerReviewBatchMode = false;
 let specReviewDocument = null;
+let batregisterV2Mode = false;
+let batregisterV2Runtime = null;
+let batregisterV2Writer = null;
+let batregisterV2Controller = null;
+let generationOneGuard = null;
 const ownerReviewBatchSelection = new Set();
 const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelContextRevision}:${sourceManifestRevision}`);
 
@@ -247,6 +257,25 @@ function offerUndo(message, restoreEntries, restoredMessage) {
 }
 
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:batregister-device-id', prefix: 'bat-web-' });
+
+function generationOneTransport(token) {
+  const markerTransport = new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-cutover-read', opsRoot: '/batregister/ops', readOnly: true });
+  generationOneGuard = new GenerationCutoverGuard({ app: 'batregister', transport: markerTransport, store });
+  return new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-batregister',
+    opsRoot: '/batregister/ops',
+    writeGuard: context => generationOneGuard.assertGeneration1Writable(context),
+  });
+}
+
+async function assertGenerationOneWritable() {
+  if (batregisterV2Mode) return true;
+  if (generationOneGuard) return generationOneGuard.assertGeneration1Writable({ source: 'batregister-v1-editor' });
+  const cachedOnly = { getJson: async () => { const error = new Error('saknas'); error.status = 409; error.code = 'path/not_found'; throw error; } };
+  const guard = new GenerationCutoverGuard({ app: 'batregister', transport: cachedOnly, store });
+  return guard.assertGeneration1Writable({ source: 'batregister-v1-editor' });
+}
 
 function redirectUri() {
   return new URL(isSourceTree ? '../../' : '../', location.href).href;
@@ -536,8 +565,9 @@ function imageElement(boat, image, role, className, index = 0) {
   const cached = imageUrls.get(ref.dropbox_path);
   const source = local || cached || '';
   const label = imageKindLabel(image.kind);
+  const visibleName = boat.display_name || boatDisplayName(boat);
   return `<figure class="boat-media ${escapeHtml(image.kind || 'boat-photo')}">
-    <img class="${className}" alt="${escapeHtml(`${boatDisplayName(boat)}${index ? `, bild ${index + 1}` : ''}`)}" ${source ? `src="${escapeHtml(source)}"` : ''} data-image-path="${escapeHtml(ref.dropbox_path || '')}" style="${image.focus ? `object-position:${escapeHtml(image.focus)}` : ''}">
+    <img class="${className}" alt="${escapeHtml(`${visibleName}${index ? `, bild ${index + 1}` : ''}`)}" ${source ? `src="${escapeHtml(source)}"` : ''} data-image-path="${escapeHtml(ref.dropbox_path || '')}" style="${image.focus ? `object-position:${escapeHtml(image.focus)}` : ''}">
     ${label ? `<figcaption>${escapeHtml(label)}${image.caption ? ` · ${escapeHtml(image.caption)}` : ''}</figcaption>` : ''}
   </figure>`;
 }
@@ -786,6 +816,7 @@ function setOwnerReviewOpen(open) {
 }
 
 function render() {
+  if (batregisterV2Mode) return batregisterV2Controller?.render();
   const all = boatRecords();
   const allPilots = pilotRecords();
   const pilots = currentPilotRecords(allPilots);
@@ -1325,6 +1356,7 @@ function renderDrawer(id) {
 }
 
 function openDrawer(id, { reviewDecision = false } = {}) {
+  if (batregisterV2Mode) return batregisterV2Controller?.open(id);
   selectedBoatId=id;
   drawerEditMode=false;
   ownerReviewDecisionMode=reviewDecision;
@@ -1332,7 +1364,7 @@ function openDrawer(id, { reviewDecision = false } = {}) {
   ownerReviewDraft=reviewDecision ? structuredClone(ownerReviewDocument?.decisions?.[id] || newOwnerReviewDecision(id)) : null;
   renderDrawer(id);
 }
-function closeDrawer() { selectedBoatId=null; drawerEditMode=false; ownerReviewDecisionMode=false; ownerReviewDraft=null; ownerReviewComposerTargets=[]; drawer.setAttribute('aria-hidden','true'); backdrop.hidden=true; drawerContent.innerHTML=''; }
+function closeDrawer() { if (batregisterV2Mode) return batregisterV2Controller?.close(); selectedBoatId=null; drawerEditMode=false; ownerReviewDecisionMode=false; ownerReviewDraft=null; ownerReviewComposerTargets=[]; drawer.setAttribute('aria-hidden','true'); backdrop.hidden=true; drawerContent.innerHTML=''; }
 
 function parseField(target) {
   const field = target.dataset.boatField;
@@ -1343,6 +1375,7 @@ function parseField(target) {
 }
 
 async function syncEdit(action) {
+  await assertGenerationOneWritable();
   await action(); render();
   try { await syncNow(); } catch (_) { setStatus('Sparat lokalt · synk kräver åtgärd','warning'); }
 }
@@ -1857,6 +1890,7 @@ async function importOwnerReviewBackup(file) {
 }
 
 async function syncNow() {
+  if (batregisterV2Mode) return syncBatregisterV2();
   if(syncPromise)return syncPromise;
   syncPromise=(async()=>{
     const hasCredential=Boolean(await store.getMeta(TOKEN_META));
@@ -1864,7 +1898,7 @@ async function syncNow() {
     const token=await currentAccessToken();
     if(!token){setStatus('Lokalt sparat · Dropbox ej ansluten','warning');connectButton.textContent='Anslut Dropbox';return null}
     connectButton.textContent='Synka Dropbox';setStatus('Synkar data…');
-    const transport=new DropboxTransport({accessToken:token,id:'dropbox-batregister',opsRoot:'/batregister/ops'});
+    const transport=generationOneTransport(token);
     let bootstrap=0;let bootstrapError=null;
     try{bootstrap=await uploadBootstrapOps(transport)}catch(error){bootstrapError=error;console.warn('Startmastern kunde inte laddas upp',error)}
     const result=await new SyncEngine({repository,transport}).syncOnce();
@@ -1888,6 +1922,121 @@ async function syncNow() {
   return syncPromise;
 }
 
+function batregisterV2WriteTransport(token) {
+  const root = '/batregister-generation2';
+  return new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-batregister-generation2-write',
+    opsRoot: `${root}/ops`,
+    writeGuard: ({ path }) => {
+      if (path !== root && !path.startsWith(`${root}/`)) throw new Error('Båtregistrets writer försökte skriva utanför sin egen namnrymd');
+    },
+  });
+}
+
+async function uploadBatregisterV2Image({ file, boat, writer }) {
+  if (!file || !boat || !writer) throw new Error('Båt, bild eller writer saknas.');
+  const prepared = await prepareImageForStorage(file);
+  const hashBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', await prepared.blob.arrayBuffer()));
+  const hash = [...hashBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  const path = `/batregister/bilder/${hash}.${prepared.extension}`;
+  const token = await currentAccessToken();
+  if (!token) throw new Error('Anslut Dropbox innan en bild sparas.');
+  const imageTransport = new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-v2-images', opsRoot: '/batregister/ops' });
+  await uploadBlobWithRetry({ transport: imageTransport, path, blob: prepared.blob });
+  await store.putBlob(path, prepared.blob);
+  objectUrl(path, prepared.blob);
+  const dimensions = prepared.width && prepared.height ? ` · ${prepared.width}×${prepared.height}px` : '';
+  const images = [...(boat.images || []), {
+    id: crypto.randomUUID(),
+    thumb: { dropbox_path: path, sha256: hash },
+    full: { dropbox_path: path, sha256: hash },
+    source: `Uppladdad ${new Date().toISOString()}${prepared.resized ? ` · nedskalad${dimensions}` : ''}`,
+  }];
+  return writer.saveBoat(boat.id, { images }, { manualComment: 'Bild tillagd i Båtregistret' });
+}
+
+async function syncBatregisterV2() {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    let localTransport = null;
+    if (isSourceTree) {
+      try {
+        const response = await fetch('/batregister-generation2/active.json', { method: 'HEAD', cache: 'no-store' });
+        if (response.ok) localTransport = new HttpReadTransport();
+      } catch { /* Dropbox eller cache används i stället. */ }
+    }
+    const token = localTransport ? null : await currentAccessToken();
+    if (!localTransport && !token) {
+      batregisterV2Writer = null;
+      batregisterV2Controller?.setWriter(null);
+      if (batregisterV2Runtime.hasData()) {
+        setStatus('Offline · senast verifierade Båtmaster visas', 'warning');
+        return null;
+      }
+      setStatus('Anslut Dropbox för att läsa Båtmastern', 'warning');
+      return null;
+    }
+    setStatus('Läser Båtmaster och Personmaster…');
+    const readTransport = localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-generation2-read', opsRoot: '/batregister-generation2/ops', readOnly: true });
+    const result = await batregisterV2Runtime.sync(readTransport);
+    batregisterV2Writer = result.writable && token ? createBatregisterWriter({ transport: batregisterV2WriteTransport(token), pendingStore: store }) : null;
+    if (batregisterV2Writer) await batregisterV2Writer.load();
+    batregisterV2Controller.setWriter(batregisterV2Writer);
+    connectButton.textContent = token ? 'Synka Dropbox' : 'Anslut Dropbox';
+    setStatus(`Båtmaster · revision ${result.boatRevision} · ${batregisterV2Writer ? 'skrivmaster' : result.writable ? 'anslut Dropbox för att skriva' : 'förhandsläge'}`, 'ok');
+    return result;
+  })().catch(error => {
+    console.error(error);
+    if (isOfflineError(error) && batregisterV2Runtime?.hasData()) {
+      batregisterV2Controller?.render();
+      setStatus('Offline · senast verifierade Båtmaster visas', 'warning');
+      return null;
+    }
+    setStatus(`Åtgärd krävs · ${error.message}`, 'error');
+    throw error;
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
+}
+
+async function activeBatregisterCutover(token) {
+  const missing = { getJson: async () => { const error = new Error('saknas'); error.status = 409; error.code = 'path/not_found'; throw error; } };
+  const transport = token ? new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-cutover-detect', opsRoot: '/batregister/ops', readOnly: true }) : missing;
+  const guard = new GenerationCutoverGuard({ app: 'batregister', transport, store });
+  return token ? guard.refresh({ force: true }) : guard.cachedMarker();
+}
+
+async function initBatregisterV2Mode() {
+  batregisterV2Mode = true;
+  bootstrapButton.hidden = true;
+  document.documentElement.dataset.batregisterV2 = 'true';
+  document.querySelector('.site-header .intro').textContent = 'Båtar, ägare och strukturerad tidslinje.';
+  batregisterV2Runtime = await createBatregisterActiveRuntime({ store }).init();
+  batregisterV2Controller = createBatregisterV2Controller({
+    runtime: batregisterV2Runtime,
+    content,
+    drawer,
+    drawerContent,
+    backdrop,
+    statusNode,
+    renderImage: imageMarkup,
+    renderGallery: drawerGalleryMarkup,
+    hydrateImages,
+    uploadImage: uploadBatregisterV2Image,
+    onSaved: async () => {
+      const token = await currentAccessToken();
+      if (!token) throw new Error('Revisionen sparades, men återläsning väntar tills Dropbox är ansluten.');
+      await batregisterV2Runtime.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-generation2-after-save', opsRoot: '/batregister-generation2/ops', readOnly: true }));
+      await batregisterV2Writer.load();
+    },
+  });
+  batregisterV2Controller.configureShell();
+  if (batregisterV2Runtime.hasData()) batregisterV2Controller.render();
+  await syncBatregisterV2();
+  const requested = new URL(location.href).searchParams.get('boat');
+  if (requested) batregisterV2Controller.open(requested, { updateUrl: false });
+}
+
 async function connectDropbox() {
   sessionStorage.setItem('korpholmen:oauth-return',new URL('batregister/',redirectUri()).pathname);
   const attempt=await beginDropboxOAuth({clientId:DROPBOX_CLIENT_ID,redirectUri:redirectUri(),scopes:DROPBOX_SCOPES});location.assign(attempt.url);
@@ -1906,10 +2055,17 @@ async function bootstrapLocal({ preview = false } = {}) {
   bootstrapButton.hidden=true;render();setStatus(preview?'Pilotdata laddad lokalt · ingen Dropbox-synk':'Startmaster aktiverad lokalt · anslut Dropbox för uppladdning','ok');
 }
 
-content.addEventListener('click',event=>{const target=event.target.closest('[data-boat-id]');if(target)openDrawer(target.dataset.boatId)});
+content.addEventListener('click',event=>{if(batregisterV2Mode){const target=event.target.closest('[data-v2-boat]');if(target)batregisterV2Controller.open(target.dataset.v2Boat);return}const target=event.target.closest('[data-boat-id]');if(target)openDrawer(target.dataset.boatId)});
 backdrop.addEventListener('click',closeDrawer);
 drawer.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close"]'))return closeDrawer();
+  if(batregisterV2Mode){
+    if(event.target.closest('[data-v2-edit-boat]'))return batregisterV2Controller.openBoatEditor(batregisterV2Runtime.getBoat(batregisterV2Controller.selectedBoatId));
+    if(event.target.closest('[data-v2-new-event]'))return batregisterV2Controller.openEventEditor();
+    const eventButton=event.target.closest('[data-v2-edit-event]');
+    if(eventButton){const boat=batregisterV2Runtime.getBoat(batregisterV2Controller.selectedBoatId);return batregisterV2Controller.openEventEditor((boat.events||[]).find(row=>row.id===eventButton.dataset.v2EditEvent))}
+    return;
+  }
   const sourceButton=event.target.closest('[data-view-source]');if(sourceButton)return openSourceViewer(sourceButton.dataset.viewSource);
   if(event.target.closest('[data-action="review-select-target"]'))return selectReviewComposerTarget();
   if(event.target.closest('[data-action="review-add-coowner"]'))return addReviewComposerCoowner();
@@ -1934,7 +2090,7 @@ drawer.addEventListener('click',event=>{
   if(event.target.closest('[data-action="delete-boat"]'))return deleteBoat();
   if(event.target.closest('[data-action="refresh-people"]'))return currentAccessToken().then(loadMatrikelPeople);
 });
-drawer.addEventListener('change',event=>{const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
+drawer.addEventListener('change',event=>{if(batregisterV2Mode){if(event.target.id==='v2-image-upload')batregisterV2Controller.handleImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'));return}const field=event.target.closest('[data-boat-field]');if(field)syncEdit(()=>repository.setField('boat',selectedBoatId,field.dataset.boatField,parseField(field)));if(event.target.id==='image-upload')uploadImage(event.target.files?.[0]).catch(error=>setStatus(`Bilden kunde inte sparas · ${error.message}`,'error'))});
 const renderSearch = debounce(render, 120);
 const renderConnectionSearch = debounce(() => {
   if (connectionFilterSearch.value.trim()) renderConnectionSearchResults();
@@ -1976,9 +2132,9 @@ connectionFilterResults.addEventListener('click',event=>{
 connectionFilterBrowse.addEventListener('click',()=>connectionFilterResults.hidden||connectionPanelMode!=='browse'?renderConnectionBrowseResults():closeConnectionSearch());
 connectionFilterClear.addEventListener('click',()=>selectConnectionFilter('',''));
 document.addEventListener('click',event=>{if(!event.target.closest('.connection-search-field'))closeConnectionSearch()});
-$('#type-options').addEventListener('click',event=>{const button=event.target.closest('[data-type-filter]');if(button){ui.type=button.dataset.typeFilter;render()}});
+$('#type-options').addEventListener('click',event=>{const button=event.target.closest('[data-type-filter]');if(button){if(batregisterV2Mode)return batregisterV2Controller.setFilter('category',button.dataset.typeFilter);ui.type=button.dataset.typeFilter;render()}});
 $('#pilot-options').addEventListener('click',event=>{const button=event.target.closest('[data-pilot-filter]');if(button){ui.pilot=button.dataset.pilotFilter;updatePilotUrl(ui.pilot);render()}});
-$('#image-options').addEventListener('click',event=>{const button=event.target.closest('[data-image-status]');if(button){ui.imageStatus=button.dataset.imageStatus;render()}});
+$('#image-options').addEventListener('click',event=>{const button=event.target.closest('[data-image-status]');if(button){if(batregisterV2Mode)return batregisterV2Controller.setFilter('image',button.dataset.imageStatus);ui.imageStatus=button.dataset.imageStatus;render()}});
 $('#name-options').addEventListener('click',event=>{const button=event.target.closest('[data-name-status]');if(button){ui.nameStatus=button.dataset.nameStatus;render()}});
 $('#quality-options').addEventListener('click',event=>{const button=event.target.closest('[data-quality-filter]');if(button){const filter=button.dataset.qualityFilter;if(ui.qualityFilters.has(filter))ui.qualityFilters.delete(filter);else ui.qualityFilters.add(filter);render()}});
 $('#group-options').addEventListener('click',event=>{const button=event.target.closest('[data-grouping]');if(button){ui.grouping=button.dataset.grouping;closeOptionsPanels();render()}});
@@ -2005,6 +2161,13 @@ ownerBatchDialog.addEventListener('change',event=>{const select=event.target.clo
 document.querySelectorAll('[data-close-panel]').forEach(button=>button.addEventListener('click',closeOptionsPanels));
 panelBackdrop.addEventListener('click',closeOptionsPanels);
 function clearFilter(key) {
+  if(batregisterV2Mode){
+    if(key==='all'||key==='search'){$('#search').value=''}
+    if(key==='all'||key==='type')batregisterV2Controller.category='';
+    if(key==='all'||key==='image')batregisterV2Controller.imageStatus='';
+    batregisterV2Controller.render();
+    return;
+  }
   if(key==='all'||key==='search'){ui.search='';$('#search').value=''}
   if(key==='all'||key==='connection'){ui.connection='';connectionFilter.value='';connectionFilterSearch.value=''}
   if(key==='all'||key==='type')ui.type='';
@@ -2018,14 +2181,23 @@ function clearFilter(key) {
 }
 $('#active-filters').addEventListener('click',event=>{const button=event.target.closest('[data-clear-filter]');if(button)clearFilter(button.dataset.clearFilter)});
 $('#clear-all-filters').addEventListener('click',()=>{clearFilter('all');closeOptionsPanels()});
-$('#add-boat').addEventListener('click',addBoat);connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal({preview:localPilotPreview}).catch(error=>setStatus(error.message,'error')));
+$('#add-boat').addEventListener('click',()=>batregisterV2Mode?batregisterV2Controller.openBoatEditor():addBoat());connectButton.addEventListener('click',()=>connectOrSyncDropbox().catch(()=>{}));bootstrapButton.addEventListener('click',()=>bootstrapLocal({preview:localPilotPreview}).catch(error=>setStatus(error.message,'error')));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(sourceViewer.open)return closeSourceViewer();if(ownerBatchDialog.open)return closeOwnerBatchDialog();if(ownerReviewOpen&&drawer.getAttribute('aria-hidden')==='true')setOwnerReviewOpen(false);else closeDrawer();closeConnectionSearch();closeOptionsPanels()}});window.addEventListener('online',()=>syncNow().catch(()=>{}));window.addEventListener('offline',()=>syncNow().catch(()=>{}));window.addEventListener('korpholmen:dropbox-ready',()=>syncNow().catch(()=>{}));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow().catch(()=>{})});
 window.addEventListener('pagehide',()=>{for(const url of imageUrls.values())URL.revokeObjectURL(url);imageUrls.clear()});
 
 async function init(){
   const serviceWorkerPromise=registerServiceWorker();
-  const db=await openSlaktlandskapDB({name:'korpholmen-batregister'});
+  const db=await openSlaktlandskapDB({name:'korpholmen-batregister',onBlocked:()=>setStatus('En annan Båtregister-flik blockerar uppdateringen · stäng den och ladda om','warning')});
   store=new IndexedDBStore(db);
+  await completeOAuthCallbackIfNeeded();
+  const parameters=new URL(location.href).searchParams;
+  const token=await currentAccessToken();
+  const cutover=await activeBatregisterCutover(token);
+  if(cutover?.state==='active'||(isSourceTree&&parameters.get('boatmaster')==='next')){
+    await initBatregisterV2Mode();
+    await serviceWorkerPromise;
+    return;
+  }
   repository=await new Repository({store,deviceId:await deviceId()}).init();
   matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();
   applyMatrikelMaster();
@@ -2045,7 +2217,7 @@ async function init(){
   bootstrapButton.hidden=!isSourceTree||boatRecords().length>0;
   if(requestedBoatId&&boatRecords().some(boat=>boat.id===requestedBoatId))selectedBoatId=requestedBoatId;
   render();
-  if(!localPilotPreview){await completeOAuthCallbackIfNeeded();await syncNow()}
+  if(!localPilotPreview){await syncNow()}
   else if(boatRecords().length)setStatus('Förhandsvisning · pilotdata laddad lokalt','ok');
   await serviceWorkerPromise;
 }

@@ -6,7 +6,7 @@ Senast kontrollerad: 2026-08-15.
 |---|---:|---|---|
 | Personer och familjer | revision 21 | Skrivskyddad | Används som stabil identitetsmaster; separat writer-byte planeras först när ett enkelt personformulär finns |
 | Matrikel | revision 10 | Aktiv writer | Fortsatt normal användning och logikkontroll |
-| Båtregister | revision 3 | Skrivskyddad | Koppla den byggda writern till ett enkelt redigeringsläge, säkerhetskopiera och slutprova före byte |
+| Båtregister | revision 3 | Förberedd writer | Enkelt V2-redigeringsläge byggt och webbläsartestat; fullbackup verifierad; kopieprov och publicering återstår före aktivering |
 | Fastigheter | revision 22 | Aktiv writer | Fortsatt normal användning och kontroll av ändringskvitton |
 | Dokumentarkiv | revision 4 | Skrivskyddad | Fortsätt dokumentgranskning; writer-byte senare |
 | Kartdata | revision 1 | Skrivskyddad | Normal läsning; writer-byte senare |

@@ -63,4 +63,11 @@ assert.equal((await computer.storage.getPending('batregister:computer-save')).st
 const invalid = createBatregisterWriter({ transport: remote, pendingStore: new MemoryStore(), now: () => '2026-08-15T19:02:00.000Z', createId: () => 'invalid' });
 await invalid.load();
 await assert.rejects(invalid.saveBoat(target.id, { category: 'flygplan' }), /category är ogiltig/);
-console.log('Båtregister V2-writer: provskrivning, domänvalidering och konfliktspärr godkända på datafri minneskopia');
+
+const lifecycle = createBatregisterWriter({ transport: remote, pendingStore: new MemoryStore(), now: () => '2026-08-15T19:03:00.000Z', createId: (() => { let index = 0; return () => `lifecycle-${++index}`; })() });
+await lifecycle.load();
+const deleted = await lifecycle.deleteBoat(target.id, { manualComment: 'Borttagningsprov' });
+assert.equal(deleted.master.data.boats.find(row => row.id === target.id).deleted_by, 'simon');
+const restored = await lifecycle.restoreBoat(target.id, { manualComment: 'Återställningsprov' });
+assert.equal(restored.master.data.boats.find(row => row.id === target.id).deleted_at, undefined);
+console.log('Båtregister V2-writer: provskrivning, tombstone/återställning, domänvalidering och konfliktspärr godkända på datafri minneskopia');

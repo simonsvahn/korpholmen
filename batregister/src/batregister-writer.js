@@ -5,7 +5,7 @@ import {
   RevisionMasterStorage,
   applyMasterChange,
   assertWriterDomainFields,
-} from '../../../packages/master-data-v2/index.js';
+} from '../master-data-v2/index.js';
 
 export const BATREGISTER_POINTER_PATH = '/batregister-generation2/active.json';
 
@@ -136,6 +136,7 @@ export class BatregisterWriter {
   saveIdentityRedirect(redirectId, patch, options) {
     return this.saveRecords([{ collection: 'identity_redirects', entity_id: redirectId, patch }], options);
   }
+
 
   deleteBoat(boatId, options) {
     return this.applyActions([{ collection: 'boats', entity_id: boatId, action: 'delete' }], options);
