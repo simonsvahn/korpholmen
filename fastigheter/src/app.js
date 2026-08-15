@@ -15,18 +15,24 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../core/data-layer.js';
-import { formatPropertyDisplayName, resolvePartyName } from '../core/master-data.js';
+import { GenerationCutoverGuard } from '../core/generation-cutover.js';
+import { PeopleMembershipMaster } from '../core/people-membership-master.js';
+import { resolvePartyName } from '../core/master-data.js';
 import { ReadOnlyMaster } from '../core/read-only-master.js';
+import { HttpReadTransport } from '../core/sync/http-read-transport.js';
 import {
   buildClaimChain,
   currentClaimMatchesNames,
   isUncertain,
   itemSortYear,
   roleLabel,
-  sameClaimIdentity,
   sourcePeriod,
 } from './timeline-model.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, KARTDATA_BOOTSTRAP_URL, LOCAL_BOOTSTRAP_URLS } from './config.js';
+import { createFastigheterActiveRuntime } from './fastigheter-runtime.js?v=2026-08-15-fastigheter-v2-preview-1';
+import { createFastigheterV2Controller } from './fastigheter-v2-ui.js?v=2026-08-15-fastigheter-v2-preview-1';
+import { createFastigheterWriter } from './fastigheter-writer.js?v=2026-08-15-fastigheter-v2-preview-1';
+import { initPropertyMasterComparison } from './master-compare.js';
 
 const $ = selector => document.querySelector(selector);
 const content = $('#content');
@@ -41,6 +47,7 @@ const TOKEN_META = 'dropbox:refresh-token';
 const BOOTSTRAP_META = 'bootstrap:fastigheter-current';
 const DATE_FIELDS = ['contract_date', 'possession_date', 'application_date', 'survey_date', 'approval_date', 'date_text'];
 const HIDDEN_PUBLIC_SOURCES = new Set(['APP-DIREKT', 'BIO-SIMON', 'FAST-1', 'FAST-2', 'MATR-EXCEL-2026', 'NOT-INTFAKTA']);
+const isMasterComparison = new URL(location.href).searchParams.get('propertymaster') === 'compare';
 
 let store;
 let repository;
@@ -51,6 +58,10 @@ let selectedPropertyId = null;
 let matrikelMaster;
 let kartdataMaster;
 let returnFocus = null;
+let fastigheterV2Mode = false;
+let fastigheterV2Runtime = null;
+let fastigheterV2Writer = null;
+let fastigheterV2Controller = null;
 const ui = { search: '', island: '', audit: '', yearFrom: '', yearTo: '' };
 const viewCache = createRevisionCache(() => `${repository?.revision || 0}:${matrikelMaster?.revision || 0}:${kartdataMaster?.revision || 0}`);
 
@@ -99,6 +110,22 @@ function setStatus(text, tone = '') {
 
 const deviceId = () => resolveDeviceId({ store, key: 'korpholmen:fastigheter-device-id', prefix: 'fastigheter-web-' });
 
+function generationOneTransport(token) {
+  const markerTransport = new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-fastigheter-cutover-read',
+    opsRoot: '/fastigheter/ops',
+    readOnly: true,
+  });
+  const guard = new GenerationCutoverGuard({ app: 'fastigheter', transport: markerTransport, store });
+  return new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-fastigheter',
+    opsRoot: '/fastigheter/ops',
+    writeGuard: context => guard.assertGeneration1Writable(context),
+  });
+}
+
 function redirectUri() { return new URL(isSourceTree ? '../../' : '../', location.href).href; }
 
 function eventYear(event) {
@@ -134,13 +161,7 @@ function currentOwners(propertyId) {
   const parties = partyMap();
   const owners = (assessment.owner_party_ids || []).map(id => {
     const party = parties.get(id);
-    return {
-      id,
-      personId: party?.person_id || null,
-      name: resolvePartyName(party, matrikelMaster) || party?.name || id,
-      display_surname: party?.display_surname || null,
-      party_type: party?.party_type || null,
-    };
+    return { id, personId: party?.person_id || null, name: resolvePartyName(party, matrikelMaster) || party?.name || id };
   });
   const confirmationSources = new Set(['FAST-1', 'FAST-2', 'BIO-SIMON', 'APP-DIREKT', 'MUNTLIG-ANN-BONNERSTIG-2021']);
   const confirmed = owners.length > 0 && (assessment.source_ids || []).some(id => confirmationSources.has(id));
@@ -149,11 +170,6 @@ function currentOwners(propertyId) {
     state: confirmed ? 'confirmed' : owners.length ? 'provisional' : 'missing',
     stateLabel: confirmed ? 'Bekräftad' : owners.length ? 'Behöver bekräftas' : 'Saknas',
   };
-}
-
-function propertyDisplayName(propertyOrId) {
-  const id = typeof propertyOrId === 'string' ? propertyOrId : propertyOrId?.id;
-  return formatPropertyDisplayName(id, currentOwners(id).owners);
 }
 
 function cleanHolder(value) {
@@ -176,7 +192,7 @@ function historyYears(propertyId) {
 
 function propertySearchText(property) {
   return [
-    property.id, propertyDisplayName(property), propertyIslandName(property),
+    property.id, propertyIslandName(property),
     ...currentOwners(property.id).owners.map(owner => owner.name),
     ...holdingClaimsFor(property.id).flatMap(claim => [claim.holder_text, claim.role, claim.period_text, claim.raw_text]),
     ...eventsFor(property.id).flatMap(event => [event.label, event.notes]),
@@ -221,7 +237,7 @@ function renderOverview() {
     const owners = currentOwners(property.id);
     const ownerHtml = owners.owners.length ? owners.owners.map(owner => personLink(owner.name, owner.personId)).join(', ') : '<span class="muted-text">Saknas</span>';
     return `<tr>
-      <td><button class="property-open" type="button" data-property-id="${escapeHtml(property.id)}"><b>${escapeHtml(propertyDisplayName(property))}</b><span>Öppna tidslinje</span></button></td>
+      <td><button class="property-open" type="button" data-property-id="${escapeHtml(property.id)}"><b>${escapeHtml(property.id)}</b><span>Öppna tidslinje</span></button></td>
       <td>${escapeHtml(propertyIslandName(property))}</td>
       <td>${ownerHtml}</td>
       <td><span class="state ${owners.state}">${owners.stateLabel}</span></td>
@@ -236,6 +252,7 @@ function renderOverview() {
 }
 
 function updateFilterOptions() {
+  if (fastigheterV2Mode) return;
   const island = $('#island-filter');
   const current = island.value;
   const values = unique(propertyRecords().map(propertyIslandName)).sort((a, b) => a.localeCompare(b, 'sv'));
@@ -244,6 +261,7 @@ function updateFilterOptions() {
 }
 
 function render() {
+  if (fastigheterV2Mode) return fastigheterV2Controller?.render();
   updateFilterOptions();
   content.innerHTML = renderOverview();
   if (selectedPropertyId) renderDrawer(selectedPropertyId);
@@ -300,7 +318,8 @@ function renderPropertyTimeline(propertyId) {
   let chain = buildClaimChain(holdingClaimsFor(propertyId));
   if (chain.length && claimMatchesCurrent(chain.at(-1), current)) chain = chain.slice(0, -1);
   const predecessors = predecessorCards(propertyId);
-  chain = chain.filter(claim => !predecessors.some(predecessor => sameClaimIdentity(predecessor, claim)));
+  const predecessorYears = new Set(predecessors.map(item => item.sort_year).filter(Boolean));
+  chain = chain.filter(claim => !predecessorYears.has(itemSortYear(claim)));
   const markers = timelineMarkers(propertyId);
   const entries = [];
   let markerIndex = 0;
@@ -386,7 +405,7 @@ function renderCommunity(propertyId) {
 function renderRelations(propertyId) {
   const relations = relationsFor(propertyId);
   if (!relations.length) return '';
-  return `<details class="drawer-fold"><summary>Fastighetsbildning och föregångare <span>${relations.length}</span></summary><div class="fold-content"><ul>${relations.map(relation => `<li>${escapeHtml(propertyRecords().some(property => property.id === relation.from_id) ? propertyDisplayName(relation.from_id) : relation.from_id)} → ${escapeHtml(propertyDisplayName(relation.to_property_id))}: ${escapeHtml(relation.relation)}</li>`).join('')}</ul></div></details>`;
+  return `<details class="drawer-fold"><summary>Fastighetsbildning och föregångare <span>${relations.length}</span></summary><div class="fold-content"><ul>${relations.map(relation => `<li>${escapeHtml(relation.from_id)} → ${escapeHtml(relation.to_property_id)}: ${escapeHtml(relation.relation)}</li>`).join('')}</ul></div></details>`;
 }
 
 function renderOpenQuestions(propertyId) {
@@ -399,7 +418,7 @@ function renderDrawer(id) {
   const property = propertyRecords().find(item => item.id === id);
   if (!property) return closeDrawer();
   const current = currentOwners(id);
-  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">Fastighet</p><h2>${escapeHtml(propertyDisplayName(property))}</h2><p>${escapeHtml(propertyIslandName(property))}</p></header>
+  drawerContent.innerHTML = `<header class="drawer-header"><p class="eyebrow dark">Fastighet</p><h2>${escapeHtml(property.id)}</h2><p>${escapeHtml(propertyIslandName(property))}</p></header>
     <section class="current-snapshot"><div><p class="snapshot-label">Nuvarande ägare</p><p class="snapshot-owners">${current.owners.length ? current.owners.map(owner => personLink(owner.name, owner.personId)).join(' · ') : 'Saknas'}</p></div><span class="state ${current.state}">${current.stateLabel}</span></section>
     ${renderPropertyTimeline(id)}
     <section class="drawer-lower">${renderRelations(id)}${renderOpenQuestions(id)}${renderCommunity(id)}${renderResearch(id)}</section>`;
@@ -414,6 +433,7 @@ function setPropertyInUrl(id) {
 }
 
 function openDrawer(id, { updateUrl = true, focusTarget = null } = {}) {
+  if (fastigheterV2Mode) return fastigheterV2Controller?.open(id, { updateUrl });
   selectedPropertyId = id;
   returnFocus = focusTarget || document.activeElement;
   renderDrawer(id);
@@ -422,6 +442,7 @@ function openDrawer(id, { updateUrl = true, focusTarget = null } = {}) {
 }
 
 function closeDrawer() {
+  if (fastigheterV2Mode) return fastigheterV2Controller?.close();
   selectedPropertyId = null;
   drawer.setAttribute('aria-hidden', 'true');
   backdrop.hidden = true;
@@ -477,12 +498,13 @@ async function uploadBootstrapOps(transport) {
 async function loadReferenceMasters(token) {
   if (!token) return [];
   return Promise.all([
-    matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
+    matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-people-membership-read', opsRoot: '/personer-familjer/ops', readOnly: true })),
     kartdataMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata-read', opsRoot: '/kartdata/ops', readOnly: true })),
   ]);
 }
 
 async function syncNow() {
+  if (fastigheterV2Mode) return syncFastigheterV2();
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
     const hasCredential = Boolean(await store.getMeta(TOKEN_META));
@@ -491,10 +513,10 @@ async function syncNow() {
     if (!token) { setStatus('Lokalt läsläge · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; }
     connectButton.textContent = 'Synka Dropbox';
     setStatus('Synkar…');
-    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter', opsRoot: '/fastigheter/ops' });
+    const transport = generationOneTransport(token);
     const bootstrap = await uploadBootstrapOps(transport);
     const result = await new SyncEngine({ repository, transport }).syncOnce();
-    await loadReferenceMasters(token).catch(error => console.warn('Matrikel- eller Kartdatareferenser kunde inte hämtas', error));
+    await loadReferenceMasters(token).catch(error => console.warn('Person-, medlems- eller Kartdatareferenser kunde inte hämtas; lokal cache används', error));
     render();
     setStatus(`Synkad · ${bootstrap + result.uploadedOps} upp, ${result.downloadedOps} ned`, 'ok');
     return result;
@@ -541,25 +563,93 @@ async function bootstrapLocal() {
   setStatus('Aktuell lokal master inläst · anslut Dropbox för synk', 'ok');
 }
 
-content.addEventListener('click', event => {
-  const target = event.target.closest('[data-property-id]');
-  if (target) openDrawer(target.dataset.propertyId, { focusTarget: target });
-});
-backdrop.addEventListener('click', closeDrawer);
-drawer.addEventListener('click', event => { if (event.target.closest('[data-action="close"]')) closeDrawer(); });
-const renderSearch = debounce(render, 120);
-const renderYearRange = debounce(render, 100);
-$('#search').addEventListener('input', event => { ui.search = event.target.value; renderSearch(); });
-$('#island-filter').addEventListener('change', event => { ui.island = event.target.value; render(); });
-$('#audit-filter').addEventListener('change', event => { ui.audit = event.target.value; render(); });
-$('#year-from').addEventListener('input', event => { ui.yearFrom = event.target.value; renderYearRange(); });
-$('#year-to').addEventListener('input', event => { ui.yearTo = event.target.value; renderYearRange(); });
-connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
-bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && selectedPropertyId) closeDrawer(); });
-window.addEventListener('online', () => syncNow().catch(() => {}));
-window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
-window.addEventListener('offline', () => syncNow().catch(() => {}));
+function fastigheterV2WriteTransport(token) {
+  const root = '/fastigheter-generation2';
+  return new DropboxTransport({
+    accessToken: token,
+    id: 'dropbox-fastigheter-generation2-write',
+    opsRoot: `${root}/ops`,
+    writeGuard: ({ path }) => {
+      if (path !== root && !path.startsWith(`${root}/`)) throw new Error('Fastighetswritern försökte skriva utanför sin egen namnrymd');
+    },
+  });
+}
+
+async function syncFastigheterV2() {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    let localTransport = null;
+    if (isSourceTree) {
+      try {
+        const response = await fetch('/fastigheter-generation2/active.json', { method: 'HEAD', cache: 'no-store' });
+        if (response.ok) localTransport = new HttpReadTransport();
+      } catch { /* Dropbox eller cache används i stället. */ }
+    }
+    const token = localTransport ? null : await currentAccessToken();
+    if (!localTransport && !token) {
+      fastigheterV2Writer = null;
+      fastigheterV2Controller?.setWriter(null);
+      if (fastigheterV2Runtime.hasData()) {
+        setStatus('Offline · senast verifierade Fastigheter V2 visas', 'warning');
+        return null;
+      }
+      setStatus('Anslut Dropbox för att läsa Fastigheter V2', 'warning');
+      return null;
+    }
+    setStatus('Läser Fastigheter V2, Personer och Kartdata…');
+    const readTransport = localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-generation2-read', opsRoot: '/fastigheter-generation2/ops', readOnly: true });
+    const result = await fastigheterV2Runtime.sync(readTransport);
+    fastigheterV2Writer = result.writable && token ? createFastigheterWriter({ transport: fastigheterV2WriteTransport(token), pendingStore: store }) : null;
+    if (fastigheterV2Writer) await fastigheterV2Writer.load();
+    fastigheterV2Controller.setWriter(fastigheterV2Writer);
+    setStatus(`Fastigheter V2 · revision ${result.propertyRevision} · ${fastigheterV2Writer ? 'skrivmaster' : result.writable ? 'anslut Dropbox för att skriva' : 'förhandsläge'}`, 'ok');
+    return result;
+  })().catch(error => {
+    console.error(error);
+    if (isOfflineError(error) && fastigheterV2Runtime?.hasData()) {
+      fastigheterV2Controller?.render();
+      setStatus('Offline · senast verifierade Fastigheter V2 visas', 'warning');
+      return null;
+    }
+    setStatus(`Åtgärd krävs · ${error.message}`, 'error');
+    throw error;
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
+}
+
+async function activeFastigheterCutover(token) {
+  const missing = { getJson: async () => { const error = new Error('saknas'); error.status = 409; error.code = 'path/not_found'; throw error; } };
+  const transport = token ? new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-cutover-detect', opsRoot: '/fastigheter/ops', readOnly: true }) : missing;
+  const guard = new GenerationCutoverGuard({ app: 'fastigheter', transport, store });
+  return token ? guard.refresh({ force: true }) : guard.cachedMarker();
+}
+
+async function initFastigheterV2Mode() {
+  fastigheterV2Mode = true;
+  bootstrapButton.hidden = true;
+  document.documentElement.dataset.fastigheterV2 = 'true';
+  document.querySelector('.site-header h1').textContent = 'Fastigheter';
+  document.querySelector('.site-header .intro').textContent = 'Nuvarande ägare och strukturerad tidslinje per fastighet.';
+  fastigheterV2Runtime = await createFastigheterActiveRuntime({ store }).init();
+  fastigheterV2Controller = createFastigheterV2Controller({
+    runtime: fastigheterV2Runtime,
+    content,
+    drawer,
+    drawerContent,
+    backdrop,
+    statusNode,
+    onSaved: async () => {
+      const token = await currentAccessToken();
+      if (!token) throw new Error('Revisionen sparades, men återläsning väntar tills Dropbox är ansluten.');
+      await fastigheterV2Runtime.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-generation2-after-save', opsRoot: '/fastigheter-generation2/ops', readOnly: true }));
+      await fastigheterV2Writer.load();
+    },
+  });
+  if (fastigheterV2Runtime.hasData()) fastigheterV2Controller.render();
+  await syncFastigheterV2();
+  const requested = new URL(location.href).searchParams.get('property');
+  if (requested) fastigheterV2Controller.open(requested, { updateUrl: false });
+}
 
 async function init() {
   const serviceWorkerPromise = registerServiceWorker();
@@ -568,16 +658,67 @@ async function init() {
     onBlocked: () => setStatus('En annan Fastigheter-flik blockerar uppdateringen · stäng den och ladda om', 'warning'),
   });
   store = new IndexedDBStore(db);
+  await completeOAuthCallbackIfNeeded();
+  const parameters = new URL(location.href).searchParams;
+  const token = await currentAccessToken();
+  const cutover = await activeFastigheterCutover(token);
+  if (cutover?.state === 'active' || (isSourceTree && parameters.get('propertymaster') === 'next')) {
+    await initFastigheterV2Mode();
+    await serviceWorkerPromise;
+    return;
+  }
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
-  matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
+  matrikelMaster = await new PeopleMembershipMaster({ store }).init();
   kartdataMaster = await new ReadOnlyMaster({ store, cacheKey: 'kartdata' }).init();
   bootstrapButton.hidden = !isSourceTree;
   render();
-  await completeOAuthCallbackIfNeeded();
   await syncNow();
   const requestedProperty = new URL(location.href).searchParams.get('property');
   if (requestedProperty && propertyRecords().some(property => property.id === requestedProperty)) openDrawer(requestedProperty, { updateUrl: false });
   await serviceWorkerPromise;
 }
 
-init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });
+if (isMasterComparison) {
+  initPropertyMasterComparison({
+    content,
+    drawer,
+    drawerContent,
+    backdrop,
+    statusNode,
+    toolbar: $('.toolbar'),
+    connectButton,
+    bootstrapButton,
+  }).catch(error => { console.error(error); setStatus(`Kunde inte starta jämförelsen · ${error.message}`, 'error'); });
+} else {
+  content.addEventListener('click', event => {
+    if (fastigheterV2Mode) {
+      const target = event.target.closest('[data-v2-property]');
+      if (target) fastigheterV2Controller.open(target.dataset.v2Property);
+      return;
+    }
+    const target = event.target.closest('[data-property-id]');
+    if (target) openDrawer(target.dataset.propertyId, { focusTarget: target });
+  });
+  backdrop.addEventListener('click', closeDrawer);
+  drawer.addEventListener('click', event => {
+    if (event.target.closest('[data-action="close"]')) closeDrawer();
+    if (!fastigheterV2Mode) return;
+    const edit = event.target.closest('[data-v2-edit-entry]');
+    if (edit) fastigheterV2Controller.openEditor(fastigheterV2Runtime.properties.get('timeline_entries', edit.dataset.v2EditEntry));
+    if (event.target.closest('[data-v2-new-entry]')) fastigheterV2Controller.openEditor();
+  });
+  const renderSearch = debounce(render, 120);
+  const renderYearRange = debounce(render, 100);
+  $('#search').addEventListener('input', event => { ui.search = event.target.value; renderSearch(); });
+  $('#island-filter').addEventListener('change', event => { ui.island = event.target.value; render(); });
+  $('#audit-filter').addEventListener('change', event => { ui.audit = event.target.value; render(); });
+  $('#year-from').addEventListener('input', event => { ui.yearFrom = event.target.value; renderYearRange(); });
+  $('#year-to').addEventListener('input', event => { ui.yearTo = event.target.value; renderYearRange(); });
+  connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
+  bootstrapButton.addEventListener('click', () => bootstrapLocal().catch(error => setStatus(error.message, 'error')));
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && selectedPropertyId) closeDrawer(); });
+  window.addEventListener('online', () => syncNow().catch(() => {}));
+  window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
+  window.addEventListener('offline', () => syncNow().catch(() => {}));
+  init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });
+}

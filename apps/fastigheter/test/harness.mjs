@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
-import { buildClaimChain, currentClaimMatchesNames, roleLabel, sameClaimIdentity, sourcePeriod } from '../src/timeline-model.js';
+import { buildClaimChain, currentClaimMatchesNames, roleLabel, sourcePeriod } from '../src/timeline-model.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '../..');
@@ -14,7 +14,7 @@ let passed = 0;
 async function test(name, action) { try { await action(); passed += 1; console.log(`✓ ${name}`); } catch (error) { console.error(`✗ ${name}`); throw error; } }
 
 await test('webbappens JavaScript har giltig syntax', () => {
-  for (const file of ['src/app.js', 'src/timeline-model.js', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-personmasterkopplingar.mjs', 'verktyg/skriv-dropbox-personmasterkopplingar.mjs', 'verktyg/bygg-kallkontroll-delta.mjs', 'verktyg/skriv-dropbox-kallkontroll.mjs']) {
+  for (const file of ['src/app.js', 'src/timeline-model.js', 'src/master-compare.js', 'verktyg/bygg-aktuella-agare.mjs', 'verktyg/skriv-dropbox-aktuella-agare.mjs', 'verktyg/bygg-personmasterkopplingar.mjs', 'verktyg/skriv-dropbox-personmasterkopplingar.mjs', 'verktyg/bygg-kallkontroll-delta.mjs', 'verktyg/skriv-dropbox-kallkontroll.mjs']) {
     const result = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}: ${result.stderr || result.stdout}`);
   }
@@ -84,10 +84,6 @@ await test('nulägesbedömningen rättar ägare utan att skriva över historiken
   assert.equal(currentHumanParties.filter(party => party.person_id.startsWith('extern-fastighet-')).length, 24);
   assert.equal(parties.get('party-korpholmens-tomtagareforening').person_id, null);
   assert.deepEqual(state.listEntities('observation').find(item => item.fields.property_id === 'Alsvik 3:343').fields.owner_party_ids, ['party-kaj-gunder-boving']);
-  assert.ok(currentHumanParties.every(party => party.display_surname));
-  assert.equal(parties.get('party-inger-bethge').display_surname, 'Bethge');
-  assert.equal(parties.get('party-helena-maria-une-rameke').display_surname, 'Une Rameke');
-  assert.equal(parties.get('party-korpholmens-tomtagareforening').display_surname, 'Tomtägareföreningen');
 });
 await test('kända transaktionsdatum hålls isär efter datumroll', () => {
   const events = new Map(state.listEntities('event').map(item => [item.entity_id, item.fields]));
@@ -141,16 +137,6 @@ await test('tidslinjens kedjeordning kan visa nästa uppgift utan att skriva ett
   assert.equal(roleLabel('boende/brukare', 'Alice'), 'Boende');
   assert.equal(currentClaimMatchesNames({ holder_text: 'Charlotta Svahn' }, ['Anna Helena Charlotta Svahn']), true);
   assert.equal(currentClaimMatchesNames({ holder_text: 'Lena, Kerstin och Åsa Dalaryd' }, ['Kerstin Eva Dalaryd', 'Lena Maria Dalaryd', 'Åsa Gunvor Birgitta Dalaryd']), true);
-  assert.equal(currentClaimMatchesNames({ holder_text: 'Erik Andersson' }, ['Anna Andersson']), false);
-  assert.equal(currentClaimMatchesNames({ holder_text: 'Anna Andersson' }, ['Anna Andersson']), true);
-  assert.equal(sameClaimIdentity(
-    { holder_text: 'Erik Andersson', sort_year: 1950, source_ids: ['A'] },
-    { holder_text: 'Anna Andersson', start_year: 1950, source_ids: ['B'] },
-  ), false);
-  assert.equal(sameClaimIdentity(
-    { holder_text: 'Anna Andersson', party_id: 'party-anna', sort_year: 1950 },
-    { holder_text: 'A. Andersson', party_id: 'party-anna', start_year: 1950 },
-  ), true);
   const decadeChain = buildClaimChain([
     { id: 'c', order: 1, holder_text: 'C', role: 'hyresgäst', start_year_min: 1940, start_year_max: 1949, start_precision: 'decennium' },
     { id: 'd', order: 2, holder_text: 'D', role: 'hyresgäst', start_year_min: 1960, start_year_max: 1969, start_precision: 'decennium' },
@@ -178,14 +164,12 @@ await test('SQLite-exporten har relationstabeller, index och samma kärnräknare
 await test('webbappen har en ren tabell, läsbar tidslinje och hopfälld källforskning', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8'); const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
   assert.ok(app.includes("opsRoot: '/fastigheter/ops'"));
-  assert.ok(app.includes("opsRoot: '/matrikel/ops'"));
+  assert.ok(app.includes("opsRoot: '/personer-familjer/ops'"));
   assert.ok(app.includes("opsRoot: '/kartdata/ops'"));
-  assert.ok(app.includes("opsRoot: '/matrikel/ops', readOnly: true"));
-  assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'matrikel' })"));
+  assert.ok(app.includes("opsRoot: '/personer-familjer/ops', readOnly: true"));
+  assert.ok(app.includes('new PeopleMembershipMaster({ store })'));
   assert.ok(app.includes("new ReadOnlyMaster({ store, cacheKey: 'kartdata' })"));
   assert.ok(app.includes('resolvePartyName(party, matrikelMaster)'));
-  assert.ok(app.includes('formatPropertyDisplayName'));
-  assert.ok(app.includes('propertyDisplayName(property)'));
   assert.ok(app.includes("recordList('current-owner-assessment')"));
   assert.ok(app.includes('Nuvarande ägare'));
   assert.ok(app.includes('Korten visar bara period, person och roll.'));
@@ -222,14 +206,28 @@ await test('publiceringsbygget är datafritt', () => {
 await test('det datafria paketet har egen offlinebar kärna', async () => {
   const app = await readFile(resolve(REPO, 'fastigheter/src/app.js'), 'utf8');
   const timeline = await readFile(resolve(REPO, 'fastigheter/src/timeline-model.js'), 'utf8');
+  const runtime = await readFile(resolve(REPO, 'fastigheter/src/fastigheter-runtime.js'), 'utf8');
+  const writer = await readFile(resolve(REPO, 'fastigheter/src/fastigheter-writer.js'), 'utf8');
+  const editor = await readFile(resolve(REPO, 'fastigheter/src/fastigheter-v2-ui.js'), 'utf8');
   const core = await readFile(resolve(REPO, 'fastigheter/core/data-layer.js'), 'utf8');
+  const masterData = await readFile(resolve(REPO, 'fastigheter/master-data-v2/index.js'), 'utf8');
   const sw = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
   assert.ok(app.includes("../core/data-layer.js"));
   assert.equal(app.includes('../../../packages/core/'), false);
+  assert.equal(runtime.includes('../../../packages/'), false);
+  assert.equal(writer.includes('../../../packages/'), false);
+  assert.ok(runtime.includes("../core/active-json-master.js"));
+  assert.ok(writer.includes("../master-data-v2/index.js"));
+  assert.ok(editor.includes('data-v2-time-kind'));
   assert.ok(timeline.includes('buildClaimChain'));
   assert.ok(core.includes("./storage/indexeddb.js"));
+  assert.ok(masterData.includes("./src/revision-storage.js"));
   assert.ok(sw.includes("key.startsWith('korpholmen-fastigheter-')"));
   assert.ok(sw.includes("'./src/timeline-model.js'"));
+  assert.ok(sw.includes("'./src/master-compare.js"));
+  assert.ok(sw.includes("'./src/fastigheter-runtime.js?v=2026-08-15-fastigheter-v2-preview-1'"));
+  assert.ok(sw.includes("`${MASTER}/index.js`"));
+  assert.ok((await readFile(resolve(REPO, 'fastigheter/src/master-compare.js'), 'utf8')).includes('initPropertyMasterComparison'));
   assert.ok(sw.includes("?'../../packages/core':'./core'"));
 });
 

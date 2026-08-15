@@ -46,6 +46,7 @@ import {
 } from '../data-layer.js';
 import { addBatchRange, contiguousSeq, createBatchProgress, hasBatchGaps } from '../sync/batch-progress.js';
 import { TransportError } from '../sync/errors.js';
+import { HttpReadTransport } from '../sync/http-read-transport.js';
 
 let passed = 0;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -57,6 +58,27 @@ async function writableMaster(deviceId, remote) {
   const repository = await new Repository({ store: new MemoryStore(), deviceId }).init();
   return { repository, sync: () => new SyncEngine({ repository, transport: remote }).syncOnce() };
 }
+
+await test('lokal HTTP-transport binder webbläsarens fetch och är uttryckligen skrivskyddad', async () => {
+  let request = null;
+  let receiver = null;
+  const transport = new HttpReadTransport({
+    baseUrl: 'http://127.0.0.1:4334',
+    fetchImpl: async function fetchWithReceiver(url, options) {
+      receiver = this;
+      request = { url, options };
+      return new Response(new TextEncoder().encode('{"ok":true}'), { status: 200 });
+    },
+  });
+  assert.equal(new TextDecoder().decode(await transport.getBytes('/master/active.json')), '{"ok":true}');
+  assert.equal(receiver, globalThis);
+  assert.deepEqual(request, {
+    url: 'http://127.0.0.1:4334/master/active.json',
+    options: { cache: 'no-store', credentials: 'same-origin' },
+  });
+  await assert.rejects(transport.putBatch({}), /skrivskyddad/);
+  await assert.rejects(transport.putBytes('/x', new Uint8Array()), /skrivskyddad/);
+});
 
 await test('batchframsteg flyttar bara vattenmärket över sammanhängande intervall', async () => {
   const progress = createBatchProgress({ device: 6 }, [{ device_id: 'device', from_seq: 3, to_seq: 4 }]);

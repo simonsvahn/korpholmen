@@ -2,7 +2,10 @@ export class HttpReadTransport {
   constructor({ baseUrl = globalThis.location?.origin || 'http://127.0.0.1', fetchImpl = globalThis.fetch } = {}) {
     if (typeof fetchImpl !== 'function') throw new TypeError('HttpReadTransport kräver fetch');
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
-    this.fetchImpl = fetchImpl;
+    // Window.fetch throws "Illegal invocation" when it is stored and later
+    // called as a plain function. Keep the injected function testable, but
+    // always invoke it with the browser global as receiver.
+    this.fetchImpl = (...args) => fetchImpl.call(globalThis, ...args);
   }
 
   async getBytes(path) {
