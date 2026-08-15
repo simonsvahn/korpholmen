@@ -13,6 +13,7 @@ const FILES = [
   'sw.js',
   'icons/icon.svg',
   'src/landscape-model.js',
+  'src/people-v2-ui.js',
   'src/config.js',
   'src/data-layer.js',
   'src/domain/canonical.js',
@@ -31,7 +32,8 @@ const FILES = [
   'src/sync/oauth-pkce.js',
   'src/sync/sync-engine.js'
 ];
-const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
+const APP_FILES = ['src/people-v2-runtime.js'];
+const CORE_FILES = ['active-json-master.js', 'people-membership-master.js', 'membership-model.js', 'dependency-compatibility.js', 'data-layer.js', 'runtime-safety.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/http-read-transport.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative);
@@ -56,6 +58,13 @@ for (const relative of CORE_FILES) {
   await copyFile(source, target);
 }
 
+for (const relative of APP_FILES) {
+  const source = (await readFile(resolve(ROOT, relative), 'utf8')).replaceAll('../../../packages/core/', '../core/');
+  const target = resolve(OUT, relative);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, source);
+}
+
 const dataLayer = (await readFile(resolve(ROOT, 'src/data-layer.js'), 'utf8'))
   .replaceAll('../../../packages/core/', '../core/');
 await writeFile(resolve(OUT, 'src/data-layer.js'), dataLayer);
@@ -63,11 +72,12 @@ await writeFile(resolve(OUT, 'src/data-layer.js'), dataLayer);
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))
   .replace("../../../packages/core/family-context.js", "../core/family-context.js")
   .replace("../../../packages/core/master-data.js", "../core/master-data.js")
-  .replace("../../../packages/core/read-only-master.js", "../core/read-only-master.js");
+  .replace("../../../packages/core/read-only-master.js", "../core/read-only-master.js")
+  .replace("../../../packages/core/sync/http-read-transport.js", "../core/sync/http-read-transport.js");
 await mkdir(resolve(OUT, 'src'), { recursive: true });
 await writeFile(resolve(OUT, 'src/app.js'), app);
 
-const expected = [...FILES, 'src/app.js', ...CORE_FILES.map(file => `core/${file}`)].sort();
+const expected = [...FILES, ...APP_FILES, 'src/app.js', ...CORE_FILES.map(file => `core/${file}`)].sort();
 const actual = await assertExactPublicationFiles(OUT, expected);
 
 const textBundle = (await Promise.all(actual

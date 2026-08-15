@@ -17,7 +17,10 @@ import {
 } from '../../../packages/core/data-layer.js';
 import { resolveArchiveEntity } from '../../../packages/core/master-data.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js';
+import { sha256Hex } from '../../../packages/core/sync/checkpoint-format.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
+import { DocumentActiveV2 } from './document-active-v2.js?v=2026-08-15-active-v2';
 
 const $ = selector => document.querySelector(selector);
 const appNode = $('#app-view');
@@ -48,6 +51,9 @@ let historyOperations = [];
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
+let documentV2Mode = true;
+let documentV2 = null;
+const documentV2ImageUrls = new Map();
 const contentImageUrls = new Map();
 const sourceFileUrls = new Map();
 const sourceFileStates = new Map();
@@ -604,6 +610,7 @@ async function uploadBootstrapOps(transport) {
 }
 
 async function syncNow() {
+  if (documentV2Mode) return syncDocumentV2();
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
     const hasCredential = Boolean(await store.getMeta(TOKEN_META));
@@ -629,6 +636,54 @@ async function syncNow() {
   })().catch(error => {
     console.error(error);
     if (isOfflineError(error)) { setStatus('Offline · lokalt arkiv tillgängligt', 'warning'); return null; }
+    setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error;
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
+}
+
+async function loadDocumentV2Image(file) {
+  if (documentV2ImageUrls.has(file.sha256)) return documentV2ImageUrls.get(file.sha256);
+  const cacheKey = `document-v2-image:${file.sha256}`;
+  let blob = await store.getBlob(cacheKey);
+  if (!blob) {
+    const token = await currentAccessToken();
+    if (!token) throw new Error('anslut Dropbox');
+    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-document-v2-images', opsRoot: '/dokumentarkiv/ops', readOnly: true });
+    blob = await transport.getBlob(file.blob_path);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (await sha256Hex(bytes) !== file.sha256) throw new Error('kontrollsumman stämmer inte');
+    blob = new Blob([bytes], { type: file.mime_type || 'image/jpeg' });
+    await store.putBlob(cacheKey, blob);
+  }
+  const url = URL.createObjectURL(blob);
+  documentV2ImageUrls.set(file.sha256, url);
+  return url;
+}
+
+async function syncDocumentV2() {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    let localTransport = null;
+    if (isSourceTree) {
+      try { if ((await fetch('/dokumentarkiv-generation2/active.json', { method: 'HEAD', cache: 'no-store' })).ok) localTransport = new HttpReadTransport(); } catch { /* cache eller Dropbox */ }
+    }
+    const token = localTransport ? null : await currentAccessToken();
+    if (!localTransport && !token) {
+      documentV2.render();
+      setStatus(documentV2.hasData() ? 'Offline · senast verifierade Dokumentmaster visas' : 'Anslut Dropbox för att läsa Dokumentmastern', 'warning');
+      return null;
+    }
+    setStatus('Läser aktiv Dokumentmaster…');
+    const result = await documentV2.sync(localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-document-active-v2', opsRoot: '/dokumentarkiv-generation2/ops', readOnly: true }));
+    documentV2.render();
+    connectButton.textContent = token ? 'Synka Dropbox' : 'Lokal V2-master';
+    setStatus(`Dokumentmaster · revision ${result.documents.masterRevision} · läsvy`, 'ok');
+    const requested = new URL(location.href).searchParams.get('document');
+    if (requested) documentV2.open(requested, { updateUrl: false });
+    return result;
+  })().catch(error => {
+    console.error(error);
+    if (documentV2?.hasData()) { documentV2.render(); setStatus(`Senast verifierade Dokumentmaster visas · ${error.message}`, 'warning'); return null; }
     setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error;
   }).finally(() => { syncPromise = null; });
   return syncPromise;
@@ -727,6 +782,15 @@ async function init() {
   const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB({ name: 'korpholmen-dokumentarkiv' });
   store = new IndexedDBStore(db);
+  if (documentV2Mode) {
+    await completeOAuthCallbackIfNeeded();
+    documentV2 = await new DocumentActiveV2({ store, view: appNode, statusNode, imageLoader: loadDocumentV2Image }).init();
+    documentV2.configureShell();
+    documentV2.render();
+    await syncDocumentV2();
+    await serviceWorkerPromise;
+    return;
+  }
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
   matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init();
   batregisterMaster = await new ReadOnlyMaster({ store, cacheKey: 'batregister' }).init();

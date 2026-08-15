@@ -617,6 +617,12 @@ async function syncFastigheterV2() {
   return syncPromise;
 }
 
+async function localFastigheterV2Available() {
+  if (!isSourceTree) return false;
+  try { return (await fetch('/fastigheter-generation2/active.json', { method: 'HEAD', cache: 'no-store' })).ok; }
+  catch { return false; }
+}
+
 async function activeFastigheterCutover(token) {
   const missing = { getJson: async () => { const error = new Error('saknas'); error.status = 409; error.code = 'path/not_found'; throw error; } };
   const transport = token ? new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-cutover-detect', opsRoot: '/fastigheter/ops', readOnly: true }) : missing;
@@ -662,7 +668,7 @@ async function init() {
   const parameters = new URL(location.href).searchParams;
   const token = await currentAccessToken();
   const cutover = await activeFastigheterCutover(token);
-  if (cutover?.state === 'active' || (isSourceTree && parameters.get('propertymaster') === 'next')) {
+  if (cutover?.state === 'active' || await localFastigheterV2Available() || (isSourceTree && parameters.get('propertymaster') === 'next')) {
     await initFastigheterV2Mode();
     await serviceWorkerPromise;
     return;

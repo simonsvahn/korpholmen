@@ -64,11 +64,11 @@ self.addEventListener('fetch', event => {
     }).catch(() => navigationFallback(request)));
     return;
   }
-  event.respondWith(caches.match(request, { ignoreSearch: true }).then(cached => {
-    const network = fetch(request, { cache: 'no-store' }).then(response => {
-      if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
-      return response;
-    }).catch(() => cached || Response.error());
-    return cached || network;
-  }));
+  // Nya appmoduler och deras gemensamma kärna måste komma från samma release.
+  // Network-first förhindrar att ett gammalt exportkontrakt i cachen stoppar
+  // hela appen efter en uppdatering; cachen är fortfarande offline-reserv.
+  event.respondWith(fetch(request, { cache: 'no-store' }).then(response => {
+    if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
+    return response;
+  }).catch(() => caches.match(request, { ignoreSearch: true }).then(cached => cached || Response.error())));
 });

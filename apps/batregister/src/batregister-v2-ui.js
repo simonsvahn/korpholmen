@@ -25,6 +25,7 @@ export const EVENT_LABELS = Object.freeze({
 });
 
 const OWNER_EVENTS = new Set(['ownership', 'purchased', 'sold', 'registered']);
+const LEGACY_SPEC_LABELS = Object.freeze({ category: 'Kategori', model: 'Modell', construction_year: 'Tillverkad', sail_number: 'Segelnummer', length_m: 'Längd', width_m: 'Bredd', draft_m: 'Djupgående', weight_kg: 'Vikt', displacement_t: 'Deplacement', construction_material: 'Material', engine_brand: 'Motormärke', engine_model: 'Motormodell', engine_count: 'Antal motorer', horsepower: 'Motorstyrka', engine_power_kw: 'Motoreffekt', fuel: 'Drivmedel', propulsion: 'Framdrivning', color: 'Färg', race_class: 'Tävlingsklass' });
 const option = (value, label, selected = false) => `<option value="${escapeAttribute(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 
 function numeric(value) {
@@ -49,6 +50,7 @@ function ownerNames(runtime, boat) {
 }
 
 function boatSearch(runtime, boat) {
+  const legacy = runtime.legacySummary(boat);
   return normalize([
     boat.display_name,
     boat.model,
@@ -57,7 +59,55 @@ function boatSearch(runtime, boat) {
     boat.notes,
     CATEGORY_LABELS[boat.category],
     ...runtime.eventsFor(boat).flatMap(event => [EVENT_LABELS[event.event_type], event.comment, boatTimeLabel(event.time), ...runtime.ownersForEvent(event).map(owner => owner.display_name)]),
+    legacy?.base?.agare,
+    legacy?.base?.modell,
+    legacy?.base?.motor,
+    legacy?.base?.notering,
+    ...Object.values(legacy?.effectiveSpecs || {}),
+    ...(legacy?.ownerships || []).flatMap(row => [row.party_label, row.legacy_owner_text]),
+    ...(legacy?.events || []).flatMap(row => [row.label, row.event_type]),
+    ...(legacy?.reviews || []).flatMap(row => [row.known, row.question]),
   ].join(' '));
+}
+
+function legacyDate(value) {
+  if (!value) return 'Tid okänd';
+  if (value.original_text) return value.original_text;
+  if (value.precision === 'not_later_than') return `senast ${value.year}`;
+  if (value.precision === 'observed') return `belagd ${value.year}`;
+  return String(value.year || 'Tid okänd');
+}
+
+function legacySpecValue(key, value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (key.endsWith('_m')) return `${value} m`;
+  if (key === 'weight_kg') return `${value} kg`;
+  if (key === 'displacement_t') return `${value} ton`;
+  if (key === 'horsepower') return `${value} hk`;
+  if (key === 'engine_power_kw') return `${value} kW`;
+  if (key === 'category') return CATEGORY_LABELS[value] || value;
+  return String(value);
+}
+
+function legacyOwner(runtime, row) {
+  const party = row.party_id ? runtime.resolveParty({ master: 'people', entity_type: row.party_type === 'family-unit' ? 'family_unit' : 'person', entity_id: row.party_id }) : null;
+  return party?.display_name || row.party_label || row.legacy_owner_text || 'Ägare ej namngiven';
+}
+
+function legacySupplementMarkup(runtime, boat) {
+  const legacy = runtime.legacySummary(boat);
+  if (!legacy) return '';
+  const baseFacts = [
+    valueLine('Äldre typ', legacy.base?.typ),
+    valueLine('Äldre modell', legacy.base?.modell),
+    valueLine('Äldre period', legacy.base?.period),
+    valueLine('Äldre ägartext', legacy.base?.agare),
+  ].join('');
+  const specs = Object.entries(legacy.effectiveSpecs || {}).map(([key, value]) => `<div><dt>${escapeHtml(LEGACY_SPEC_LABELS[key] || key)}</dt><dd>${escapeHtml(legacySpecValue(key, value))}</dd></div>`).join('');
+  const owners = legacy.ownerships.filter(row => !row.status || row.status === 'accepted').map(row => `<li><time>${escapeHtml([row.start ? legacyDate(row.start) : '', row.end ? `till ${legacyDate(row.end)}` : ''].filter(Boolean).join(' · ') || 'Tid okänd')}</time><b>${escapeHtml(legacyOwner(runtime, row))}</b>${row.legacy_owner_text && row.legacy_owner_text !== row.party_label ? `<small>${escapeHtml(row.legacy_owner_text)}</small>` : ''}</li>`).join('');
+  const events = legacy.events.filter(row => !row.status || row.status === 'accepted').map(row => `<li><time>${escapeHtml(legacyDate(row.date))}</time><b>${escapeHtml(row.label || row.event_type)}</b></li>`).join('');
+  const reviews = legacy.reviews.map(row => `<article><b>${escapeHtml(row.question || 'Se över uppgiften')}</b>${row.known ? `<p>${escapeHtml(row.known)}</p>` : ''}</article>`).join('');
+  return `<section class="drawer-section v2-legacy-supplement"><header><div><h3>Tidigare strukturerad master</h3><p>Visas som läskomplement. Uppgifterna skrivs inte automatiskt in i V2.</p></div><span>${legacy.sources.length} källor</span></header>${baseFacts || specs ? `<dl class="v2-boat-facts">${baseFacts}${specs}</dl>` : ''}${owners ? `<h4>Godkända ägaruppgifter</h4><ol class="v2-legacy-list">${owners}</ol>` : ''}${events ? `<h4>Godkänd historik</h4><ol class="v2-legacy-list">${events}</ol>` : ''}${reviews ? `<h4>Se över</h4><div class="v2-legacy-reviews">${reviews}</div>` : ''}</section>`;
 }
 
 function valueLine(label, value) {
@@ -106,6 +156,7 @@ export class BatregisterV2Controller {
     this.selectedBoatId = null;
     this.category = '';
     this.imageStatus = '';
+    this.supplementStatus = '';
     this.dialog = null;
     this.saving = false;
   }
@@ -135,6 +186,19 @@ export class BatregisterV2Controller {
     document.querySelector('#connection-filter')?.closest('.panel-section')?.setAttribute('hidden', '');
     const addButton = document.querySelector('#add-boat');
     if (addButton) addButton.hidden = !this.writer;
+    const qualitySection = document.querySelector('#quality-filter-section');
+    if (qualitySection) {
+      qualitySection.removeAttribute('hidden');
+      qualitySection.querySelector('h2').textContent = 'Datagranskning';
+      qualitySection.querySelector('.filter-help').textContent = 'Visar vad som redan finns strukturerat i V2 eller i den tidigare mastern.';
+      qualitySection.querySelector('#quality-options').innerHTML = '<button type="button" data-v2-supplement-filter="">Alla</button><button type="button" data-v2-supplement-filter="structured">Med äldre strukturerad data</button><button type="button" data-v2-supplement-filter="review">Med se-över-fråga</button>';
+      qualitySection.querySelector('#quality-options').addEventListener('click', event => {
+        const button = event.target.closest('[data-v2-supplement-filter]');
+        if (!button) return;
+        this.supplementStatus = button.dataset.v2SupplementFilter;
+        this.render();
+      });
+    }
   }
 
   visibleBoats() {
@@ -143,6 +207,9 @@ export class BatregisterV2Controller {
       if (this.category && boat.category !== this.category) return false;
       if (this.imageStatus === 'with' && !(boat.images || []).length) return false;
       if (this.imageStatus === 'without' && (boat.images || []).length) return false;
+      const legacy = this.runtime.legacySummary(boat);
+      if (this.supplementStatus === 'structured' && !legacy) return false;
+      if (this.supplementStatus === 'review' && !(boat.needs_review || legacy?.reviews.length)) return false;
       return !needle || boatSearch(this.runtime, boat).includes(needle);
     });
   }
@@ -154,9 +221,13 @@ export class BatregisterV2Controller {
     if (count) count.textContent = `${boats.length} av ${total} båtar`;
     for (const button of document.querySelectorAll('[data-type-filter]')) button.setAttribute('aria-pressed', String(button.dataset.typeFilter === this.category));
     for (const button of document.querySelectorAll('[data-image-status]')) button.setAttribute('aria-pressed', String(button.dataset.imageStatus === this.imageStatus));
+    for (const button of document.querySelectorAll('[data-v2-supplement-filter]')) button.setAttribute('aria-pressed', String(button.dataset.v2SupplementFilter === this.supplementStatus));
     this.content.innerHTML = total ? `<section class="group"><div class="register-heading"><div><p class="eyebrow dark">Båtmaster</p><h2>Båtar</h2></div><p>${this.writer ? 'Ändringar sparas som en ny masterrevision.' : 'Verifierad läsvy.'}</p></div><div class="boat-grid">${boats.map(boat => {
       const owners = ownerNames(this.runtime, boat);
-      return `<button class="boat-card" type="button" data-v2-boat="${escapeAttribute(boat.id)}">${this.renderImage(boat)}<span class="boat-copy"><h3>${escapeHtml(boat.display_name)}</h3>${[CATEGORY_LABELS[boat.category], boat.model].filter(Boolean).length ? `<p>${escapeHtml([CATEGORY_LABELS[boat.category], boat.model].filter(Boolean).join(' · '))}</p>` : ''}${owners ? `<p>${escapeHtml(owners)}</p>` : ''}${boat.needs_review ? '<span class="chip warn">Se över</span>' : ''}</span></button>`;
+      const legacy = this.runtime.legacySummary(boat);
+      const legacyOwners = legacy?.ownerships.filter(row => !row.status || row.status === 'accepted').map(row => legacyOwner(this.runtime, row)).filter(Boolean) || [];
+      const summary = [CATEGORY_LABELS[boat.category] || CATEGORY_LABELS[legacy?.effectiveSpecs.category], boat.model || legacy?.effectiveSpecs.model || legacy?.base?.modell].filter(Boolean);
+      return `<button class="boat-card" type="button" data-v2-boat="${escapeAttribute(boat.id)}">${this.renderImage(boat)}<span class="boat-copy"><h3>${escapeHtml(boat.display_name)}</h3>${summary.length ? `<p>${escapeHtml(summary.join(' · '))}</p>` : ''}${owners || legacyOwners.length ? `<p>${escapeHtml(owners || [...new Set(legacyOwners)].join(', '))}</p>` : ''}<span class="chips">${legacy ? '<span class="chip">Äldre struktur finns</span>' : ''}${boat.needs_review || legacy?.reviews.length ? '<span class="chip warn">Se över</span>' : ''}</span></span></button>`;
     }).join('')}</div>${boats.length ? '' : '<p class="empty-row">Inga båtar matchar filtren.</p>'}</section>` : '<section class="empty"><h2>Ingen Båtmaster på den här enheten ännu</h2><p>Anslut Dropbox för att läsa generation 2.</p></section>';
     this.hydrateImages(this.content);
   }
@@ -174,7 +245,7 @@ export class BatregisterV2Controller {
       valueLine('Mått', dimensionText(boat.dimensions)),
       valueLine('Motor', engineText(boat.engine)),
     ].join('');
-    this.drawerContent.innerHTML = `<header class="drawer-heading"><div><p class="eyebrow dark">Båt</p><h2 class="drawer-title">${escapeHtml(boat.display_name)}</h2></div>${this.writer ? '<button class="edit-toggle" type="button" data-v2-edit-boat>Redigera</button>' : ''}</header>${this.renderGallery(boat)}<dl class="v2-boat-facts">${details || '<div><dt>Fakta</dt><dd>Inga ytterligare strukturerade uppgifter.</dd></div>'}</dl>${boat.notes ? `<section class="drawer-section"><h3>Not</h3><p>${escapeHtml(boat.notes)}</p></section>` : ''}${boat.needs_review && boat.review_comment ? `<section class="drawer-section v2-review"><h3>Se över</h3><p>${escapeHtml(boat.review_comment)}</p></section>` : ''}<section class="drawer-section"><div class="v2-section-heading"><div><h3>Tidslinje</h3><p>${events.length} ${events.length === 1 ? 'händelse' : 'händelser'}</p></div>${this.writer ? '<button class="primary" type="button" data-v2-new-event>Ny händelse</button>' : ''}</div><div class="v2-event-list">${events.map(event => eventCard(this.runtime, event, Boolean(this.writer))).join('') || '<p>Ingen strukturerad händelse ännu.</p>'}</div></section>${(boat.source_ids || []).length ? `<details class="drawer-section"><summary>Källkopplingar (${boat.source_ids.length})</summary><ul>${boat.source_ids.map(source => `<li><code>${escapeHtml(source)}</code></li>`).join('')}</ul></details>` : ''}${this.writer ? `<section class="drawer-section"><h3>Bilder</h3><p>${(boat.images || []).length} bildposter.</p><input id="v2-image-upload" type="file" accept="image/*"></section>` : ''}`;
+    this.drawerContent.innerHTML = `<header class="drawer-heading"><div><p class="eyebrow dark">Båt</p><h2 class="drawer-title">${escapeHtml(boat.display_name)}</h2></div>${this.writer ? '<button class="edit-toggle" type="button" data-v2-edit-boat>Redigera</button>' : ''}</header>${this.renderGallery(boat)}<dl class="v2-boat-facts">${details || '<div><dt>V2-fakta</dt><dd>Inga ytterligare strukturerade uppgifter i V2 ännu.</dd></div>'}</dl>${boat.notes ? `<section class="drawer-section"><h3>Not</h3><p>${escapeHtml(boat.notes)}</p></section>` : ''}${boat.needs_review && boat.review_comment ? `<section class="drawer-section v2-review"><h3>Se över</h3><p>${escapeHtml(boat.review_comment)}</p></section>` : ''}<section class="drawer-section"><div class="v2-section-heading"><div><h3>Aktiv V2-tidslinje</h3><p>${events.length} ${events.length === 1 ? 'händelse' : 'händelser'}</p></div>${this.writer ? '<button class="primary" type="button" data-v2-new-event>Ny händelse</button>' : ''}</div><div class="v2-event-list">${events.map(event => eventCard(this.runtime, event, Boolean(this.writer))).join('') || '<p>Ingen strukturerad V2-händelse ännu.</p>'}</div></section>${legacySupplementMarkup(this.runtime, boat)}${(boat.source_ids || []).length ? `<details class="drawer-section"><summary>V2-källkopplingar (${boat.source_ids.length})</summary><ul>${boat.source_ids.map(source => `<li><code>${escapeHtml(source)}</code></li>`).join('')}</ul></details>` : ''}${this.writer ? `<section class="drawer-section"><h3>Bilder</h3><p>${(boat.images || []).length} bildposter.</p><input id="v2-image-upload" type="file" accept="image/*"></section>` : ''}`;
     this.drawer.setAttribute('aria-hidden', 'false');
     this.backdrop.hidden = false;
     this.hydrateImages(this.drawer);

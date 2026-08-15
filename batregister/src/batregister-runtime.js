@@ -1,4 +1,5 @@
 import { ActiveJsonMaster } from '../core/active-json-master.js';
+import { ReadOnlyMaster } from '../core/read-only-master.js';
 import { assertCompatibleActiveDependency } from '../core/dependency-compatibility.js';
 import { assertWriterDomainFields } from '../master-data-v2/index.js';
 
@@ -21,10 +22,11 @@ export class BatregisterActiveRuntime {
       app: 'people',
       requiredCollections: ['people', 'family_units'],
     });
+    this.legacy = new ReadOnlyMaster({ store, cacheKey: 'batregister-generation1-supplement' });
   }
 
   async init() {
-    await Promise.all([this.boats.init(), this.people.init()]);
+    await Promise.all([this.boats.init(), this.people.init(), this.legacy.init()]);
     if (this.hasData()) this.assertCoherent();
     return this;
   }
@@ -51,6 +53,60 @@ export class BatregisterActiveRuntime {
       peopleRevision: this.people.masterRevision,
       writable: this.boats.pointer.writer_enabled === true,
     };
+  }
+
+  async syncLegacy(transport) {
+    return this.legacy.sync(transport);
+  }
+
+  legacyRecords(type) {
+    return this.legacy.listEntities(type).map(entity => ({
+      id: entity.entity_id,
+      ...(entity.fields?.record && typeof entity.fields.record === 'object' ? entity.fields.record : entity.fields),
+    }));
+  }
+
+  legacyIdsForBoat(boatId) {
+    return [boatId, ...this.boats.list('identity_redirects').filter(row => row.target_boat_id === boatId).map(row => row.id)];
+  }
+
+  legacySupplement(boatOrId) {
+    const boat = typeof boatOrId === 'string' ? this.getBoat(boatOrId) : boatOrId;
+    if (!boat) return null;
+    const ids = new Set(this.legacyIdsForBoat(boat.id));
+    const records = type => this.legacyRecords(type).filter(row => ids.has(row.boat_id));
+    const base = this.legacyRecords('boat').find(row => ids.has(row.id)) || null;
+    const supplement = {
+      base,
+      specs: records('boat-spec-observation'),
+      ownerships: records('boat-ownership-observation'),
+      events: records('boat-event-observation'),
+      names: records('boat-name-observation'),
+      reviews: records('boat-review-item').filter(row => row.status !== 'resolved'),
+      sources: [],
+    };
+    const sourceIds = new Set([
+      ...(base?.source_ids || []),
+      ...supplement.specs.flatMap(row => row.source_ids || []),
+      ...supplement.ownerships.flatMap(row => row.source_ids || []),
+      ...supplement.events.flatMap(row => row.source_ids || []),
+      ...supplement.names.flatMap(row => row.source_ids || []),
+      ...supplement.reviews.flatMap(row => row.source_ids || []),
+    ]);
+    supplement.sources = this.legacyRecords('boat-source').filter(row => sourceIds.has(row.id));
+    supplement.hasData = Boolean(base || supplement.specs.length || supplement.ownerships.length || supplement.events.length || supplement.names.length || supplement.reviews.length);
+    return supplement;
+  }
+
+  legacySummary(boatOrId) {
+    const supplement = this.legacySupplement(boatOrId);
+    if (!supplement?.hasData) return null;
+    const specs = {};
+    for (const observation of supplement.specs) {
+      if (observation.status && !['accepted', 'source-observation'].includes(observation.status)) continue;
+      for (const [key, value] of Object.entries(observation.values || {})) if (specs[key] === undefined && value !== null && value !== '') specs[key] = value;
+    }
+    return { ...supplement, specs: supplement.specs, effectiveSpecs: specs };
   }
 
   listBoats() {

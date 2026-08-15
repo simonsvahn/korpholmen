@@ -1,4 +1,4 @@
-const CACHE = 'korpholmen-matrikel-2026-08-07-property-master';
+const CACHE = 'korpholmen-personer-2026-08-15-active-v2';
 const FAMILY_CORE = self.location.pathname.includes('/apps/personer-familjer/')
   ? '../../packages/core/family-context.js'
   : './core/family-context.js';
@@ -10,6 +10,8 @@ const SHELL = [
   './manifest.webmanifest',
   './icons/icon.svg',
   './src/app.js?v=2026-08-07-property-master',
+  './src/people-v2-runtime.js?v=2026-08-15-active-v2',
+  './src/people-v2-ui.js?v=2026-08-15-active-v2',
   FAMILY_CORE,
   './src/landscape-model.js?v=2026-08-01-12',
   './src/config.js?v=2026-08-01-10',
