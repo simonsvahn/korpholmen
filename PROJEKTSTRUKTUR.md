@@ -26,10 +26,9 @@ byggda publika leveransen. Samma princip gäller övriga appar.
 - tillfälliga renderingsfiler, kalkylbladsinspektioner och `node_modules`.
 
 Det fullständiga arbetsmaterialet från migreringen 2026-08-07 ligger i det
-externa säkerhetskopiearkivet. I den lokala projektmappen får
-`arbetsmaterial` vara en Git-ignorerad genväg dit, så att äldre kontroll- och
-återställningsverktyg fortfarande kan följa sina ursprungliga sökvägar utan
-att materialet blandas ihop med aktuell kod.
+externa säkerhetskopiearkivet. Den aktiva projektmappen innehåller ingen kopia
+eller genväg till arkivet. Äldre kontroll- och återställningsmaterial öppnas
+direkt från arkivet när det verkligen behövs.
 
 ## Git-regel
 
