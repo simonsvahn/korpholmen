@@ -1,4 +1,5 @@
 import { MasterValidationError } from './errors.js';
+import { assertBoatCategory, assertIdentityRedirect, assertStructuredEvent } from './validation.js';
 
 export const COMMON_RECORD_FIELDS = Object.freeze([
   'id',
@@ -34,6 +35,11 @@ export const FASTIGHETER_WRITER_CONTRACT = contract({
   identity_redirects: ['target_property_id', 'decision_id'],
 });
 
+export const BATREGISTER_WRITER_CONTRACT = contract({
+  boats: ['display_name', 'category', 'model', 'base_name_id', 'events', 'vessel_type', 'dimensions', 'material', 'engine', 'additional_specs', 'images', 'source_ids', 'notes'],
+  identity_redirects: ['target_boat_id', 'decision_document'],
+});
+
 export const DOKUMENTARKIV_WRITER_CONTRACT = contract({
   document_categories: ['display_name', 'sort_order'],
   document_types: ['category_id', 'display_name', 'sort_order'],
@@ -47,6 +53,7 @@ export const DOKUMENTARKIV_WRITER_CONTRACT = contract({
 export const WRITER_DOMAIN_CONTRACTS = Object.freeze({
   matrikel: MATRIKEL_WRITER_CONTRACT,
   fastigheter: FASTIGHETER_WRITER_CONTRACT,
+  batregister: BATREGISTER_WRITER_CONTRACT,
   dokumentarkiv: DOKUMENTARKIV_WRITER_CONTRACT,
 });
 
@@ -160,6 +167,56 @@ function assertFastigheterRows(data) {
     if (propertyIds.has(row.id)) throw new MasterValidationError(`Aktiv fastighet kan inte samtidigt vara identitetsompekning: ${row.id}`);
     if (!propertyIds.has(row.target_property_id)) throw new MasterValidationError(`fastigheter.identity_redirects/${row.id} pekar på okänd fastighet`);
     if (typeof row.decision_id !== 'string' || !row.decision_id.trim()) throw new MasterValidationError(`fastigheter.identity_redirects/${row.id}.decision_id saknas`);
+  }
+}
+
+function assertStringArray(value, label) {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
+    throw new MasterValidationError(`${label} måste vara en lista med textvärden`);
+  }
+}
+
+function assertBatregisterRows(data) {
+  const active = rows => (rows || []).filter(row => !row.deleted_at);
+  const boats = active(data.boats);
+  const boatIds = new Set();
+  for (const row of boats) {
+    const label = `batregister.boats/${row.id}`;
+    if (boatIds.has(row.id)) throw new MasterValidationError(`Dubblerad aktiv båt: ${row.id}`);
+    boatIds.add(row.id);
+    if (typeof row.display_name !== 'string' || !row.display_name.trim()) throw new MasterValidationError(`${label}.display_name saknas`);
+    if (row.base_name_id !== undefined && (typeof row.base_name_id !== 'string' || !row.base_name_id.trim())) throw new MasterValidationError(`${label}.base_name_id måste vara text eller utelämnat`);
+    if (row.category !== undefined) assertBoatCategory(row.category, `${label}.category`);
+    for (const field of ['model', 'vessel_type', 'material', 'notes']) {
+      if (row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string') throw new MasterValidationError(`${label}.${field} måste vara text`);
+    }
+    for (const field of ['dimensions', 'engine', 'additional_specs']) {
+      if (row[field] !== undefined && (!row[field] || typeof row[field] !== 'object' || Array.isArray(row[field]))) throw new MasterValidationError(`${label}.${field} måste vara ett objekt`);
+    }
+    if (row.images !== undefined && !Array.isArray(row.images)) throw new MasterValidationError(`${label}.images måste vara en lista`);
+    if (row.source_ids !== undefined) assertStringArray(row.source_ids, `${label}.source_ids`);
+    if (row.events !== undefined) {
+      if (!Array.isArray(row.events)) throw new MasterValidationError(`${label}.events måste vara en lista`);
+      const eventIds = new Set();
+      row.events.forEach((event, index) => {
+        assertStructuredEvent(event, `${label}.events[${index}]`);
+        if (event.id) {
+          if (eventIds.has(event.id)) throw new MasterValidationError(`${label}.events har dubblerat id: ${event.id}`);
+          eventIds.add(event.id);
+        }
+        for (const [participantIndex, participant] of (event.participants || []).entries()) {
+          const reference = participant.party_ref;
+          const valid = reference?.master === 'people' && ['person', 'family_unit'].includes(reference.entity_type)
+            && typeof reference.entity_id === 'string' && reference.entity_id.trim();
+          if (!valid) throw new MasterValidationError(`${label}.events[${index}].participants[${participantIndex}] har otillåten ägarreferens`);
+        }
+      });
+    }
+  }
+  for (const row of active(data.identity_redirects)) {
+    assertIdentityRedirect({ ...row, target_person_id: row.target_boat_id, decision_id: row.decision_document }, `batregister.identity_redirects/${row.id}`);
+    if (boatIds.has(row.id)) throw new MasterValidationError(`Aktiv båt kan inte samtidigt vara identitetsompekning: ${row.id}`);
+    if (!boatIds.has(row.target_boat_id)) throw new MasterValidationError(`batregister.identity_redirects/${row.id} pekar på okänd båt`);
   }
 }
 
@@ -314,6 +371,7 @@ export function assertWriterDomainFields(master, { allowMissingCollections = tru
   }
   if (master.app === 'matrikel' && Array.isArray(master.data?.memberships)) assertMatrikelMembershipRows(master.data.memberships);
   if (master.app === 'fastigheter') assertFastigheterRows(master.data || {});
+  if (master.app === 'batregister') assertBatregisterRows(master.data || {});
   if (master.app === 'dokumentarkiv') assertDocumentarkivRows(master.data || {});
   return master;
 }

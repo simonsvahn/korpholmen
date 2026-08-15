@@ -70,3 +70,13 @@ låter användaren välja rätt omfattning; en koppling på hög nivå syns äve
 en underliggande person eller familj filtreras fram. Familje- och släktmodellen
 hämtas ur Matrikelns lokalt cachade data. Oklara fall granskas i det separata
 Excelarket.
+
+## Generation 2
+
+Den aktiva läsmastern har 236 stabila båtidentiteter och läses genom en
+SHA-verifierad pekare. Generation 1 är fortfarande ensam skrivare tills
+Båtregistrets vanliga redigeringsvy har kopplats till den nya writern och hela
+bytet har säkerhetskopierats och slutprovats. Den nya writern sparar en ny
+masterrevision och ett separat ändringskvitto per tryck på **Spara**; den
+skriver aldrig om en befintlig revision och avvisar ändringar från en gammal
+flik eller enhet.

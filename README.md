@@ -1,8 +1,9 @@
 # Korpholmen
 
-Gemensamt repo och gemensam Dropbox App Folder för flera separata appar.
-Dropbox-projektmappen är den permanenta Git-checkouten och har samma struktur
-som GitHub.
+Gemensamt, datafritt repo för Korpholmens appar. Dropbox-projektmappen är den
+permanenta Git-checkouten. Privat masterdata ligger bredvid koden i ignorerade
+appmappar eller i Korpholmens privata Dropbox App Folder och publiceras aldrig
+till GitHub.
 
 - `apps/matrikel/` — källkod och privata, ignorerade arbetsdata för personer,
   relationer, klubbnamn och familje-/fastighetsgemenskap.
@@ -31,29 +32,28 @@ finns i [`ARKITEKTUR.md`](ARKITEKTUR.md). Apparnas README-filer beskriver
 drift och aktuellt dataläge; arkitekturdokumentet beskriver den avsedda
 helheten och gränserna mellan mastrarna.
 
+Den avsedda katalogstrukturen och gränsen mellan aktuell kod, privat data och
+arkiv beskrivs i [`PROJEKTSTRUKTUR.md`](PROJEKTSTRUKTUR.md). En kort tabell över
+vilka generation 2-mastrar som är skrivande respektive skrivskyddade finns i
+[`STATUS.md`](STATUS.md).
+
 Repo-roten är den enda installerbara PWA:n **Korpholmen**, gemensam OAuth-retur,
 appväljare och synkcentral. Rotmanifestet har scope över hela appfamiljen. Alla
 underappar länkar till samma manifest och registrerar samma service worker, så
 navigationen stannar i en installerad app på bland annat iPhone. Privat data
 finns aldrig i GitHub.
 
-Korpholmen har ett gemensamt versionsatt, datafritt appskal. De sju
-sakapparna har fortfarande varsin IndexedDB och Dropbox-namnrymd. Efter första
-lyckade Dropbox-synken startar de från lokal IndexedDB utan nät, sparar
-ändringar lokalt och skickar dem automatiskt när anslutningen återkommer.
-En gemensam Dropbox-session återanvänds av alla appar. När en app öppnas drar
-bakgrundssynken nya operationer till de övriga lokala mastrarna; bara den
-aktiva ägarappen laddar upp sina väntande ändringar. Båtregister lagrar även
-hela det hämtade bildbeståndet lokalt och köar nya offlinebilder.
+Generation 2 använder den enkla modell som valts för vardagsarbetet: en
+mänskligt läsbar masterfil per ägarapp, en liten aktiv pekare och ett separat
+oföränderligt ändringskvitto per sparning. En sparning skapar alltid en ny
+masterrevision. Revisionskontroll avvisar en gammal flik eller enhet i stället
+för att tyst skriva över nyare data. Generation 1:s operationsloggar,
+checkpoints och snapshots bevaras som historiskt arkiv under övergången och är
+fortsatt writer endast för appar vars generation 2 ännu är skrivskyddad.
 
-Varje Dropbox-namnrymd kan dessutom bära ett litet
-`checkpoints/latest.json` som pekar på en innehållsadresserad, gzip-komprimerad
-snapshot i `snapshots/`. Snapshoten verifieras med SHA-256 och är en snabb
-startpunkt; de oföränderliga operationsbatcherna är fortsatt revisionsmaster
-och bevaras alltid. En tom Klubbhistorik kräver en giltig snapshot och faller
-inte tillbaka till att hämta hela operationsloggen.
-Bygg om checkpoints från en lokalt komplett Dropbox-spegel med
-`npm run build:checkpoints -- "/absolut/sökväg/till/Korpholmen"`.
+Apparna använder fortfarande lokal IndexedDB för snabb start och offlinevy.
+Båtregister lagrar dessutom privata bilder lokalt. Ingen privat master eller
+bild byggs in i GitHub Pages.
 
 Bygg hela appfamiljen och det gemensamma release-manifestet med `npm run build`.
 Kontrollera därefter samtliga data- och PWA-kontrakt med `npm test`.

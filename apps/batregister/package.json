@@ -6,7 +6,7 @@
     "build:migration": "node verktyg/bygg-startmaster.mjs",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "seed:dropbox": "node verktyg/skriv-dropbox-startmaster.mjs",
-    "test": "npm run test:pipeline && node test/harness.mjs",
+    "test": "npm run test:pipeline && node test/harness.mjs && node test/batregister-writer.mjs",
     "test:pipeline": "node test/image-pipeline.mjs"
   }
 }
