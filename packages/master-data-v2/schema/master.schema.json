@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://korpholmen.example/schema/master-v2.json",
+  "title": "Korpholmen generation 2 master",
+  "type": "object",
+  "required": ["schema_version", "architecture_generation", "app", "master_revision", "last_change_id", "updated_at", "updated_by", "data"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "architecture_generation": { "const": 2 },
+    "app": { "type": "string", "minLength": 1 },
+    "master_revision": { "type": "integer", "minimum": 0 },
+    "last_change_id": { "type": ["string", "null"] },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" },
+    "updated_by": { "type": ["string", "null"] },
+    "data": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "needs_review": { "type": "boolean" },
+            "review_comment": { "type": "string" },
+            "updated_at": { "type": "string", "format": "date-time" },
+            "updated_by": { "type": "string" },
+            "deleted_at": { "type": "string", "format": "date-time" },
+            "deleted_by": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
