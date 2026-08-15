@@ -7,6 +7,22 @@ andra master för samma sorts sakuppgift.
 
 ## Grundidé
 
+### Aktuell lagringsprincip
+
+Generation 2:s vardagsmaster är **masterfil + separat ändringshistorik**.
+`active.json` pekar på en SHA-verifierad, oföränderlig masterrevision. Varje
+tryck på **Spara** skapar en ny revision och ett separat ändringskvitto;
+revisionskontroll gör att en gammal flik inte kan skriva över en nyare
+ändring. Modellen är vald för att aktuell data ska vara enkel att läsa,
+analysera och flytta. En journal kan införas senare utan att sakmodellen eller
+de stabila ID:na behöver göras om.
+
+Generation 1:s operationsloggar, checkpoints och snapshots raderas inte. De
+är ett fryst historiskt arkiv och fortsätter bara som writer för en app tills
+den appens uttryckliga generation 2-byte är klart. Avsnitt nedan som beskriver
+operationssynk gäller därför generation 1 under övergången, inte den nya
+vardagsmastern.
+
 Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
 granskningsappar, en gemensam datafri motor och en framtida sammanhållen
 läsvy. Original, tolkning och presentation är skilda lager.
@@ -16,7 +32,7 @@ flowchart LR
     K["Källoriginal och bytebevarade källkopior"] --> I["Reproducerbar import"]
     I --> O["Ordagranna källposter och observationer"]
     O --> G["Granskade kopplingar till stabila ID:n"]
-    G --> M["Appens egen operationsmaster"]
+    G --> M["Appens egen masterfil och ändringshistorik"]
     M <--> D["Egen Dropbox-namnrymd"]
     M --> L["Lokal IndexedDB och offlinevy"]
     M -. "datafri kod" .-> P["GitHub Pages-appskal"]
