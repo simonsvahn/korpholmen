@@ -23,6 +23,10 @@ den appens uttryckliga generation 2-byte är klart. Avsnitt nedan som beskriver
 operationssynk gäller därför generation 1 under övergången, inte den nya
 vardagsmastern.
 
+Båtregistret använder nu `/batregister-generation2/active.json` som aktiv
+skrivpekare. Dess generation 1-logg under `/batregister/ops` är fryst av en
+beständig cutover-markör och får inte längre användas för nya ändringar.
+
 Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
 granskningsappar, en gemensam datafri motor och en framtida sammanhållen
 läsvy. Original, tolkning och presentation är skilda lager.

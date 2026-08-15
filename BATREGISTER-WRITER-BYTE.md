@@ -42,6 +42,15 @@ Byt bara sista argumentet till `--activate` efter att det datafria appskalet är
 publicerat. Verktyget avbryter om V1 avviker från backupen, beroenden har glidit
 eller någon av de 330 båtlänkarna i Korpholmen runt inte längre går att lösa.
 
+## Genomfört byte
+
+Båtregister generation 2 aktiverades som enda writer den 15 augusti 2026.
+Aktiv startrevision är 3 med 236 båtar och 2 identitetsompekningar. Den aktiva
+cutover-markören fryser generation 1 vid 61 batchfiler och 9 081 operationer.
+Efterkontrollen bekräftade också att samtliga 330 båtreferenser i Korpholmen
+runt fortfarande kan lösas. Exakta hashvärden och tidpunkt finns i backupens
+aktiveringskvitto.
+
 ## Återställning
 
 Säkerhetskopian ligger utanför projektet i den daterade arkivmapp som anges som
