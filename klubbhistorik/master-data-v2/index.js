@@ -25,6 +25,7 @@ export { MemoryMasterStorage } from './src/memory-storage.js';
 export { RevisionMasterStorage } from './src/revision-storage.js';
 export {
   COMMON_RECORD_FIELDS,
+  BATREGISTER_WRITER_CONTRACT,
   DOKUMENTARKIV_WRITER_CONTRACT,
   FASTIGHETER_WRITER_CONTRACT,
   MATRIKEL_WRITER_CONTRACT,
