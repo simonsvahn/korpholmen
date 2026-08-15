@@ -137,7 +137,6 @@ export class BatregisterWriter {
     return this.saveRecords([{ collection: 'identity_redirects', entity_id: redirectId, patch }], options);
   }
 
-
   deleteBoat(boatId, options) {
     return this.applyActions([{ collection: 'boats', entity_id: boatId, action: 'delete' }], options);
   }
