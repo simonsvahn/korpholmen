@@ -26,7 +26,7 @@ export const dropboxApiArg = value => JSON.stringify(value)
   .replace(/[\u007f-\uffff]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 export class DropboxTransport {
-  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false, requestTimeoutMs = 45_000 }) {
+  constructor({ accessToken, fetchImpl = (...args) => globalThis.fetch(...args), id = 'dropbox', opsRoot = '/ops', readOnly = false, writeGuard = null, requestTimeoutMs = 45_000 }) {
     if (!accessToken) throw new TypeError('Dropbox access token saknas');
     if (!fetchImpl) throw new TypeError('fetch saknas');
     this.accessToken = accessToken;
@@ -34,10 +34,17 @@ export class DropboxTransport {
     this.id = id;
     this.opsRoot = normalizePath(opsRoot).replace(/\/$/, '') || '/';
     this.readOnly = Boolean(readOnly);
+    if (writeGuard !== null && typeof writeGuard !== 'function') throw new TypeError('writeGuard måste vara en funktion');
+    this.writeGuard = writeGuard;
     if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 0) throw new TypeError('Ogiltig Dropbox-timeout');
     this.requestTimeoutMs = requestTimeoutMs;
     this.checkpointPath = childPath(parentPath(this.opsRoot), 'checkpoints/latest.json');
     this.knownFolders = new Set(['/']);
+  }
+
+  async assertWritable(action, path) {
+    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte skriva data');
+    if (this.writeGuard) await this.writeGuard({ action, path, transport_id: this.id });
   }
 
   async request(url, init, timeoutMs = this.requestTimeoutMs) {
@@ -82,9 +89,9 @@ export class DropboxTransport {
   }
 
   async ensureFolder(pathValue) {
-    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte skapa mappar');
     const path = normalizePath(pathValue);
     if (path === '/' || this.knownFolders.has(path)) return;
+    await this.assertWritable('create_folder', path);
     await this.ensureFolder(parentPath(path));
     try {
       await this.rpc('/files/create_folder_v2', { path, autorename: false });
@@ -95,8 +102,8 @@ export class DropboxTransport {
   }
 
   async upload(pathValue, value, mode) {
-    if (this.readOnly) throw new Error('Skrivskyddad Dropbox-transport får inte ladda upp data');
     const path = normalizePath(pathValue);
+    await this.assertWritable('upload_json', path);
     await this.ensureFolder(parentPath(path));
     const response = await this.request(`${CONTENT}/files/upload`, {
       method: 'POST',
@@ -113,39 +120,64 @@ export class DropboxTransport {
 
   async putImmutable(path, value) {
     try {
-      await this.upload(path, value, 'add');
-      return { path, created: true };
+      const result = await this.upload(path, value, 'add');
+      return { path, created: true, revision: result.rev ?? null };
     } catch (error) {
       if (!(error instanceof TransportError) || error.status !== 409 || !String(error.code).includes('conflict')) throw error;
-      const existing = await this.getJson(path);
-      if (canonicalStringify(existing) !== canonicalStringify(value)) throw new Error(`Oföränderlig Dropbox-kollision: ${path}`);
-      return { path, created: false };
+      const existing = await this.getJsonWithMetadata(path);
+      if (canonicalStringify(existing.value) !== canonicalStringify(value)) throw new Error(`Oföränderlig Dropbox-kollision: ${path}`);
+      return { path, created: false, revision: existing.revision };
     }
   }
 
   async putMutable(path, value) {
-    await this.upload(path, value, 'overwrite');
-    return { path, created: true };
+    const result = await this.upload(path, value, 'overwrite');
+    return { path, created: true, revision: result.rev ?? null };
   }
 
-  async getJson(pathValue) {
+  async putMutableIfRevision(path, value, expectedRevision) {
+    if (typeof expectedRevision !== 'string' || !expectedRevision) throw new TypeError('expectedRevision krävs för villkorad Dropbox-skrivning');
+    try {
+      const result = await this.upload(path, value, { '.tag': 'update', update: expectedRevision });
+      return { ok: true, path, revision: result.rev ?? null };
+    } catch (error) {
+      if (!(error instanceof TransportError) || error.status !== 409 || !String(error.code).includes('conflict')) throw error;
+      return { ok: false, path, revision: null };
+    }
+  }
+
+  async download(pathValue) {
     const path = normalizePath(pathValue);
     const response = await this.request(`${CONTENT}/files/download`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': dropboxApiArg({ path }) }
     });
     if (!response.ok) return this.parseError(response);
+    let metadata = {};
+    const metadataHeader = response.headers?.get?.('Dropbox-API-Result');
+    if (metadataHeader) {
+      try { metadata = JSON.parse(metadataHeader); } catch (_) { metadata = {}; }
+    }
+    return { path, response, metadata };
+  }
+
+  async getJsonWithMetadata(pathValue) {
+    const { path, response, metadata } = await this.download(pathValue);
     try {
       const value = typeof response.text === 'function'
         ? JSON.parse(await response.text())
         : await response.json();
-      return cloneJson(value);
+      return { value: cloneJson(value), revision: metadata.rev ?? null, metadata: cloneJson(metadata) };
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new TransportError(`Dropbox-filen innehåller ogiltig JSON: ${path}`, { code: 'invalid_json' });
       }
       throw error;
     }
+  }
+
+  async getJson(pathValue) {
+    return (await this.getJsonWithMetadata(pathValue)).value;
   }
 
   async putBatch(batch) {
@@ -234,6 +266,7 @@ export class DropboxTransport {
 
   async uploadBytes(pathValue, body, mode = 'overwrite') {
     const path = normalizePath(pathValue);
+    await this.assertWritable('upload_bytes', path);
     await this.ensureFolder(parentPath(path));
     const response = await this.request(`${CONTENT}/files/upload`, {
       method: 'POST',
@@ -259,12 +292,15 @@ export class DropboxTransport {
   }
 
   async getBytes(pathValue) {
-    const path = normalizePath(pathValue);
-    const response = await this.request(`${CONTENT}/files/download`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.accessToken}`, 'Dropbox-API-Arg': JSON.stringify({ path }) }
-    });
-    if (!response.ok) return this.parseError(response);
-    return new Uint8Array(await response.arrayBuffer());
+    return (await this.getBytesWithMetadata(pathValue)).value;
+  }
+
+  async getBytesWithMetadata(pathValue) {
+    const { response, metadata } = await this.download(pathValue);
+    return {
+      value: new Uint8Array(await response.arrayBuffer()),
+      revision: metadata.rev ?? null,
+      metadata: cloneJson(metadata),
+    };
   }
 }

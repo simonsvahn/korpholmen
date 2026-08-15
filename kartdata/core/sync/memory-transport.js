@@ -1,6 +1,6 @@
 import { canonicalStringify, cloneJson } from '../domain/canonical.js';
 import { batchPath, validateBatch } from './batch.js';
-import { CursorResetError } from './errors.js';
+import { CursorResetError, TransportError } from './errors.js';
 
 const normalizePath = value => {
   const path = String(value || '');
@@ -14,6 +14,7 @@ export class MemoryRemoteTransport {
     this.pageSize = pageSize;
     this.opsRoot = opsRoot;
     this.files = new Map();
+    this.fileRevisions = new Map();
     this.changes = [];
     this.revision = 0;
     this.minimumCursor = 0;
@@ -46,8 +47,10 @@ export class MemoryRemoteTransport {
   record(path, value) {
     this.revision += 1;
     this.files.set(path, cloneJson(value));
+    this.fileRevisions.set(path, `mfile:${this.revision}`);
     this.changes.push({ revision: this.revision, path });
     this.notifyWaiters();
+    return this.fileRevisions.get(path);
   }
 
   async putImmutable(pathValue, value) {
@@ -55,22 +58,52 @@ export class MemoryRemoteTransport {
     const existing = this.files.get(path);
     if (existing !== undefined) {
       if (canonicalStringify(existing) !== canonicalStringify(value)) throw new Error(`Oföränderlig filkollision: ${path}`);
-      return { path, created: false };
+      return { path, created: false, revision: this.fileRevisions.get(path) };
     }
-    this.record(path, value);
-    return { path, created: true };
+    const revision = this.record(path, value);
+    return { path, created: true, revision };
   }
 
   async putMutable(pathValue, value) {
     const path = normalizePath(pathValue);
-    this.record(path, value);
-    return { path, created: true };
+    const revision = this.record(path, value);
+    return { path, created: true, revision };
+  }
+
+  async putMutableIfRevision(pathValue, value, expectedRevision) {
+    const path = normalizePath(pathValue);
+    if (this.fileRevisions.get(path) !== expectedRevision) {
+      return { ok: false, path, revision: this.fileRevisions.get(path) ?? null };
+    }
+    const revision = this.record(path, value);
+    return { ok: true, path, revision };
   }
 
   async getJson(pathValue) {
+    return (await this.getJsonWithMetadata(pathValue)).value;
+  }
+
+  async getJsonWithMetadata(pathValue) {
     const path = normalizePath(pathValue);
-    if (!this.files.has(path)) throw new Error(`Filen saknas: ${path}`);
-    return cloneJson(this.files.get(path));
+    if (!this.files.has(path)) throw new TransportError(`Filen saknas: ${path}`, { status: 409, code: 'path/not_found' });
+    return {
+      value: cloneJson(this.files.get(path)),
+      revision: this.fileRevisions.get(path),
+      metadata: { path, rev: this.fileRevisions.get(path) },
+    };
+  }
+
+  async getBytes(pathValue) {
+    return (await this.getBytesWithMetadata(pathValue)).value;
+  }
+
+  async getBytesWithMetadata(pathValue) {
+    const loaded = await this.getJsonWithMetadata(pathValue);
+    return {
+      value: new TextEncoder().encode(JSON.stringify(loaded.value)),
+      revision: loaded.revision,
+      metadata: loaded.metadata,
+    };
   }
 
   async putBatch(batch) {
