@@ -6,8 +6,8 @@ import { assertExactPublicationFiles, readOptionalPrivateJson } from '../../../v
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '../../kartdata');
 const CORE = resolve(ROOT, '../../packages/core');
-const FILES = ['index.html', 'styles.css', 'manifest.webmanifest', 'sw.js', 'icons/icon.svg', 'src/config.js', 'src/model.js', 'src/property-selection.js'];
-const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
+const FILES = ['index.html', 'styles.css', 'manifest.webmanifest', 'sw.js', 'icons/icon.svg', 'src/config.js', 'src/model.js', 'src/property-selection.js', 'src/kart-active-v2.js'];
+const CORE_FILES = ['data-layer.js', 'runtime-safety.js', 'master-data.js', 'read-only-master.js', 'active-json-master.js', 'active-app-bundle.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/http-read-transport.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative); if (!(await stat(source)).isFile()) throw new Error(`Publiceringsfil saknas: ${relative}`);
@@ -21,12 +21,15 @@ for (const relative of CORE_FILES) {
 }
 const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8')).replaceAll('../../../packages/core/', '../core/');
 await mkdir(resolve(OUT, 'src'), { recursive: true }); await writeFile(resolve(OUT, 'src/app.js'), app);
+const activeV2 = (await readFile(resolve(ROOT, 'src/kart-active-v2.js'), 'utf8')).replaceAll('../../../packages/core/', '../core/');
+await writeFile(resolve(OUT, 'src/kart-active-v2.js'), activeV2);
 await assertExactPublicationFiles(OUT, [...FILES, 'src/app.js', ...CORE_FILES.map(file => `core/${file}`)]);
 
 const bundle = (await Promise.all([
   ...FILES.map(file => readFile(resolve(OUT, file), 'utf8')),
   ...CORE_FILES.map(file => readFile(resolve(OUT, 'core', file), 'utf8')),
   (async () => app)(),
+  (async () => activeV2)(),
 ])).join('\n');
 const privateData = await readOptionalPrivateJson(resolve(ROOT, 'privat/migrering-2026-08-04-ren-v2/clean-v2-ops.json'));
 const forbiddenNames = (privateData?.operations || [])

@@ -14,6 +14,7 @@ import {
   resolveDeviceId,
   validateOperation,
 } from '../../../packages/core/data-layer.js';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js';
 import { formatPropertyDisplayName, resolveCurrentOwners, resolvePropertyReferences } from '../../../packages/core/master-data.js';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
 import { CLEAN_V2_BOOTSTRAP_URL, DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
@@ -30,6 +31,7 @@ import {
   stableEntityId,
 } from './model.js?v=2026-08-04-2';
 import { propertySelectionState, validatePropertySelection } from './property-selection.js';
+import { KartActiveV2 } from './kart-active-v2.js?v=2026-08-15-1';
 
 const $ = selector => document.querySelector(selector);
 const content = $('#content');
@@ -53,6 +55,8 @@ let matrikelMaster;
 let accessToken = null;
 let accessTokenExpiresAt = 0;
 let syncPromise = null;
+let kartV2Mode = true;
+let kartV2 = null;
 let selectedEntryId = null;
 let selectedIslandId = null;
 let requestedDeepLinkApplied = false;
@@ -392,12 +396,35 @@ async function registerServiceWorker() { try { return await registerKorpholmenSe
 async function completeOAuthCallbackIfNeeded() { const url = new URL(location.href); if (!url.searchParams.has('code') && !url.searchParams.has('error')) return; const token = await completeDropboxOAuth(); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token) await store.putMeta(TOKEN_META, token.refresh_token); for (const parameter of ['code', 'state', 'error', 'error_description']) url.searchParams.delete(parameter); history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`); }
 async function currentAccessToken() { if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken; const refreshToken = await store.getMeta(TOKEN_META); if (!refreshToken || !DROPBOX_CLIENT_ID || navigator.onLine === false) return null; const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken }); accessToken = token.access_token; accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000; if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token); return accessToken; }
 async function syncNow() {
+  if (kartV2Mode) return syncKartV2();
   if (syncPromise) return syncPromise;
   syncPromise = (async () => { const hasCredential = Boolean(await store.getMeta(TOKEN_META)); if (navigator.onLine === false) { setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning'); return null; } const token = await currentAccessToken(); if (!token) { setStatus('Lokalt sparat · Dropbox ej ansluten', 'warning'); connectButton.textContent = 'Anslut Dropbox'; return null; } connectButton.textContent = 'Synka Dropbox'; setStatus('Synkar Kartdata och läser mastrar…'); const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata', opsRoot: '/kartdata/ops' }); const kartdataSync = new SyncEngine({ repository, transport }).syncOnce().then(result => { render(); return result; }); const [result] = await Promise.all([
     kartdataSync,
     fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
     matrikelMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-read', opsRoot: '/matrikel/ops', readOnly: true })),
   ]); render(); applyRequestedDeepLink(); setStatus(`Synkad · ${result.uploadedOps} upp, ${result.downloadedOps} ned · ägare från Fastigheter`, 'ok'); return result; })().catch(error => { console.error(error); if (isOfflineError(error)) { setStatus('Offline · lokalt sparat · synkas automatiskt', 'warning'); return null; } setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error; }).finally(() => { syncPromise = null; }); return syncPromise;
+}
+async function syncKartV2() {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    let localTransport = null;
+    if (isSourceTree) {
+      try { if ((await fetch('/kartdata-generation2/active.json', { method: 'HEAD', cache: 'no-store' })).ok) localTransport = new HttpReadTransport(); } catch { /* Dropbox används nedan. */ }
+    }
+    const token = localTransport ? null : await currentAccessToken();
+    if (!localTransport && !token) {
+      kartV2.render(); setStatus(kartV2.hasData() ? 'Offline · senast verifierade kartmaster visas' : 'Anslut Dropbox för att läsa kartmastern', 'warning'); return null;
+    }
+    setStatus('Läser aktiv kart- och fastighetsmaster…');
+    const result = await kartV2.sync(localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-kart-active-v2', opsRoot: '/kartdata-generation2/ops', readOnly: true }));
+    kartV2.render(); connectButton.textContent = token ? 'Synka Dropbox' : 'Lokal V2-master';
+    setStatus(`Kartdata · revision ${result.kart.masterRevision} · läsvy`, 'ok'); return result;
+  })().catch(error => {
+    console.error(error);
+    if (kartV2?.hasData()) { kartV2.render(); setStatus(`Senast verifierade kartmaster visas · ${error.message}`, 'warning'); return null; }
+    setStatus(`Åtgärd krävs · ${error.message}`, 'error'); throw error;
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
 }
 async function connectDropbox() { sessionStorage.setItem('korpholmen:oauth-return', new URL('kartdata/', redirectUri()).pathname); const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES }); location.assign(attempt.url); }
 async function bootstrapCleanV2({ force = false } = {}) {
@@ -445,6 +472,8 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 window.addEventListener('online', () => syncNow().catch(() => {})); window.addEventListener('offline', () => syncNow().catch(() => {})); window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
 
 async function init() {
-  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db); repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; newEntryButton.disabled = false; render(); applyRequestedDeepLink(); if (isSourceTree && !entryRecords().length) { await bootstrapCleanV2(); applyRequestedDeepLink(); } await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
+  const serviceWorkerPromise = registerServiceWorker(); const db = await openSlaktlandskapDB({ name: 'korpholmen-kartdata-v2' }); store = new IndexedDBStore(db);
+  if (kartV2Mode) { await completeOAuthCallbackIfNeeded(); kartV2 = await new KartActiveV2({ store, content, summary }).init(); kartV2.configureShell(); kartV2.render(); await syncKartV2(); await serviceWorkerPromise; return; }
+  repository = await new Repository({ store, deviceId: await deviceId() }).init(); fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init(); matrikelMaster = await new ReadOnlyMaster({ store, cacheKey: 'matrikel' }).init(); bootstrapButton.hidden = !isSourceTree; newEntryButton.disabled = false; render(); applyRequestedDeepLink(); if (isSourceTree && !entryRecords().length) { await bootstrapCleanV2(); applyRequestedDeepLink(); } await completeOAuthCallbackIfNeeded(); await syncNow(); await serviceWorkerPromise;
 }
 init().catch(error => { console.error(error); setStatus(`Kunde inte starta · ${error.message}`, 'error'); });

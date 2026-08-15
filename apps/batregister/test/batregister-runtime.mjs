@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { MemoryRemoteTransport, MemoryStore } from '../../../packages/core/data-layer.js';
+import { MemoryRemoteTransport, MemoryStore, createClock, createRestoreOperation, createSetOperation } from '../../../packages/core/data-layer.js';
 import { createBatregisterActiveRuntime } from '../src/batregister-runtime.js';
 import { boatTimeLabel, CATEGORY_LABELS, EVENT_LABELS } from '../src/batregister-v2-ui.js';
 
@@ -24,7 +24,7 @@ const boats = {
         { id: 'event:early', event_type: 'registered', time: { kind: 'point', start_min: 1999, start_max: 1999, precision: 'year' }, participants: [{ role: 'owner', party_ref: { master: 'people', entity_type: 'family_unit', entity_id: 'family:test' } }] },
       ],
     })],
-    identity_redirects: [],
+    identity_redirects: [record({ id: 'legacy-testbaten', target_boat_id: 'testbaten', decision_document: 'testbeslut.md' })],
   },
 };
 
@@ -58,4 +58,24 @@ assert.deepEqual(runtime.partyOptions().map(row => row.label), ['Familjen Test',
 assert.equal(boatTimeLabel({ kind: 'period', start_min: 1970, end_max: 1979 }), '1970–1979');
 assert.equal(CATEGORY_LABELS.rowboat, 'Rodbåt');
 assert.equal(EVENT_LABELS.registered, 'Inregistrerad');
-console.log('Båtregister V2-runtime och enkel vylogik: beroende, tidslinje, ägare, kategorier och årtal godkända');
+
+const legacyClock = createClock('legacy-supplement-test', () => 1_786_000_000_000);
+let legacySeq = 0;
+const legacyOperations = [];
+for (const [entityType, entityId, recordValue] of [
+  ['boat', 'legacy-testbaten', { id: 'legacy-testbaten', namn: 'Testbåten', modell: 'Äldre modell' }],
+  ['boat-spec-observation', 'spec:test', { id: 'spec:test', boat_id: 'legacy-testbaten', status: 'accepted', values: { model: 'Strukturerad modell', length_m: 4.2 } }],
+  ['boat-review-item', 'review:test', { id: 'review:test', boat_id: 'legacy-testbaten', status: 'open', question: 'Kontrollera äldre uppgift' }],
+]) {
+  legacyOperations.push(createRestoreOperation({ deviceId: 'legacy-supplement-test', seq: ++legacySeq, entityType, entityId, hlc: legacyClock.tick() }));
+  legacyOperations.push(createSetOperation({ deviceId: 'legacy-supplement-test', seq: ++legacySeq, entityType, entityId, field: 'record', value: recordValue, hlc: legacyClock.tick() }));
+}
+await runtime.legacy.applyOperations(legacyOperations);
+const supplement = runtime.legacySummary('testbaten');
+assert.equal(supplement.base.modell, 'Äldre modell');
+assert.equal(supplement.effectiveSpecs.model, 'Strukturerad modell');
+assert.equal(supplement.effectiveSpecs.length_m, 4.2);
+assert.equal(supplement.reviews[0].question, 'Kontrollera äldre uppgift');
+assert.equal(boats.data.boats[0].model, undefined, 'läskomplementet får inte skriva in äldre data i V2');
+
+console.log('Båtregister V2-runtime och enkel vylogik: beroende, tidslinje, ägare, kategorier, årtal och skrivskyddat G1-komplement godkända');

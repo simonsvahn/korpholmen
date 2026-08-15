@@ -1,228 +1,99 @@
-import {
-  IndexedDBStore,
-  KORPHOLMEN_APPS,
-  Repository,
-  SharedDropboxSession,
-  exchangeDropboxRefreshToken,
-  openSlaktlandskapDB,
-  syncAppFamily,
-} from '../../../packages/core/data-layer.js';
+import { DropboxTransport, IndexedDBStore, SharedDropboxSession, exchangeDropboxRefreshToken, openSlaktlandskapDB } from '../../../packages/core/data-layer.js';
+import { createActiveAppBundle } from '../../../packages/core/active-app-bundle.js';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js';
 import { DROPBOX_CLIENT_ID } from '../../../src/config.js';
-import { buildPersonProfile, buildSearchIndex, searchExplorer } from './projection.js';
 
-const ENTITY_TYPES = Object.freeze({
-  matrikel: ['person', 'relation', 'property-link', 'family-unit', 'kin-group'],
-  batregister: ['boat', 'boat-ownership-observation', 'boat-person-link'],
-  fastigheter: ['property', 'party', 'current-owner-assessment', 'community-link'],
-  dokumentarkiv: ['document', 'archive-entity'],
-  korpholmenrunt: ['race-result', 'race-person-link', 'race-edition'],
-  klubbhistorik: ['matrikel-release', 'person-occurrence'],
-  kartdata: [],
-});
-const TYPE_LABELS = Object.freeze({ person: 'Person', boat: 'Båt', property: 'Fastighet', document: 'Handling', year: 'Tävlingsår', 'source-text': 'Källtext' });
-const SOURCE_LABELS = Object.freeze({ matrikel: 'Personer & familjer', batregister: 'Båtregistret', fastigheter: 'Fastigheter', dokumentarkiv: 'Dokumentarkivet', korpholmenrunt: 'Korpholmen runt', klubbhistorik: 'Matrikeln' });
+const SOURCES = {
+  people: { pointerPath: '/personer-familjer/active.json', app: 'people', requiredCollections: ['people', 'relations', 'family_units'] },
+  matrikel: { pointerPath: '/matrikel-generation2/active.json', app: 'matrikel', requiredCollections: ['memberships', 'releases', 'person_occurrences'] },
+  boats: { pointerPath: '/batregister-generation2/active.json', app: 'batregister', requiredCollections: ['boats', 'identity_redirects'] },
+  properties: { pointerPath: '/fastigheter-generation2/active.json', app: 'fastigheter', requiredCollections: ['properties', 'timeline_entries', 'affiliations'] },
+  documents: { pointerPath: '/dokumentarkiv-generation2/active.json', app: 'dokumentarkiv', requiredCollections: ['documents', 'document_links'] },
+  race: { pointerPath: '/korpholmenrunt-generation2/active.json', app: 'korpholmenrunt', requiredCollections: ['editions', 'results', 'participants'] },
+  kart: { pointerPath: '/kartdata-generation2/active.json', app: 'kartdata', requiredCollections: ['places', 'place_names', 'entries', 'entry_names'] },
+};
+const TYPE_LABELS = { person: 'Person', boat: 'Båt', property: 'Fastighet', document: 'Handling', race: 'Tävling', place: 'Plats', map: 'Kartobjekt' };
 const viewNode = document.querySelector('#explorer-view');
 const searchForm = document.querySelector('#explorer-search-form');
 const searchInput = document.querySelector('#explorer-search');
 const reloadButton = document.querySelector('#reload-data');
 const statusNode = document.querySelector('#explorer-status');
 const session = new SharedDropboxSession({ clientId: DROPBOX_CLIENT_ID, exchangeRefreshToken: exchangeDropboxRefreshToken });
-let masters = {};
+let store;
+let bundle;
 let searchIndex = [];
 let loading = false;
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-const escapeAttribute = escapeHtml;
-const encode = value => encodeURIComponent(String(value || ''));
+const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g, ' ').trim();
 const unique = values => [...new Set(values.filter(Boolean))];
+const list = (source, collection) => bundle.list(source, collection);
+const get = (source, collection, id) => bundle.get(source, collection, id);
+const setStatus = (text, tone = '') => { statusNode.textContent = text; statusNode.className = tone ? `is-${tone}` : ''; };
+const item = ({ type, id, label, detail = '', search = [] }) => ({ type, id, label, detail, normalizedLabel: normalize(label), normalizedSearch: normalize([label, detail, ...search].join(' ')) });
 
-function setStatus(text, tone = '') {
-  statusNode.textContent = text;
-  statusNode.className = tone ? `is-${tone}` : '';
+function membership(personId) { return list('matrikel', 'memberships').find(row => row.person_id === personId) || null; }
+function buildIndex() {
+  const rows = [];
+  for (const person of list('people', 'people')) { const member = membership(person.id); rows.push(item({ type: 'person', id: person.id, label: person.display_name, detail: unique([member?.club_name, member?.status, person.living === false ? 'Avliden' : '']).join(' · '), search: [person.birth_name, ...(person.aliases || [])] })); }
+  for (const boat of list('boats', 'boats')) rows.push(item({ type: 'boat', id: boat.id, label: boat.display_name, detail: unique([boat.vessel_type, boat.category, boat.model]).join(' · '), search: [boat.notes, ...(boat.events || []).flatMap(event => event.participants || []).map(p => p.party_ref?.entity_id)] }));
+  for (const property of list('properties', 'properties')) rows.push(item({ type: 'property', id: property.id, label: property.display_name || property.designation || property.id, detail: 'Fastighetsmaster', search: [property.designation] }));
+  for (const document of list('documents', 'documents')) rows.push(item({ type: 'document', id: document.id, label: document.title, detail: unique([document.time?.original_text, ...(document.type_ids || [])]).join(' · '), search: [document.category_id] }));
+  const resultCounts = new Map(); for (const result of list('race', 'results')) resultCounts.set(result.year, (resultCounts.get(result.year) || 0) + 1);
+  for (const [year, count] of [...resultCounts].sort((a, b) => b[0] - a[0])) rows.push(item({ type: 'race', id: String(year), label: `Korpholmen runt ${year}`, detail: `${count} resultat` }));
+  for (const place of list('kart', 'places')) rows.push(item({ type: 'place', id: place.id, label: place.preferred_name, detail: unique([place.kind, get('kart', 'places', place.parent_place_id)?.preferred_name]).join(' · '), search: list('kart', 'place_names').filter(name => name.place_id === place.id).map(name => name.name) }));
+  for (const entry of list('kart', 'entries')) rows.push(item({ type: 'map', id: entry.id, label: entry.name, detail: unique([entry.entry_type, entry.subtype]).join(' · '), search: list('kart', 'entry_names').filter(name => name.entry_id === entry.id).map(name => name.name) }));
+  return rows;
 }
-
-function flattenEntity(entity) {
-  const fields = entity.fields || {};
-  const record = fields.record && typeof fields.record === 'object' && !Array.isArray(fields.record) ? fields.record : {};
-  return { id: entity.entity_id, ...fields, ...record };
+function href(item) {
+  if (item.type === 'person') return `../personer-familjer/?person=${encodeURIComponent(item.id)}`;
+  if (item.type === 'boat') return `../batregister/?boat=${encodeURIComponent(item.id)}`;
+  if (item.type === 'property') return `../fastigheter/?property=${encodeURIComponent(item.id)}`;
+  if (item.type === 'document') return `../dokumentarkiv/?document=${encodeURIComponent(item.id)}`;
+  if (item.type === 'race') return `../korpholmenrunt/?year=${encodeURIComponent(item.id)}`;
+  return '../kartdata/';
 }
-
-async function readApp(app) {
-  const database = await openSlaktlandskapDB({ name: app.database });
-  try {
-    const store = new IndexedDBStore(database);
-    const repository = await new Repository({ store, deviceId: `explorer-read-${app.id}` }).init();
-    return Object.fromEntries((ENTITY_TYPES[app.id] || []).map(type => [type, repository.listEntities(type).map(flattenEntity)]));
-  } finally {
-    database.close();
-  }
+function resultHtml(entry) { return `<a class="search-result" href="${href(entry)}"><span class="result-type">${escapeHtml(TYPE_LABELS[entry.type])}</span><span class="result-copy"><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.detail)}</span></span><span class="result-arrow" aria-hidden="true">→</span></a>`; }
+function search(value) {
+  const needle = normalize(value);
+  if (!needle) return [];
+  return searchIndex.map(entry => ({ entry, score: entry.normalizedLabel === needle ? 0 : entry.normalizedLabel.startsWith(needle) ? 1 : entry.normalizedLabel.includes(needle) ? 2 : entry.normalizedSearch.includes(needle) ? 3 : 99 })).filter(row => row.score < 99).sort((a, b) => a.score - b.score || a.entry.label.localeCompare(b.entry.label, 'sv', { numeric: true })).slice(0, 80).map(row => row.entry);
 }
-
-async function readLocalMasters() {
-  const entries = await Promise.all(KORPHOLMEN_APPS.map(async app => [app.id, await readApp(app)]));
-  return Object.fromEntries(entries);
-}
-
-function entityCount(data) {
-  return Object.values(data).reduce((total, app) => total + Object.values(app).reduce((sum, list) => sum + list.length, 0), 0);
-}
-
-function itemHref(item) {
-  if (item.type === 'person') return `./?person=${encode(item.id)}`;
-  if (item.type === 'boat') return `../batregister/?boat=${encode(item.id)}`;
-  if (item.type === 'property') return `../fastigheter/?property=${encode(item.id)}`;
-  if (item.type === 'document') return `../dokumentarkiv/?document=${encode(item.id)}`;
-  if (item.type === 'year') return `../korpholmenrunt/?year=${encode(item.id)}`;
-  if (item.type === 'source-text') {
-    const year = item.label.match(/\d{4}/)?.[0] || '';
-    return year ? `../korpholmenrunt/?year=${encode(year)}` : '../korpholmenrunt/';
-  }
-  return '#';
-}
-
-function searchResultHtml(item) {
-  return `<a class="search-result ${item.sourceTextOnly ? 'source-result' : ''}" href="${escapeAttribute(itemHref(item))}"><span class="result-type">${escapeHtml(TYPE_LABELS[item.type] || item.type)}</span><span class="result-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail || SOURCE_LABELS[item.sourceApp] || '')}</span></span><span class="result-arrow" aria-hidden="true">→</span></a>`;
-}
-
 function renderStart() {
-  viewNode.innerHTML = `<div class="start-grid"><section class="start-card"><p class="eyebrow">Börja här</p><h2>Sök efter en person</h2><p>Personsidan samlar kända relationer, båtar, fastighetsanknytningar, tävlingsresultat, dokument och matrikelutgåvor.</p><p>För båtar, fastigheter, handlingar och tävlingsår leder sökningen direkt till appen som äger uppgiften.</p></section><aside class="start-card"><p class="eyebrow">Datagräns</p><h2>En läsvy</h2><ul class="source-legend"><li><span class="source-dot"></span>Inga uppgifter sparas i Explorer</li><li><span class="source-dot"></span>Inga identiteter skapas automatiskt</li><li><span class="source-dot"></span>Okopplad källtext visas separat</li></ul></aside></div>`;
+  const counts = Object.fromEntries(Object.keys(SOURCES).map(source => [source, Object.values(bundle.sources[source]?.state?.master?.data || {}).reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0)]));
+  viewNode.innerHTML = `<div class="start-grid"><section class="start-card"><p class="eyebrow">Aktiva V2-mastrar</p><h2>Sök på tvären</h2><p>Personer, båtar, fastigheter, handlingar, tävlingsår och kartobjekt öppnas i den app som äger uppgiften.</p></section><aside class="start-card"><p class="eyebrow">Inläst</p><h2>${searchIndex.length.toLocaleString('sv-SE')} sökbara objekt</h2><p>${Object.values(counts).reduce((a, b) => a + b, 0).toLocaleString('sv-SE')} strukturerade poster i sju verifierade V2-mastrar.</p></aside></div>`;
   viewNode.setAttribute('aria-busy', 'false');
 }
-
 function renderSearch(value) {
-  const results = searchExplorer(searchIndex, value);
-  const sourceCount = results.filter(item => item.sourceTextOnly).length;
-  viewNode.innerHTML = results.length
-    ? `<header class="search-heading"><h2>${results.length} träffar</h2><p>${sourceCount ? `${sourceCount} ligger enbart i källtext och är inte registerkopplade` : 'Registerkopplade träffar'}</p></header><div class="search-results">${results.map(searchResultHtml).join('')}</div>`
-    : `<section class="empty-state"><h2>Ingen träff</h2><p>Prova ett namn, en båt, en fastighet, en handling eller ett år.</p></section>`;
+  const results = search(value);
+  viewNode.innerHTML = results.length ? `<header class="search-heading"><h2>${results.length} träffar</h2><p>Enbart aktiva V2-mastrar</p></header><div class="search-results">${results.map(resultHtml).join('')}</div>` : `<section class="empty-state"><h2>Ingen träff</h2><p>Prova ett personnamn, klubbnamn, en båt, fastighet, handling eller plats.</p></section>`;
   viewNode.setAttribute('aria-busy', 'false');
 }
-
-function yearSpan(person) {
-  const born = person.birth_year || person.fodd_ar || String(person.birth_date || '').slice(0, 4);
-  const died = person.death_year || person.dod_ar || String(person.death_date || '').slice(0, 4);
-  if (!born && !died) return '';
-  return `${born || '?'}–${died || ''}`;
-}
-
-function rowHtml({ title, meta = '', tags = [], href = '', hrefLabel = 'Öppna' }) {
-  return `<li class="card-row"><span class="card-row-main"><strong>${escapeHtml(title)}</strong>${meta ? `<span>${escapeHtml(meta)}</span>` : ''}${tags.length ? `<span class="tag-row">${tags.map(tag => `<span class="tag ${tag.caution ? 'caution' : ''}">${escapeHtml(tag.label)}</span>`).join('')}</span>` : ''}</span>${href ? `<a href="${escapeAttribute(href)}">${escapeHtml(hrefLabel)} →</a>` : ''}</li>`;
-}
-
-function cardHtml({ title, source, sourceHref, items, empty, wide = false, note = '' }) {
-  return `<section class="profile-card ${wide ? 'wide' : ''}"><header class="card-head"><h3>${escapeHtml(title)}</h3>${sourceHref ? `<a href="${escapeAttribute(sourceHref)}">${escapeHtml(source)} →</a>` : ''}</header>${items.length ? `<ul class="card-list">${items.join('')}</ul>` : `<p class="card-empty">${escapeHtml(empty)}</p>`}${note ? `<p class="profile-note">${escapeHtml(note)}</p>` : ''}</section>`;
-}
-
-function renderPerson(personId) {
-  const profile = buildPersonProfile(masters, personId);
-  if (!profile) {
-    viewNode.innerHTML = `<section class="empty-state"><h2>Personen finns inte lokalt</h2><p>Synka registren eller sök efter en annan person.</p></section>`;
-    viewNode.setAttribute('aria-busy', 'false');
-    return;
-  }
-  const p = profile.person;
-  const identity = unique([yearSpan(p), p.club_name || p.klubbnamn, p.family || p.ui_clan]).join(' · ');
-  const relationItems = profile.relations.map(relation => rowHtml({
-    title: relation.personName,
-    meta: relation.label,
-    tags: relation.confirmed ? [] : [{ label: 'Ej bekräftad uppgift', caution: true }],
-    href: `./?person=${encode(relation.personId)}`,
-    hrefLabel: 'Visa person',
-  }));
-  const groupItems = profile.groups.map(group => rowHtml({
-    title: unique([group.referenceCode, group.name]).join(' · '),
-    meta: group.role,
-    tags: group.confirmed ? [] : [{ label: 'Härledd via öppet underlag', caution: true }],
-    href: `../personer-familjer/?group=${encode(group.id)}`,
-    hrefLabel: 'Öppna grupp',
-  }));
-  const boatItems = profile.boats.map(boat => rowHtml({
-    title: boat.name,
-    meta: unique([boat.type, ...boat.roles, ...boat.periods]).join(' · '),
-    href: `../batregister/?boat=${encode(boat.id)}`,
-    hrefLabel: 'Öppna båt',
-  }));
-  const propertyItems = profile.properties.map(property => rowHtml({
-    title: property.name,
-    tags: [property.currentOwner ? { label: 'Nuvarande ägare' } : null, property.associated ? { label: 'Anknytning, inte ägaruppgift', caution: !property.currentOwner } : null].filter(Boolean),
-    href: `../fastigheter/?property=${encode(property.id)}`,
-    hrefLabel: 'Öppna fastighet',
-  }));
-  const raceItems = profile.raceResults.map(result => rowHtml({
-    title: unique([result.year, result.boatName]).join(' · '),
-    meta: unique([result.className, result.course, result.time]).join(' · '),
-    href: `../korpholmenrunt/?year=${encode(result.year)}`,
-    hrefLabel: 'Öppna året',
-  }));
-  const documentItems = profile.documents.map(document => rowHtml({
-    title: document.title,
-    meta: unique([document.date, document.type]).join(' · '),
-    href: `../dokumentarkiv/?document=${encode(document.id)}`,
-    hrefLabel: 'Öppna handling',
-  }));
-  const clubItems = profile.clubOccurrences.map(item => rowHtml({
-    title: item.year ? `Matrikel ${item.year}` : item.releaseId,
-    meta: unique([item.name, item.clubName, item.membershipStatus]).join(' · '),
-    href: `../matrikel/?release=${encode(item.releaseId)}`,
-    hrefLabel: 'Öppna utgåva',
-  }));
-
-  viewNode.innerHTML = `<header class="profile-head"><div><p class="eyebrow">Person · läsvy</p><h2>${escapeHtml(profile.name)}</h2>${identity ? `<p>${escapeHtml(identity)}</p>` : ''}</div><a class="owner-link" href="../personer-familjer/?person=${encode(profile.id)}">Öppna och ändra i Personer & familjer →</a></header><div class="profile-grid">${cardHtml({ title: 'Familj & släkt', source: 'Personer & familjer', sourceHref: `../personer-familjer/?person=${encode(profile.id)}`, items: [...relationItems, ...groupItems], empty: 'Inga kopplade relationer eller grupper.', note: 'Explorer återger personmastern. Härledda gruppmedlemskap skapar inga nya personfakta.' })}${cardHtml({ title: 'Båtar', source: 'Båtregistret', sourceHref: `../batregister/?person=${encode(profile.id)}`, items: boatItems, empty: 'Ingen kopplad båt.' })}${cardHtml({ title: 'Fastigheter', source: 'Fastigheter', sourceHref: '../fastigheter/', items: propertyItems, empty: 'Ingen kopplad fastighet.', note: 'Fastighetsanknytning visas separat från bedömt nuvarande ägande.' })}${cardHtml({ title: 'Korpholmen runt', source: 'Korpholmen runt', sourceHref: `../korpholmenrunt/?person=${encode(profile.id)}`, items: raceItems, empty: 'Inga manuellt kopplade tävlingsresultat.' })}${cardHtml({ title: 'Handlingar', source: 'Dokumentarkivet', sourceHref: '../dokumentarkiv/', items: documentItems, empty: 'Inga kopplade handlingar.' })}${cardHtml({ title: 'Matrikeln över tid', source: 'Matrikeln', sourceHref: `../matrikel/?person=${encode(profile.id)}`, items: clubItems, empty: 'Inga bekräftade förekomster i historiska matriklar.' })}</div>`;
-  viewNode.setAttribute('aria-busy', 'false');
-}
-
-function renderRoute() {
-  const params = new URL(location.href).searchParams;
-  const personId = params.get('person');
-  if (personId) renderPerson(personId);
-  else if (searchInput.value.trim()) renderSearch(searchInput.value.trim());
-  else renderStart();
-}
-
-async function load({ sync = false } = {}) {
-  if (loading) return;
-  loading = true;
-  reloadButton.disabled = true;
-  viewNode.setAttribute('aria-busy', 'true');
+function renderRoute() { const query = new URL(location.href).searchParams.get('q') || searchInput.value.trim(); if (query) { searchInput.value = query; renderSearch(query); } else renderStart(); }
+async function localTransport() { try { return (await fetch('/personer-familjer/active.json', { method: 'HEAD', cache: 'no-store' })).ok ? new HttpReadTransport() : null; } catch { return null; } }
+async function load({ force = false } = {}) {
+  if (loading) return; loading = true; reloadButton.disabled = true; viewNode.setAttribute('aria-busy', 'true');
   try {
-    if (sync) {
-      const token = await session.getAccessToken({ online: navigator.onLine !== false });
-      if (token) {
-        setStatus('Hämtar senaste data från de sju registren…');
-        await syncAppFamily({ accessToken: token, force: true });
-      } else {
-        setStatus('Dropbox är inte ansluten · läser lokala register');
-      }
+    const http = await localTransport(); const token = http ? null : await session.getAccessToken({ online: navigator.onLine !== false });
+    if ((http || token) && (force || !Object.values(SOURCES).every((_, index) => bundle.hasData(Object.keys(SOURCES)[index])))) {
+      setStatus('Läser sju aktiva V2-mastrar…');
+      await bundle.sync(http || new DropboxTransport({ accessToken: token, id: 'dropbox-explorer-active-v2', opsRoot: '/explorer-v2-read', readOnly: true }));
     }
-    masters = await readLocalMasters();
-    searchIndex = buildSearchIndex(masters);
-    renderRoute();
-    setStatus(`${entityCount(masters).toLocaleString('sv-SE')} lokala poster lästa · Explorer är skrivskyddad`, 'ok');
+    searchIndex = buildIndex(); renderRoute();
+    const revisions = Object.keys(SOURCES).map(source => bundle.revision(source)).join('/');
+    setStatus(`${searchIndex.length.toLocaleString('sv-SE')} sökbara objekt · V2-revisioner ${revisions} · skrivskyddad`, 'ok');
   } catch (error) {
     console.error(error);
-    setStatus(`Kunde inte läsa registren · ${error.message}`, 'error');
-    viewNode.innerHTML = `<section class="empty-state"><h2>Explorer kunde inte starta</h2><p>${escapeHtml(error.message)}</p></section>`;
-    viewNode.setAttribute('aria-busy', 'false');
-  } finally {
-    loading = false;
-    reloadButton.disabled = false;
-  }
+    if (Object.keys(SOURCES).some(source => bundle.hasData(source))) { searchIndex = buildIndex(); renderRoute(); setStatus(`Senast verifierade V2-data visas · ${error.message}`, 'warning'); }
+    else { setStatus(`Kunde inte läsa V2-mastrarna · ${error.message}`, 'error'); viewNode.innerHTML = `<section class="empty-state"><h2>Explorer kunde inte starta</h2><p>${escapeHtml(error.message)}</p></section>`; }
+  } finally { loading = false; reloadButton.disabled = false; }
 }
 
-searchForm.addEventListener('submit', event => {
-  event.preventDefault();
-  const url = new URL(location.href);
-  url.searchParams.delete('person');
-  history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
-  renderSearch(searchInput.value.trim());
-});
-searchInput.addEventListener('input', () => {
-  if (new URL(location.href).searchParams.has('person')) return;
-  if (searchInput.value.trim().length >= 2) renderSearch(searchInput.value.trim());
-  else if (!searchInput.value.trim()) renderStart();
-});
-reloadButton.addEventListener('click', () => load({ sync: true }));
+searchForm.addEventListener('submit', event => { event.preventDefault(); const query = searchInput.value.trim(); const url = new URL(location.href); if (query) url.searchParams.set('q', query); else url.searchParams.delete('q'); history.pushState({}, '', `${url.pathname}${url.search}`); query ? renderSearch(query) : renderStart(); });
+searchInput.addEventListener('input', () => searchInput.value.trim().length >= 2 ? renderSearch(searchInput.value.trim()) : !searchInput.value.trim() && renderStart());
+reloadButton.addEventListener('click', () => load({ force: true }));
 window.addEventListener('popstate', renderRoute);
-window.addEventListener('korpholmen:dropbox-ready', () => setStatus('Dropbox är ansluten · tryck Läs om för senaste data'));
+window.addEventListener('korpholmen:dropbox-ready', () => load({ force: true }));
 
-load();
+async function init() { const database = await openSlaktlandskapDB({ name: 'korpholmen-explorer-v2' }); store = new IndexedDBStore(database); bundle = await createActiveAppBundle({ store, cacheKey: 'explorer-active-v2', sources: SOURCES }).init(); if (Object.keys(SOURCES).some(source => bundle.hasData(source))) { searchIndex = buildIndex(); renderRoute(); } await load(); }
+init().catch(error => { console.error(error); setStatus(error.message, 'error'); });

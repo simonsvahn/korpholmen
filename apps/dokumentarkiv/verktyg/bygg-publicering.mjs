@@ -7,7 +7,8 @@ const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const OUT=resolve(ROOT,'../../dokumentarkiv');
 const CORE=resolve(ROOT,'../../packages/core');
 const FILES=['index.html','styles.css','manifest.webmanifest','sw.js','og.png','src/config.js'];
-const CORE_FILES=['data-layer.js', 'runtime-safety.js', 'master-data.js','read-only-master.js','domain/canonical.js','domain/hlc.js','domain/materializer.js','domain/operations.js','domain/repository.js','pwa/korpholmen-service-worker.js','storage/indexeddb.js','storage/memory.js','sync/app-family-sync.js','sync/batch.js','sync/batch-progress.js','sync/checkpoint-format.js','sync/dropbox-transport.js','sync/errors.js','sync/memory-transport.js','sync/oauth-flow.js','sync/oauth-pkce.js','sync/shared-dropbox-session.js','sync/sync-engine.js'];
+const APP_FILES=['src/document-active-v2.js'];
+const CORE_FILES=['active-app-bundle.js','active-json-master.js','data-layer.js', 'runtime-safety.js', 'master-data.js','read-only-master.js','domain/canonical.js','domain/hlc.js','domain/materializer.js','domain/operations.js','domain/repository.js','pwa/korpholmen-service-worker.js','storage/indexeddb.js','storage/memory.js','sync/app-family-sync.js','sync/batch.js','sync/batch-progress.js','sync/checkpoint-format.js','sync/dropbox-transport.js','sync/errors.js','sync/http-read-transport.js','sync/memory-transport.js','sync/oauth-flow.js','sync/oauth-pkce.js','sync/shared-dropbox-session.js','sync/sync-engine.js'];
 
 for(const relative of FILES){
   const source=resolve(ROOT,relative);
@@ -25,15 +26,17 @@ for(const relative of CORE_FILES){
   await mkdir(dirname(target),{recursive:true});
   await copyFile(source,target);
 }
+for(const relative of APP_FILES){const source=(await readFile(resolve(ROOT,relative),'utf8')).replaceAll('../../../packages/core/','../core/');const target=resolve(OUT,relative);await mkdir(dirname(target),{recursive:true});await writeFile(target,source)}
 
 const app=(await readFile(resolve(ROOT,'src/app.js'),'utf8')).replaceAll('../../../packages/core/','../core/');
 await mkdir(resolve(OUT,'src'),{recursive:true});
 await writeFile(resolve(OUT,'src/app.js'),app);
-await assertExactPublicationFiles(OUT,[...FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);
+await assertExactPublicationFiles(OUT,[...FILES,...APP_FILES,'src/app.js',...CORE_FILES.map(file=>`core/${file}`)]);
 
 const bundle=(await Promise.all([
   ...FILES.filter(file=>!file.endsWith('.png')).map(file=>readFile(resolve(OUT,file),'utf8')),
   ...CORE_FILES.map(file=>readFile(resolve(OUT,'core',file),'utf8')),
+  ...APP_FILES.map(file=>readFile(resolve(OUT,file),'utf8')),
   Promise.resolve(app),
 ])).join('\n');
 const privateData=await readOptionalPrivateJson(resolve(ROOT,'privat/aktuell-startmaster/initial-ops.json'));

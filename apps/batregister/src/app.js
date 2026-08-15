@@ -616,6 +616,16 @@ async function cachedBlob(path, transport = null) {
   return promise;
 }
 
+async function localImageBlob(path) {
+  if (!isSourceTree || !path?.startsWith('/batregister/bilder/')) return null;
+  try {
+    const response = await fetch(path, { cache: 'no-store' });
+    return response.ok ? await response.blob() : null;
+  } catch {
+    return null;
+  }
+}
+
 function objectUrl(path, blob) {
   let url = imageUrls.get(path);
   if (!url && blob) {
@@ -626,20 +636,34 @@ function objectUrl(path, blob) {
 }
 
 async function hydrateImages(scope = document) {
-  if (isSourceTree) return;
-  const nodes = [...scope.querySelectorAll('img[data-image-path]')].filter(node => node.dataset.imagePath && !node.src);
   const transport = accessToken && navigator.onLine !== false
     ? new DropboxTransport({ accessToken, id: 'dropbox-batregister-images', opsRoot: '/batregister/ops' })
     : null;
-  await mapConcurrent(nodes, 6, async node => {
+  const loadRemote = async node => {
     const path = node.dataset.imagePath;
     try {
-      const blob = await cachedBlob(path, transport);
+      let blob = await cachedBlob(path);
+      if (!blob) {
+        blob = await localImageBlob(path);
+        if (blob) await store.putBlob(path, blob);
+      }
+      if (!blob && transport) blob = await cachedBlob(path, transport);
       if (blob && node.isConnected) node.src = objectUrl(path, blob);
     } catch (error) {
       if (!isOfflineError(error)) node.alt = `Bild kunde inte hämtas: ${error.message}`;
     }
-  });
+  };
+  const allNodes = [...scope.querySelectorAll('img[data-image-path]')].filter(node => node.dataset.imagePath);
+  for (const node of allNodes) {
+    if (node.src && !node.dataset.remoteFallbackInstalled) {
+      node.dataset.remoteFallbackInstalled = 'true';
+      node.addEventListener('error', () => {
+        node.removeAttribute('src');
+        loadRemote(node);
+      }, { once: true });
+    }
+  }
+  await mapConcurrent(allNodes.filter(node => !node.src), 6, loadRemote);
 }
 
 function allImagePaths() {
@@ -1983,6 +2007,16 @@ async function syncBatregisterV2() {
     batregisterV2Writer = result.writable && token ? createBatregisterWriter({ transport: batregisterV2WriteTransport(token), pendingStore: store }) : null;
     if (batregisterV2Writer) await batregisterV2Writer.load();
     batregisterV2Controller.setWriter(batregisterV2Writer);
+    if (token) {
+      setStatus(`Båtmaster · revision ${result.boatRevision} · läser tidigare strukturerade uppgifter…`);
+      try {
+        await batregisterV2Runtime.syncLegacy(new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-generation1-supplement', opsRoot: '/batregister/ops', readOnly: true }));
+        batregisterV2Controller.render();
+        if (batregisterV2Controller.selectedBoatId) batregisterV2Controller.open(batregisterV2Controller.selectedBoatId, { updateUrl: false });
+      } catch (legacyError) {
+        console.warn('Det äldre läskomplementet kunde inte uppdateras', legacyError);
+      }
+    }
     connectButton.textContent = token ? 'Synka Dropbox' : 'Anslut Dropbox';
     setStatus(`Båtmaster · revision ${result.boatRevision} · ${batregisterV2Writer ? 'skrivmaster' : result.writable ? 'anslut Dropbox för att skriva' : 'förhandsläge'}`, 'ok');
     return result;
@@ -2004,6 +2038,12 @@ async function activeBatregisterCutover(token) {
   const transport = token ? new DropboxTransport({ accessToken: token, id: 'dropbox-batregister-cutover-detect', opsRoot: '/batregister/ops', readOnly: true }) : missing;
   const guard = new GenerationCutoverGuard({ app: 'batregister', transport, store });
   return token ? guard.refresh({ force: true }) : guard.cachedMarker();
+}
+
+async function localBatregisterV2Available() {
+  if (!isSourceTree) return false;
+  try { return (await fetch('/batregister-generation2/active.json', { method: 'HEAD', cache: 'no-store' })).ok; }
+  catch { return false; }
 }
 
 async function initBatregisterV2Mode() {
@@ -2193,7 +2233,7 @@ async function init(){
   const parameters=new URL(location.href).searchParams;
   const token=await currentAccessToken();
   const cutover=await activeBatregisterCutover(token);
-  if(cutover?.state==='active'||(isSourceTree&&parameters.get('boatmaster')==='next')){
+  if(cutover?.state==='active'||await localBatregisterV2Available()||(isSourceTree&&parameters.get('boatmaster')==='next')){
     await initBatregisterV2Mode();
     await serviceWorkerPromise;
     return;

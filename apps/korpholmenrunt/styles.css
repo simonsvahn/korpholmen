@@ -232,3 +232,6 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+.v2-race-table{display:grid;margin:1rem;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.v2-race-table>header,.v2-race-table>article{display:grid;grid-template-columns:5rem minmax(12rem,1.3fr) minmax(10rem,1fr) 8rem 4rem 6rem;gap:.7rem;align-items:center;padding:.65rem .8rem;border-bottom:1px solid var(--line)}.v2-race-table>header{background:#e5ece8;color:var(--muted);font-size:.7rem;font-weight:900;text-transform:uppercase}.v2-race-table>article:last-child{border-bottom:0}.v2-race-table a{color:var(--blue);font-weight:750}.v2-unlinked{color:#8b5a2b;text-decoration:underline dotted}
+@media(max-width:760px){.v2-race-table{overflow-x:auto}.v2-race-table>header,.v2-race-table>article{min-width:52rem}}

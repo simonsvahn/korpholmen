@@ -53,8 +53,11 @@ import {
 } from '../../../packages/core/family-context.js?v=2026-08-05-paket-3';
 import { resolvePropertyIslandNames, resolvePropertyReferences } from '../../../packages/core/master-data.js?v=2026-08-07-master-integrations';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js?v=2026-08-06-property-owner-display';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js?v=2026-08-15-active-v2';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
+import { createPeopleV2Runtime } from './people-v2-runtime.js?v=2026-08-15-active-v2';
+import { createPeopleV2Controller } from './people-v2-ui.js?v=2026-08-15-active-v2';
 
 const $ = (selector) => document.querySelector(selector);
 const statusNode = $('#sync-status');
@@ -107,6 +110,9 @@ let propertyById = new Map();
 let requestedPersonApplied = false;
 let requestedGroupApplied = false;
 let filterReturnFocus = null;
+let peopleV2Mode = true;
+let peopleV2Runtime = null;
+let peopleV2Controller = null;
 
 const ui = {
   selectedPersonId: null,
@@ -1273,6 +1279,7 @@ async function migrateLateLegacyBatches(primaryTransport, token) {
 }
 
 async function syncNow() {
+  if (peopleV2Mode) return syncPeopleV2();
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
     const hasCredential = Boolean(await store.getMeta(TOKEN_META));
@@ -1320,9 +1327,48 @@ async function syncNow() {
 
 async function connectDropbox() {
   if (!DROPBOX_CLIENT_ID) return;
-  sessionStorage.setItem('korpholmen:oauth-return', new URL('matrikel/', redirectUri()).pathname);
+  sessionStorage.setItem('korpholmen:oauth-return', new URL('personer-familjer/', redirectUri()).pathname);
   const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES });
   location.assign(attempt.url);
+}
+
+async function syncPeopleV2() {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    let localTransport = null;
+    if (isSourceTree) {
+      try {
+        const response = await fetch('/personer-familjer/active.json', { method: 'HEAD', cache: 'no-store' });
+        if (response.ok) localTransport = new HttpReadTransport();
+      } catch { /* Dropbox eller verifierad cache används. */ }
+    }
+    const token = localTransport ? null : await currentAccessToken();
+    if (!localTransport && !token) {
+      peopleV2Controller.render();
+      setStatus(peopleV2Runtime.hasData() ? 'Offline · senast verifierade Personmaster visas' : 'Anslut Dropbox för att läsa Personmastern', 'warning');
+      connectButton.textContent = 'Anslut Dropbox';
+      return null;
+    }
+    setStatus('Läser aktiv Person- och Matrikelmaster…');
+    const transport = localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-people-active-v2', opsRoot: '/personer-familjer/ops', readOnly: true });
+    const result = await peopleV2Runtime.sync(transport);
+    peopleV2Controller.render();
+    connectButton.textContent = token ? 'Synka Dropbox' : 'Lokal V2-master';
+    setStatus(`Personmaster · revision ${result.peopleRevision} · Matrikel revision ${result.matrikelRevision}`, 'ok');
+    const requested = new URL(location.href).searchParams.get('person');
+    if (requested) peopleV2Controller.open(requested, { updateUrl: false });
+    return result;
+  })().catch(error => {
+    console.error(error);
+    if (peopleV2Runtime?.hasData()) {
+      peopleV2Controller.render();
+      setStatus(`Senast verifierade Personmaster visas · ${error.message}`, 'warning');
+      return null;
+    }
+    setStatus(`Åtgärd krävs · ${error.message}`, 'error');
+    throw error;
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
 }
 
 async function connectOrSyncDropbox() {
@@ -1537,6 +1583,16 @@ async function init() {
   const serviceWorkerPromise = registerServiceWorker();
   const db = await openSlaktlandskapDB();
   store = new IndexedDBStore(db);
+  if (peopleV2Mode) {
+    await completeOAuthCallback();
+    peopleV2Runtime = await createPeopleV2Runtime({ store }).init();
+    peopleV2Controller = createPeopleV2Controller({ runtime: peopleV2Runtime, content: contentNode, drawer, drawerContent, statusNode });
+    peopleV2Controller.configureShell();
+    peopleV2Controller.render();
+    await syncPeopleV2();
+    await serviceWorkerPromise;
+    return;
+  }
   repository = await new Repository({ store, deviceId: await deviceId() }).init();
   fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init();
   kartdataMaster = await new ReadOnlyMaster({ store, cacheKey: 'kartdata' }).init();

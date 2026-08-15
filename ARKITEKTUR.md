@@ -27,6 +27,11 @@ Båtregistret använder nu `/batregister-generation2/active.json` som aktiv
 skrivpekare. Dess generation 1-logg under `/batregister/ops` är fryst av en
 beständig cutover-markör och får inte längre användas för nya ändringar.
 
+Alla ordinarie appvyer läser respektive aktiva generation 2-pekare. Explorer
+läser samtliga sju V2-mastrar och är en ren, skrivskyddad sökprojektion.
+Generation 1 får bara läsas i uttryckligen märkta övergångskomplement. Ett
+sådant komplement får aldrig föras in i V2 utan ett separat granskningsbeslut.
+
 Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
 granskningsappar, en gemensam datafri motor och en framtida sammanhållen
 läsvy. Original, tolkning och presentation är skilda lager.
@@ -62,8 +67,9 @@ Fyra regler håller modellen samman:
 | **Matrikel** | Medlemskap, medlemsnivå, aktivitet/passivitet, invalsår, klubbnamn och daterade matrikelutgåvor | Person-, båt- och senare fastighets-ID:n | Stabil person-/båtidentitet eller ägande härlett ur kolumnplacering |
 | **Kartdata** | Aktiv kartdata, stabila öobjekt, namnformer samt strukturerade ö- och fastighetskopplingar | Fastighets-ID:n, personer och externa ägarparter från Fastighetshistorik | Ägarhistorik, personidentitet eller AI-förslag som aktiva sakuppgifter |
 
-`packages/core/` äger ingen sakdata. Paketet tillhandahåller operationer,
-materialisering, IndexedDB, synk, OAuth och konfliktregler.
+`packages/core/` äger ingen sakdata. Paketet tillhandahåller aktiva
+masterpekare, skrivskyddade fler-master-läsare, operationer, materialisering,
+IndexedDB, synk, OAuth och konfliktregler.
 
 ## Mastrar, skrivskyddade läsningar och den gemensamma läsvyn
 
@@ -109,39 +115,25 @@ sakmaster. Den ska kunna visa en person, familj, båt, fastighet, handling eller
 händelse och följa länkarna mellan dem. Ett tidsfilter väljer observationer
 och giltighetsintervall från rätt master.
 
-Kartdata v2 använder `data-entry` som aktiv sakpost. Posten länkas till ett
-stabilt ö-ID genom `data-entry-island-link` och till Fastighetshistorikens
-fastighets-ID genom `data-entry-property-link`. Äldre `map-entry`, källfält,
-arbetsanteckningar och automatiska förslag ligger kvar som ett avskilt
-append-only-arkiv men läses inte av appen och ingår inte i exporten.
-Äldre karttexter av typen `ägaretikett` hör också till detta arkiv och är inte
-aktiva sakobjekt.
+Kartdatas aktiva V2-master består av `places`, `place_names`, `entries` och
+`entry_names`. En `place` är ett stabilt geografiskt sammanhang och kan ha en
+överordnad plats, exempelvis Yxlan → Brokholmen. En `entry` är ett kartobjekt,
+exempelvis ett hus, en brygga, en udde eller ett historiskt platsnamn.
+Namnformer ligger separat så att föredragna, tidigare och alternativa namn
+kan samexistera utan att sakobjektets ID byts.
 
-Önamn ligger som separata `name-record`, så att föredraget, officiellt,
-historiskt och alternativt namn kan samexistera utan att ö-ID:t byts. En
-sakpost kopplas bara till en ö när länken är entydig. Borttagna öar och
-områdeskategorier får ingen gissad ersättningsö.
-
-Kartdata kopierar inte det äldre fritextfältet för dagens ägare. För varje
-länkad fastighet läser appen live eller ur en märkt offlinecache det granskade
-`current-owner-assessment`-lagret från Fastighetshistorik. Därifrån följs
-`owner_party_ids` till en part. Har parten `person_id` hämtas namnet från
-Matrikel; organisationer och ännu oupplösta namngrupper visas från
-Fastigheter. Namnlikhet används aldrig för identitetsmatchning.
-
-Fastighets-ID:t är stabilt, men det synliga namnet räknas fram som ID följt av
-de unika strukturerade efternamnen på parterna i nulägesbedömningen, exempelvis
-`Alsvik 3:79 (Bethge)`. Saknas en säker nulägesbedömning visas endast ID:t.
-Samma läsprojektion används i Fastigheter, Personer & familjer, Kartdata och
-Dokumentarkivets strukturerade fastighetsnoder.
+En kartpost länkar direkt till plats med `place_ids` när det är den relevanta
+nivån och till Fastighetsmaster med stabila `property_refs` när fastigheten är
+den tydligare anknytningen. Kartvyn härleder platsen via fastigheten när en
+egen platslänk saknas. Den kopierar varken fastighetshistorik eller ägartext;
+fastighetens aktuella visningsnamn läses från Fastighetsmaster. Namnlikhet
+används aldrig för identitetsmatchning.
 
 ```mermaid
 flowchart LR
-    KD["Kartdata: data-entry och ö-ID"] -->|property_id| FA["Fastigheter: property"]
-    FA --> CO["current-owner-assessment"]
-    CO --> PA["party"]
-    PA -->|person_id, när det är en person| PF["Personer & familjer: person och aktuellt namn"]
-    PA -->|organisation eller oupplöst part| PN["Fastigheter: partnamn"]
+    KD["Kartdata: entry, place och namnform"] -->|property_refs| FA["Fastigheter: property"]
+    FA --> TL["timeline_entries och aktuellt innehav"]
+    TL -->|party_ref| PF["Personer & familjer: person eller familjeenhet"]
 ```
 
 Ett namnbyte görs alltså en gång i Personer & familjer. Båtregister, Fastigheter,
@@ -177,7 +169,8 @@ systemet därför:
 
 1. behålla de ordagranna källförekomsterna och det äldre beslutet i
    operationshistoriken;
-2. återkalla den felaktiga länken med en senare operation eller tombstone;
+2. återkalla den felaktiga länken med en senare operation, ompekning eller
+   tombstone;
 3. skapa saknad stabil identitet i Personer & familjer och länka om samtliga
    förekomster i Matrikel och andra refererande appar;
 4. rätta verkliga namnbyten separat från identitetsdelningen;
