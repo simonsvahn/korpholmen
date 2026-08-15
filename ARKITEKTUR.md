@@ -54,13 +54,13 @@ Fyra regler håller modellen samman:
 
 | App | Kanoniskt ansvar | Refererar till | Äger inte |
 |---|---|---|---|
-| **Matrikel** | Stabil personidentitet för både klubb-/släktpersoner och externa personer, verkliga personnamn och namnhistorik, personrelationer, medlemsidentitet, FAMILJ och SLÄKT | Fastigheter och båtar för navigation | Juridiskt ägande, båtar eller en matrikelutgåvas exakta stavning |
+| **Personer & familjer** | Stabil personidentitet för både klubb-/släktpersoner och externa personer, verkliga personnamn och namnhistorik, personrelationer, FAMILJ och SLÄKT | Fastigheter och båtar för navigation | Medlemskap, juridiskt ägande, båtar eller en matrikelutgåvas exakta stavning |
 | **Båtregister** | Stabil båtidentitet, båtnamn och båthistorik, motorer, bilder samt belagda typade båtanknytningar | Person-, familje-, släkt- och fastighets-ID:n | Personidentitet eller medlemsstatus |
 | **Fastighetshistorik** | Fastigheter, historiska jordenheter, innehav, bruk, transaktioner, datumroller, källor och evidens | Person-ID:n | Släktskap eller juridiskt ägande härlett ur fastighetsgemenskap |
 | **Dokumentarkiv** | Dokumentidentitet, ordagrann avskrift och dokumentets granskade registerkopplingar | Alla relevanta entitets-ID:n | Person-, båt- eller fastighetssanning som bara råkar nämnas i texten |
 | **Korpholmen runt** | Tävlingsutgåvor, resultat, tider, klasser och källrader | Person- och båt-ID:n | Personer och båtar som egna masterobjekt |
-| **Klubbhistorik** | Daterade matrikelutgåvor, medlemsobservationer, historiska klubbnamnsformer, roller när de är källbelagda, båtförekomster och belagda ägarobservationer | Person-, båt- och senare fastighets-ID:n | Stabil person-/båtidentitet eller ägande härlett ur kolumnplacering |
-| **Kartdata** | Aktiv kartdata, stabila öobjekt, namnformer samt strukturerade ö- och fastighetskopplingar | Fastighets-ID:n, Matrikel-personer och externa ägarparter från Fastighetshistorik | Ägarhistorik, personidentitet eller AI-förslag som aktiva sakuppgifter |
+| **Matrikel** | Medlemskap, medlemsnivå, aktivitet/passivitet, invalsår, klubbnamn och daterade matrikelutgåvor | Person-, båt- och senare fastighets-ID:n | Stabil person-/båtidentitet eller ägande härlett ur kolumnplacering |
+| **Kartdata** | Aktiv kartdata, stabila öobjekt, namnformer samt strukturerade ö- och fastighetskopplingar | Fastighets-ID:n, personer och externa ägarparter från Fastighetshistorik | Ägarhistorik, personidentitet eller AI-förslag som aktiva sakuppgifter |
 
 `packages/core/` äger ingen sakdata. Paketet tillhandahåller operationer,
 materialisering, IndexedDB, synk, OAuth och konfliktregler.
@@ -79,28 +79,28 @@ först när alla befintliga ID-länkar har jämförts och förlustkontrollen är
 
 ```mermaid
 flowchart TB
-    MA["Matrikel: personer, relationer, FAMILJ och SLÄKT"]
+    PF["Personer & familjer: personer, relationer, FAMILJ och SLÄKT"]
     BA["Båtregister: båtar och båthistorik"]
     FA["Fastighetshistorik: fastigheter och innehav"]
     AR["Dokumentarkiv: dokument och avskrifter"]
     KR["Korpholmen runt: tävlingsresultat"]
-    KH["Klubbhistorik: daterade klubbobservationer"]
+    MA["Matrikel: medlemskap och daterade matrikelutgåvor"]
     KD["Kartdata: kartposter, öar och namn"]
     EX["Korpholmen Explorer: härledd, skrivskyddad totalbild"]
 
-    MA -->|"stabila person- och grupp-ID:n"| BA
-    MA -->|"stabila person-ID:n"| FA
-    MA -->|"stabila person-ID:n"| KR
-    MA -->|"stabila person-ID:n"| KH
+    PF -->|"stabila person- och grupp-ID:n"| BA
+    PF -->|"stabila person-ID:n"| FA
+    PF -->|"stabila person-ID:n"| KR
+    PF -->|"stabila person-ID:n"| MA
     BA -->|"stabila båt-ID:n"| KR
-    BA -->|"stabila båt-ID:n"| KH
+    BA -->|"stabila båt-ID:n"| MA
     FA -->|"stabila fastighets-ID:n"| KD
-    MA -.-> EX
+    PF -.-> EX
     BA -.-> EX
     FA -.-> EX
     AR -.-> EX
     KR -.-> EX
-    KH -.-> EX
+    MA -.-> EX
     KD -.-> EX
 ```
 
@@ -132,7 +132,7 @@ Fastigheter. Namnlikhet används aldrig för identitetsmatchning.
 Fastighets-ID:t är stabilt, men det synliga namnet räknas fram som ID följt av
 de unika strukturerade efternamnen på parterna i nulägesbedömningen, exempelvis
 `Alsvik 3:79 (Bethge)`. Saknas en säker nulägesbedömning visas endast ID:t.
-Samma läsprojektion används i Fastigheter, Matrikel, Kartdata och
+Samma läsprojektion används i Fastigheter, Personer & familjer, Kartdata och
 Dokumentarkivets strukturerade fastighetsnoder.
 
 ```mermaid
@@ -140,12 +140,12 @@ flowchart LR
     KD["Kartdata: data-entry och ö-ID"] -->|property_id| FA["Fastigheter: property"]
     FA --> CO["current-owner-assessment"]
     CO --> PA["party"]
-    PA -->|person_id, när det är en person| MA["Matrikel: person och aktuellt namn"]
+    PA -->|person_id, när det är en person| PF["Personer & familjer: person och aktuellt namn"]
     PA -->|organisation eller oupplöst part| PN["Fastigheter: partnamn"]
 ```
 
-Ett namnbyte görs alltså en gång i Matrikel. Båtregister, Fastigheter,
-Kartdata, Dokumentarkiv, Klubbhistorik och Korpholmen runt får det nya namnet vid nästa
+Ett namnbyte görs alltså en gång i Personer & familjer. Båtregister, Fastigheter,
+Kartdata, Dokumentarkiv, Matrikel och Korpholmen runt får det nya namnet vid nästa
 skrivskyddade lässynk. Källans rånamn och historiska namnformer påverkas inte.
 
 ## Tre lager av namn
@@ -154,16 +154,16 @@ Namn får inte blandas ihop bara för att de liknar varandra.
 
 | Lager | Exempel | Ägare |
 |---|---|---|
-| Källform | `Christina Lindbom` på ett matrikelblad | Klubbhistorik eller Dokumentarkiv, ordagrant |
+| Källform | `Christina Lindbom` på ett matrikelblad | Matrikel eller Dokumentarkiv, ordagrant |
 | Identitetskoppling | Källraden avser personen `christinakisselindblom` | Granskat beslut i den importerande appen |
-| Verkligt namn och namnhändelse | Une → Lindblom efter ett verkligt namnbyte | Matrikel efter godkännande |
+| Verkligt namn och namnhändelse | Une → Lindblom efter ett verkligt namnbyte | Personer & familjer efter godkännande |
 
 Rena skrivfel, OCR-fel och typografiska variationer stannar i källformen och
 kan få rättelsemetadata. De blir inte en namnhändelse. Ett verkligt namnbyte
-kan upptäckas i Klubbhistorik men lämnas som förslag tills Matrikelns master
+kan upptäckas i Matrikel men lämnas som förslag tills personmastern
 har godkänt det.
 
-Klubbhistorik skiljer dessutom källtext från källayout. Ett särskilt
+Matrikel skiljer dessutom källtext från källayout. Ett särskilt
 `source-layout-row` kan placera flera båtrader bredvid en medlemsrad eller
 återge rubriker och noter utan att skapa en person–båt-relation. En tryckt rad
 med flera namngivna personer delas i personförekomster, medan en ren
@@ -178,8 +178,8 @@ systemet därför:
 1. behålla de ordagranna källförekomsterna och det äldre beslutet i
    operationshistoriken;
 2. återkalla den felaktiga länken med en senare operation eller tombstone;
-3. skapa saknad stabil identitet i Matrikel och länka om samtliga
-   förekomster i Klubbhistorik och andra refererande appar;
+3. skapa saknad stabil identitet i Personer & familjer och länka om samtliga
+   förekomster i Matrikel och andra refererande appar;
 4. rätta verkliga namnbyten separat från identitetsdelningen;
 5. testa samtidiga källrader som negativ kontroll, så att de två identiteterna
    inte kan slås ihop igen av en framtida import.
@@ -199,7 +199,7 @@ Apparna skiljer mellan minst två tider:
   rättades.
 
 Fastighetshistorik skiljer dessutom på datumroller som avtal, tillträde,
-ansökan, förrättning och observation. Klubbhistorik skiljer matrikelutgåvans
+ansökan, förrättning och observation. Matrikel skiljer matrikelutgåvans
 `as_of` från operationsloggens HLC. Explorer ska filtrera på domäntid och
 fortfarande kunna redovisa när tolkningen tillkom.
 
@@ -212,7 +212,7 @@ och ska redovisas med begripliga originalhänvisningar; interna arbetskoder och
 nutida register visas inte som publika källor. Nulägesägaren visas som
 bekräftad utan källapparat.
 
-Fastighetsgemenskap från Matrikel är endast en huvudsaklig eller senast känd
+Fastighetsgemenskap från Personer & familjer är endast en huvudsaklig eller senast känd
 fastighetsanknytning. Den kan visas långt ned som orientering men får aldrig
 omtolkas till juridiskt ägande eller fullständig boendehistorik.
 
@@ -231,7 +231,7 @@ timeline
 sequenceDiagram
     participant K as Källan
     participant I as Importen
-    participant H as Historikappen
+    participant H as Matrikeln
     participant G as Mänsklig granskning
     participant A as Ägarappen
 
@@ -282,12 +282,12 @@ flowchart TB
 Varje sakapp har egen IndexedDB-databas och Dropbox-namnrymd:
 
 ```text
-/matrikel/ops
+/matrikel/ops           # fryst V1-personmaster
 /batregister/ops       + /batregister/bilder
 /fastigheter/ops
 /dokumentarkiv/ops
 /korpholmenrunt/ops
-/klubbhistorik/ops
+/klubbhistorik/ops      # fryst V1-matrikelhistorik
 /kartdata/ops
 
 /<app>/checkpoints/latest.json   # litet atomiskt manifest, aldrig sakmaster
@@ -301,7 +301,7 @@ enhet. Manifestet publiceras sist och pekar på en innehållsadresserad,
 gzip-komprimerad snapshot vars storlek och SHA-256 verifieras före användning.
 Den gör att en ny telefon kan läsa ett kompakt nuläge och bara hämta senare
 batcher. De flesta appar kan ignorera och bygga om en saknad checkpoint från
-operationsloggen. En tom Klubbhistorik fallerar däremot säkert, eftersom dess
+operationsloggen. En tom V1-matrikelhistorik fallerar däremot säkert, eftersom dess
 fulla revisionslogg är för stor för webbens startväg. Checkpoints får aldrig
 användas för att radera eller skriva om historiska batcher.
 
@@ -342,7 +342,7 @@ eller vars HLC ligger mer än ett dygn framför mottagarens klocka isoleras i
 lokal synkmetadata. Övriga batcher på sidan tillämpas och synkcentralen visar
 en tydlig varning för manuell granskning. Dropbox-huvuden kodas ASCII-säkert,
 så sökvägar med svenska tecken inte kan stoppa bild- eller JSON-hämtning.
-Matrikelns äldre `/ops`-migrering får en beständig slutmarkör efter lyckad
+Personmasterns äldre `/matrikel/ops`-migrering får en beständig slutmarkör efter lyckad
 genomgång och körs därefter inte vid varje synk.
 
 Bilder ligger utanför operationsloggen. Båtregistrets operationsdata bär
@@ -376,7 +376,7 @@ byggts in. Service workern får bara cacha det datafria appskalet.
 5. Publicera endast appskalet.
 6. Uppdatera Explorers läsprojektion när ägarapparnas scheman är stabila.
 
-Klubbhistoriks fördjupade tids- och källmodell finns i
-[`apps/klubbhistorik/ARKITEKTUR.md`](apps/klubbhistorik/ARKITEKTUR.md).
+Matrikelns fördjupade tids- och källmodell finns i
+[`apps/matrikel/ARKITEKTUR.md`](apps/matrikel/ARKITEKTUR.md).
 Person-, familje- och släktgränserna beskrivs i
 [`FAMILJEMODELL.md`](FAMILJEMODELL.md).

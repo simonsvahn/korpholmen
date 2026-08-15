@@ -9,7 +9,7 @@ const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
 const SOURCE=resolve(ROOT,'privat/kallkopior/Korpholmen runt konv.mdb');
 const OUT=resolve(ROOT,'privat/migrering-2026-08-02');
-const PEOPLE=resolve(REPO,'apps/matrikel/privat/migrering-2026-08-01/approved-excel-import.json');
+const PEOPLE=resolve(REPO,'apps/personer-familjer/privat/migrering-2026-08-01/approved-excel-import.json');
 const BOATS=resolve(REPO,'apps/batregister/privat/kallkopior/byggkit/batregister.json');
 const DEVICE='migration-korpholmenrunt-2026-08-05-v3';
 const REVIEW_DEVICE='migration-korpholmenrunt-granskning-2026-08-05-v3';
@@ -159,7 +159,7 @@ for(const result of results)add('race-result',result);
 add('race-participant-placeholder',{id:MED_FLERA_ID,fields:{code:'med-flera',label:'Med flera',kind:'okända ytterligare tävlande',terminal:true,review_status:'avslutad',description:'Källan anger ytterligare tävlande vars identiteter inte kan fastställas och inte ska ligga kvar som granskningsfråga.'}});
 for(const link of links)add('race-person-link',link);
 for(const note of notes)add('source-note',note);
-for(const person of peopleData)add('person-ref',{id:`person-ref:${person.id}`,fields:{external_id:person.id,display_name:person.display_name,island:person.island||'',living:person.living||'',url:`../matrikel/?person=${encodeURIComponent(person.id)}`}});
+for(const person of peopleData)add('person-ref',{id:`person-ref:${person.id}`,fields:{external_id:person.id,display_name:person.display_name,island:person.island||'',living:person.living||'',url:`../personer-familjer/?person=${encodeURIComponent(person.id)}`}});
 for(const boat of boatData)add('boat-ref',{id:`boat-ref:${boat.id}`,fields:{external_id:boat.id,name:boat.namn,type:boat.typ||'',period:boat.period||'',owner_text:boat.agare||'',url:`../batregister/?boat=${encodeURIComponent(boat.id)}`}});
 add('race-root',{id:'race-root:korpholmenrunt',fields:{schema_version:3,migration_id:'korpholmenrunt-2026-08-05-v3-tavlande',participant_model:'tävlande',source_sha256:sourceHash,source_rows:rows.length,result_count:results.length,edition_count:editions.length,person_reference_count:peopleData.length,boat_reference_count:boatData.length,participant_placeholder_count:1}});
 

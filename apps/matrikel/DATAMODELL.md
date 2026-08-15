@@ -1,0 +1,139 @@
+# Datamodell — Matrikel
+
+Detta är den konkreta entitetsmodellen. Arkitektur, dataflöden och planerade
+utbyggnader finns i [`ARKITEKTUR.md`](ARKITEKTUR.md).
+
+## Människan, källan och tolkningen
+
+`matrikel-release` beskriver en konceptuell årsutgåva. Varje kalenderår med
+en bevarad originalmatrikel har exakt ett aktivt `source-document` och exakt
+en validerad JSON-fil. Om arkivet
+innehåller flera PDF-sorteringar väljs varianten med ålder eller födelsedatum
+som ledande fält i första hand;
+i annat fall används den enda eller mest kompletta varianten. Alternativa
+arkivoriginal ändras inte, men de ingår inte som egna JSON-dokument i mastern.
+
+Alla privata matrikelkällor har dessutom samma validerade JSON-format
+`matrikel-source.schema.json`. En JSON-fil heter `matrikel-ÅÅÅÅ.json`,
+motsvarar den valda återgivningen för året och innehåller alltid samma
+topplager: `document`, `release`, `columns`, `sections`, `member_rows`,
+`boat_rows`, `layout_rows` och `document_notes`.
+
+`person-occurrence` är en person som uttryckligen kan utläsas ur en ordagrann
+rad i medlemskolumnen. Den bär bland annat
+utgåva, ordning, råtext, medlemskategori, rått invalår, det personnamn som kan
+utläsas och en separat identitetsmatchning mot Matrikelns `person_id`.
+
+`boat-occurrence` är en namngiven båt i fartygskolumnen. Den bär råtext,
+prefix, registreringsår eller strukturerade öppna/slutna årsperioder och en
+separat matchning mot Båtregistrets
+`boat_id`. Förekomsten innebär att båten står i utgåvan, inte automatiskt vem
+som ägde den.
+
+I vyn **Som källan skrevs** återbyggs de historiska trycksidorna av
+`source-layout-row`. Varje layoutrad pekar på noll eller en medlemskällrad och
+noll eller flera båtkällrader samt kan i stället vara en rubrik, not eller
+fristående avregistreringsrad. Medlemskolumnen och fartygskolumnen visas därför
+sida vid sida precis som i matrikeln. Den visuella placeringen är källayout,
+inte en ägarrelation: inget `person_id`, `boat_id` eller ägarpåstående skapas
+genom att två celler står på samma höjd.
+
+`person-ref` och `boat-ref` är privata läskopior för sökning och länkning.
+Deras `external_id` är fortsatt auktoritativt i Matrikel respektive
+Båtregister. De är inte nya identitetsmastrar.
+
+## Rekonstruerad grundarmatrikel
+
+`matrikel-grundare-1940-tal` är inte en femtonde matrikel-JSON. Det är en
+append-only, källkorsläst projektion med `is_reconstruction: true`, utan
+`source-document` eller `source-row`. På utgåvan lagras:
+
+- arbetsrubrik och metodnot;
+- intervall 1943–1945, visningsform »cirka 1945« och medelhög tidsmässig
+  säkerhet;
+- fem evidenskällor och vad var och en bidrar med;
+- uttrycklig avgränsning: Bethge-paret har belagt inval 1953 och ingår inte.
+
+Varje rekonstruerad `person-occurrence` har grundarroll, stabilt person-ID,
+normaliserad ö, källans mer precisa platsord, medlems- respektive
+platssäkerhet och en läsbar evidensnot. `induction_year` förblir `null`; den
+separata uppskattningen `induction_year_estimate: 1945` gör att matrisen kan
+visa **ca 1945** utan att förvandla intervallet till ett exakt invalsår.
+Alsvassen lagras som platsdetalj på Yxlan. Därmed kan en senare uppgift om
+Wesliens anknytning till Stugholmen samexistera utan att skriva över den
+tidsbundna grundarobservationen.
+
+## Tider
+
+Källutgåvans `as_of` är domäntid: när ögonblicksbilden avser. HLC på en
+operation är transaktionstid: när en import eller rättelse registrerades.
+Dessa två tider får aldrig blandas ihop.
+
+Flera exporter kan finnas inom samma kalenderår. Matrikelns beslutade
+upplösning är en årsutgåva: den valda källans exakta `as_of` bevaras som
+domäntid, medan övriga exporter registreras med filnamn, sortering och SHA-256
+i årsfilens proveniens. De är alltså inte egna kolumner i tidsresan. Tidigare
+importerade exportutgåvor raderas inte ur operationshistoriken utan markeras
+inaktiva.
+
+## Gemensamt källformat
+
+`document.original_files` lagrar ursprungligt filnamn, kanoniskt namn på den
+privata källkopian, relativ källsökväg, byteantal, MIME-typ och SHA-256. De
+nytillkomna `IMG_*.HEIC` har därför fått begripliga kopienamn som
+`medlemsmatrikel-1987-sida-1.heic`, medan arkivoriginalen ligger helt orörda.
+
+Varje medlemsrad har alltid samma fält, även när en äldre matrikel saknar
+födelsedatum, ö eller relationskolumn. Saknade värden är tom sträng eller
+`null`; de tas aldrig bort ur schemat. Båtraden bevaras ordagrant och bär en
+`components`-lista där exempelvis `M/S Filifjonkan, M/S Lilla My` blir två
+båtförekomster utan att originalraden ändras. En tom layoutbärande rad har
+`category: blank` och inga komponenter.
+
+`entity_kind` skiljer `person`, `multiple_people`, `group` och `blank`.
+`person_components` anger vilka personförekomster raden faktiskt skapar.
+Det gör att en rad med två namngivna makar blir två observationer, medan en
+etikett som »Familjen Wagstaff« inte blir en fingerad personidentitet.
+
+Varje båtrad kan bära `associated_member_row_id`, som endast anger vilken
+tryckt medlemsrad båttexten står bredvid. `registry_periods` bevarar dessutom
+slutna intervall och öppna ändar; råformen ligger alltid kvar i
+`registry_year_raw`.
+
+De stora PDF-filerna 2023–2025 innehåller även äldre sorteringsbilagor. Dessa
+ligger kvar bytebevarade i den privata källkopian men räknas inte en gång till
+som medlemmar i den aktuella utgåvan.
+
+## Frånvaro och förändring
+
+Frånvaro ur en senare utgåva betyder `inte observerad`, inte automatiskt
+utträde eller dödsfall. Ett verkligt namnbyte kan föreslås när två godkända
+förekomster med samma person-ID bär olika normala personnamn. Förslaget är inte
+en skrivning till Matrikelns personmaster.
+
+Medlemsmatrisen lagras inte som en ny master. Den grupperar synliga,
+bekräftade `person-occurrence` efter `person_id` och `release_id`. Invalsår är
+det minsta uttryckligen belagda `induction_year`; det härleds aldrig från den
+första matrikel där personen råkar synas. Klubbnamn och födelseår hämtas i
+första hand från `person-ref` och annars från den senaste kopplade
+förekomsten. Tom matriscell är frånvaro av observation, inte en händelse.
+
+En avgjord källdubblett hanteras med en append-only tombstone på den extra
+`person-occurrence`. Berörda `source-row` behåller råtexten men får tom
+`occurrence_ids` och en `normalization_note` som pekar ut den bevarade
+normaliserade förekomsten.
+
+Samma mekanism gäller ett felaktigt identitetsbeslut. Beslutsoperationen
+raderas inte ur historiken: en senare korrigering länkar om alla berörda
+`person-occurrence`, tombstonar felaktiga namnbyteskandidater och skapar en ny
+kandidat för det namnbyte som källserien faktiskt stödjer. Ett test över år
+där båda namnen står på varsin rad används som spärr mot framtida
+återsammanslagning.
+
+## Matchningsstatus
+
+- `kopplad` — entydig maskinell träff;
+- `godkand` — tidigare mänskligt godkänt beslut;
+- `foreslagen` — en eller flera kandidater, inget avgörande;
+- `saknas` — ingen kandidat;
+- `manuell` — beslut sparat i den levande Matrikeln.

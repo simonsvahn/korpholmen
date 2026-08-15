@@ -18,6 +18,17 @@ Korpholmen-arkivet, inte till den aktiva arbetsytan.
 `apps/fastigheter/` är alltså källan som utvecklas. `fastigheter/` är den
 byggda publika leveransen. Samma princip gäller övriga appar.
 
+De två närliggande person- och medlemsapparna har följande entydiga namn:
+
+| Källkod | Publik mapp | App |
+|---|---|---|
+| `apps/personer-familjer/` | `personer-familjer/` | Personer & familjer |
+| `apps/matrikel/` | `matrikel/` | Matrikel |
+| — | `klubbhistorik/` | Endast omdirigering till `matrikel/` |
+
+Äldre interna Dropbox-namnrymder får ligga kvar som frysta revisionsspår, men
+ska aldrig styra synliga appnamn eller webbadresser.
+
 ## Det som inte hör hemma på GitHub
 
 - privata masterfiler, bilder, källkopior och granskningsbeslut;

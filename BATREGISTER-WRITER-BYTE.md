@@ -45,11 +45,20 @@ eller någon av de 330 båtlänkarna i Korpholmen runt inte längre går att lö
 ## Genomfört byte
 
 Båtregister generation 2 aktiverades som enda writer den 15 augusti 2026.
-Aktiv startrevision är 3 med 236 båtar och 2 identitetsompekningar. Den aktiva
+Aktiv startrevision var 3 med 236 båtar och 2 identitetsompekningar. Den aktiva
 cutover-markören fryser generation 1 vid 61 batchfiler och 9 081 operationer.
 Efterkontrollen bekräftade också att samtliga 330 båtreferenser i Korpholmen
 runt fortfarande kan lösas. Exakta hashvärden och tidpunkt finns i backupens
 aktiveringskvitto.
+
+Efter aktiveringen visade en bildkontroll att revision 3 bara innehöll
+bildreferenser från den sista migreringsdelen. Originalfilerna var intakta.
+Verktyget `verktyg/migrera-batbilder-till-v2.mjs` materialiserade därför hela
+den frysta generation 1-loggen, verifierade samtliga 260 refererade bildfiler
+med SHA-256 och återförde 129 saknade bildposter via stabila båt-ID. Detta
+skapade aktiv revision 4 med 140 bildposter för 122 båtar. Ingen generation
+1-post ändrades. Före korrigeringen skapades en separat fullbackup i
+Korpholmens säkerhetskopiearkiv.
 
 ## Återställning
 

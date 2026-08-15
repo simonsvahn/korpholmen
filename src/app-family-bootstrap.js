@@ -11,7 +11,7 @@ import {
 import { DROPBOX_CLIENT_ID } from './config.js';
 
 const sourceTree = location.pathname.includes('/apps/');
-const activeAppConfig = KORPHOLMEN_APPS.find(app => location.pathname.includes(`/${app.id}/`)) || null;
+const activeAppConfig = KORPHOLMEN_APPS.find(app => location.pathname.includes(`/${app.route || app.id}/`)) || null;
 const activeApp = activeAppConfig?.id || null;
 const session = new SharedDropboxSession({ clientId: DROPBOX_CLIENT_ID, exchangeRefreshToken: exchangeDropboxRefreshToken });
 

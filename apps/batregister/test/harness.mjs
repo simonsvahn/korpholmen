@@ -385,7 +385,7 @@ const correctionDocuments=await Promise.all(correctionFiles.map(file=>readJson(r
 const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
 const state=materialize([...document.operations,...correctionOperations]);
 
-const matrikelPrivate=resolve(ROOT,'../matrikel/privat');
+const matrikelPrivate=resolve(ROOT,'../personer-familjer/privat');
 const matrikelMigration=resolve(matrikelPrivate,'migrering-2026-08-01');
 const matrikelDocuments=await Promise.all(['initial-ops.json','ui-metadata-ops.json','approved-excel-ops.json'].map(file=>readJson(resolve(matrikelMigration,file))));
 const familyBatch=await readJson(resolve(matrikelPrivate,'familjemodell-2026-08-02-batch.json'));
@@ -522,7 +522,7 @@ await test('webbgränssnittet kan ändra båtar, länkar och bilder',async()=>{
   assert.ok(app.includes('FAMILY_UNIT_TYPE'));
   assert.ok(app.includes('KIN_GROUP_TYPE'));
   assert.ok(app.includes('boatMatchesConnectionTarget'));
-  assert.ok(app.includes('../matrikel/?person='));
+  assert.ok(app.includes('../personer-familjer/?person='));
   assert.ok(html.includes('id="connection-filter-search"'));
   assert.ok(html.includes('id="connection-filter-browse"'));
   assert.ok(html.includes('id="filter-panel"'));
@@ -662,7 +662,7 @@ await test('OAuth-returen kan skickas till båda apparna',async()=>{
   const root=await readFile(resolve(REPO,'index.html'),'utf8');
   const rootApp=await readFile(resolve(REPO,'src/app.js'),'utf8');
   const bootstrap=await readFile(resolve(REPO,'src/app-family-bootstrap.js'),'utf8');
-  const matrikel=await readFile(resolve(REPO,'apps/matrikel/src/app.js'),'utf8');
+  const matrikel=await readFile(resolve(REPO,'apps/personer-familjer/src/app.js'),'utf8');
   const boats=await readFile(resolve(ROOT,'src/app.js'),'utf8');
   assert.ok(rootApp.includes('korpholmen:oauth-return'));
   assert.ok(bootstrap.includes('mirrorSharedDropboxCredential'));
@@ -673,7 +673,7 @@ await test('OAuth-returen kan skickas till båda apparna',async()=>{
 });
 
 await test('service workers rensar bara sina egna cacher',async()=>{
-  const matrikel=await readFile(resolve(REPO,'apps/matrikel/sw.js'),'utf8');
+  const matrikel=await readFile(resolve(REPO,'apps/personer-familjer/sw.js'),'utf8');
   const boats=await readFile(resolve(ROOT,'sw.js'),'utf8');
   assert.ok(matrikel.includes("key.startsWith('korpholmen-matrikel-')"));
   assert.ok(boats.includes("key.startsWith('korpholmen-batregister-')"));

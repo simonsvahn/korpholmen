@@ -45,7 +45,7 @@ for (const assessment of assessments) {
     if (party.person_id && !person) throw new Error(`Matrikelpersonen saknas: ${party.person_id}`);
     const ownerType = person ? 'person-ref' : 'external-party';
     const ownerId = person?.id || party.id;
-    if (person) setFields('person-ref', `person-ref:${person.id}`, { external_id: person.id, display_name: person.display_name, full_name: person.full_name || person.display_name, display_surname: party.display_surname || null, source_master: 'matrikel', url: `../matrikel/?person=${encodeURIComponent(person.id)}` });
+    if (person) setFields('person-ref', `person-ref:${person.id}`, { external_id: person.id, display_name: person.display_name, full_name: person.full_name || person.display_name, display_surname: party.display_surname || null, source_master: 'matrikel', url: `../personer-familjer/?person=${encodeURIComponent(person.id)}` });
     else setFields('external-party', `external-party:${party.id}`, { external_id: party.id, display_name: party.name, display_surname: party.display_surname || null, party_type: party.party_type || 'extern part', source_master: 'fastigheter', url: `../fastigheter/?party=${encodeURIComponent(party.id)}` });
     setFields('property-owner-link', `current-owner:${slug(assessment.property_id)}:${ownerType}:${slug(ownerId)}`, {
       property_id: assessment.property_id,

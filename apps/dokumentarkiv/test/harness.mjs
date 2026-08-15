@@ -81,7 +81,7 @@ await test('Dropbox-synken återhämtar sig när en gammal mappcursor saknar sö
 await test('registerkopplingar skiljer exakt träff, granskning och saknad entitet',()=>{
   const byId=new Map(entities.map(entity=>[entity.id,entity]));
   assert.equal(byId.get('person:nilshenrikhedström').external_id,'nilshenrikhedström');
-  assert.equal(byId.get('person:nilshenrikhedström').url,'../matrikel/?person=nilshenrikhedstr%C3%B6m');
+  assert.equal(byId.get('person:nilshenrikhedström').url,'../personer-familjer/?person=nilshenrikhedstr%C3%B6m');
   assert.equal(byId.get('boat:atlanta').external_id,'atlanta');
   assert.equal(byId.get('boat:galejan').external_id,'galejan');
   assert.equal(byId.get('boat:pumsbullan').name,'Pumsbullan');
@@ -91,7 +91,7 @@ await test('registerkopplingar skiljer exakt träff, granskning och saknad entit
   assert.equal(byId.get('place:brockholmen').name,'Brokholmen');
   assert.equal(byId.get('person:rolf-une-olöst').match_status,'saknas');
   assert.equal(byId.get('person:bibbihedström').external_id,'bibbihedström');
-  assert.equal(byId.get('person:mats-sam-une-olöst').match_status,'granska');
+  assert.equal(byId.get('person:max-allan-1955-olöst').match_status,'granska');
   assert.ok(entities.some(entity=>entity.match_status==='lokal'));
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:atlanta')));
   assert.ok(documents.some(item=>item.entity_ids.includes('boat:gungafin')));

@@ -103,7 +103,7 @@ for (const propertyId of usedPropertyIds) {
     if (person) personRefs.set(person.id, {
       external_id: person.id, display_name: person.display_name,
       full_name: person.full_name || person.display_name, display_surname: party.display_surname || null, source_master: 'matrikel',
-      url: `../matrikel/?person=${encodeURIComponent(person.id)}`,
+      url: `../personer-familjer/?person=${encodeURIComponent(person.id)}`,
     });
     else externalParties.set(party.id, {
       external_id: party.id, display_name: party.name, display_surname: party.display_surname || null,

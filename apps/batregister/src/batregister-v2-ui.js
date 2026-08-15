@@ -79,7 +79,7 @@ function engineText(engine = {}) {
 
 function ownerLinks(runtime, event) {
   return runtime.ownersForEvent(event).map(owner => owner.kind === 'person'
-    ? `<a href="../matrikel/?person=${encodeURIComponent(owner.person.id)}">${escapeHtml(owner.display_name)}</a>`
+    ? `<a href="../personer-familjer/?person=${encodeURIComponent(owner.person.id)}">${escapeHtml(owner.display_name)}</a>`
     : `<span>${escapeHtml(owner.display_name)}</span>`).join(', ');
 }
 

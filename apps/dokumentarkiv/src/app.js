@@ -282,7 +282,9 @@ function comparisonHtml(selected) {
 }
 
 function sourcePreviewAsset(sourceFile) {
-  return sourceFile?.display_copy || null;
+  // `reading_copy` var namnet i den redan publicerade V1-mastern. Nya byggen
+  // använder `display_copy`; båda beskriver samma icke-generativa läskopia.
+  return sourceFile?.display_copy || sourceFile?.reading_copy || null;
 }
 
 function sourceAssetState(asset) {

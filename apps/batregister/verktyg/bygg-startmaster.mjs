@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { materialize } from '../../matrikel/src/domain/materializer.js';
+import { materialize } from '../../personer-familjer/src/domain/materializer.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = resolve(ROOT, 'privat/kallkopior');
 const OUT = resolve(ROOT, 'privat/migrering-2026-08-01');
 const IMAGE_OUT = resolve(OUT, 'bilder');
-const MATRICLE = resolve(ROOT, '../matrikel/privat/migrering-2026-08-01');
+const MATRICLE = resolve(ROOT, '../personer-familjer/privat/migrering-2026-08-01');
 const DEVICE = 'migration-batregister-2026-08-01';
 const CLOCK_MS = 1785592800000;
 

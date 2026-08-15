@@ -6,12 +6,13 @@ import { SyncEngine } from './sync-engine.js';
 import { KorpholmenSharedStore, sharedDropboxDisconnectedKey, sharedDropboxTokenKey } from './shared-dropbox-session.js';
 
 export const KORPHOLMEN_APPS = Object.freeze([
-  { id: 'matrikel', label: 'Matrikel', database: 'slaktlandskap', deviceKey: 'slaktlandskap:device-id', devicePrefix: 'slakt-web-', transportId: 'dropbox-matrikel-v2', opsRoot: '/matrikel/ops' },
+  // ID och opsRoot är frysta generation 1-namn. label är det aktiva appnamnet.
+  { id: 'matrikel', route: 'personer-familjer', label: 'Personer & familjer', database: 'slaktlandskap', deviceKey: 'slaktlandskap:device-id', devicePrefix: 'slakt-web-', transportId: 'dropbox-matrikel-v2', opsRoot: '/matrikel/ops' },
   { id: 'batregister', label: 'Båtregister', database: 'korpholmen-batregister', deviceKey: 'korpholmen:batregister-device-id', devicePrefix: 'bat-web-', transportId: 'dropbox-batregister', opsRoot: '/batregister/ops' },
   { id: 'fastigheter', label: 'Fastigheter', database: 'korpholmen-fastigheter', deviceKey: 'korpholmen:fastigheter-device-id', devicePrefix: 'fastigheter-web-', transportId: 'dropbox-fastigheter', opsRoot: '/fastigheter/ops' },
   { id: 'dokumentarkiv', label: 'Dokumentarkiv', database: 'korpholmen-dokumentarkiv', deviceKey: 'korpholmen:dokumentarkiv-device-id', devicePrefix: 'dokumentarkiv-web-', transportId: 'dropbox-dokumentarkiv', opsRoot: '/dokumentarkiv/ops' },
   { id: 'korpholmenrunt', label: 'Korpholmen runt', database: 'korpholmen-runt', deviceKey: 'korpholmen:runt-device-id', devicePrefix: 'runt-web-', transportId: 'dropbox-korpholmenrunt', opsRoot: '/korpholmenrunt/ops' },
-  { id: 'klubbhistorik', label: 'Klubbhistorik', database: 'kbk-klubbhistorik', deviceKey: 'korpholmen:klubbhistorik-device-id', devicePrefix: 'klubbhistorik-web-', transportId: 'dropbox-klubbhistorik', opsRoot: '/klubbhistorik/ops', requireCheckpointOnEmpty: true },
+  { id: 'klubbhistorik', route: 'matrikel', label: 'Matrikel', database: 'kbk-klubbhistorik', deviceKey: 'korpholmen:klubbhistorik-device-id', devicePrefix: 'klubbhistorik-web-', transportId: 'dropbox-klubbhistorik', opsRoot: '/klubbhistorik/ops', requireCheckpointOnEmpty: true },
   { id: 'kartdata', label: 'Kartdata', database: 'korpholmen-kartdata-v2', deviceKey: 'korpholmen:kartdata-device-id', devicePrefix: 'kartdata-web-', transportId: 'dropbox-kartdata', opsRoot: '/kartdata/ops' },
 ]);
 

@@ -8,7 +8,7 @@ import { buildCheckpointForApp } from '../verktyg/sync-checkpoint-builder.mjs';
 import { createBatch, decodeCheckpointPayload, Materializer } from '../packages/core/data-layer.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const APPS = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
+const APPS = ['personer-familjer', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'matrikel', 'kartdata'];
 const PROJECTIONS = ['explorer'];
 const SURFACES = [...APPS, ...PROJECTIONS];
 let passed = 0;
@@ -68,6 +68,9 @@ await test('Dropbox-inloggningen och totalsynken är gemensamma men mastrarna f�
   assert.match(bootstrap, /migrateLegacyCredentialsToShared/);
   assert.match(bootstrap, /mirrorSharedDropboxCredential/);
   assert.match(bootstrap, /scheduleAppFamilySync/);
+  assert.match(bootstrap, /app\.route \|\| app\.id/, 'webbrutten måste vara frikopplad från den frysta Dropbox-identiteten');
+  assert.match(familySync, /id: 'matrikel', route: 'personer-familjer'/);
+  assert.match(familySync, /id: 'klubbhistorik', route: 'matrikel'/);
   assert.match(familySync, /\.downloadRemote\(/, 'bakgrundssynken ska bara dra data och inte skriva andra appars väntande ändringar');
   assert.doesNotMatch(familySync, /\.syncOnce\(\)/);
   for (const path of ['/matrikel/ops', '/batregister/ops', '/fastigheter/ops', '/dokumentarkiv/ops', '/korpholmenrunt/ops', '/klubbhistorik/ops', '/kartdata/ops']) assert.ok(familySync.includes(path));
@@ -119,13 +122,13 @@ await test('alla appar använder kompakta checkpoints, revisionscache och deboun
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     assert.match(source, /debounce/, `${app} saknar debounce`);
-    assert.ok(source.includes('createRevisionCache') || app === 'matrikel' && source.includes('refreshedRepositoryRevision'), `${app} saknar revisionscache`);
+    assert.ok(source.includes('createRevisionCache') || app === 'personer-familjer' && source.includes('refreshedRepositoryRevision'), `${app} saknar revisionscache`);
   }
   const [clubSource, clubConfig, clubHtml, clubSeed] = await Promise.all([
-    readFile(resolve(ROOT, 'apps/klubbhistorik/src/app.js'), 'utf8'),
-    readFile(resolve(ROOT, 'apps/klubbhistorik/src/config.js'), 'utf8'),
-    readFile(resolve(ROOT, 'apps/klubbhistorik/index.html'), 'utf8'),
-    readFile(resolve(ROOT, 'apps/klubbhistorik/verktyg/skriv-dropbox-startmaster.mjs'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/matrikel/src/app.js'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/matrikel/src/config.js'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/matrikel/index.html'), 'utf8'),
+    readFile(resolve(ROOT, 'apps/matrikel/verktyg/skriv-dropbox-startmaster.mjs'), 'utf8'),
   ]);
   assert.match(clubSource, /requireCheckpointOnEmpty:true/);
   assert.doesNotMatch(clubSource, /bootstrapLocal/);
@@ -184,7 +187,7 @@ await test('Dokumentarkiv och Båtregister använder levande masterreferenser oc
 });
 
 await test('borttagningar kan ångras och granskningsköer har ett källbevarande slutbeslut', async () => {
-  for (const app of ['matrikel', 'batregister', 'kartdata']) {
+  for (const app of ['personer-familjer', 'batregister', 'kartdata']) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     const styles = await readFile(resolve(ROOT, 'apps', app, 'styles.css'), 'utf8');
     const html = await readFile(resolve(ROOT, 'apps', app, 'index.html'), 'utf8');
@@ -197,7 +200,7 @@ await test('borttagningar kan ångras och granskningsköer har ett källbevarand
     assert.match(styles, /\.undo-action/);
     assert.match(html, /id="undo-status" role="status" hidden/);
   }
-  for (const app of ['klubbhistorik']) {
+  for (const app of ['matrikel']) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');
     assert.match(source, /review_decision/);
     assert.match(source, /bevarad okopplad/);

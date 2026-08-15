@@ -1,104 +1,117 @@
-# Matrikel — säker lokal-först-app
+# KBK Matrikel
 
-Matrikelns roll som identitetsmaster och dess gränser mot övriga appar finns i
-den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md). Familje- och
-släktmodellen fördjupas i [`FAMILJEMODELL.md`](../../FAMILJEMODELL.md).
+Appens avsedda lager, tidsaxlar, granskningsflöde och framtida utbyggnad finns
+i [`ARKITEKTUR.md`](ARKITEKTUR.md). Ansvarsfördelningen mellan alla appar finns
+i [`../../ARKITEKTUR.md`](../../ARKITEKTUR.md).
 
-Ny lokal-först-app enligt samma arkitektur som Packa:
+Lokal-först-app för Korpholmens Båtklubbs medlems- och båthistorik. Appen
+bevarar varje källrad och håller den åtskild från tolkningen. Den länkar
+godkända förekomster till Personer & familjers stabila person-ID och Båtregistrets
+stabila båt-ID, men skriver inte automatiskt tillbaka till dessa mastrar.
+Normaliserade vyer läser personens aktuella namn skrivskyddat från personmastern;
+`person_name_raw` och källayouten förblir bundna till den historiska utgåvan.
 
-- datafritt appskal för GitHub Pages;
-- privat data i IndexedDB och en separat Dropbox App Folder;
-- oföränderliga operationer med HLC och fältvis LWW-merge;
-- uttryckliga tombstones för borttagningar;
-- inga helfilsöverskrivningar och ingen automatisk sammanslagning av äldre
-  Chrome-/Safari-exporter;
-- Service Worker cachar enbart appskalet.
+Mastern omfattar 15 årsvisa originalmatriklar från juli 1980 till augusti
+2025, inklusive matrikeln från juli 1996 och den tvåsidiga medlemsmatrikeln
+2010. Före dessa ligger en
+separat, uttryckligen märkt **grundarmatrikel (rekonstruktion)** för cirka
+1945. Den bygger på fem redovisade källor och är inte ett påstående om att ett
+sådant originaldokument har bevarats. I de
+historiska matriklarna bevaras medlems- och fartygskolumnen var för sig och
+sammanförs för källvisning med ett separat, källkontrollerat layoutlager,
+inklusive passiva, juniorer, korresponderande och avregistrerade/namnändrade
+fartyg där källan har sådana avsnitt. Kolumnerna är självständiga i källan;
+appen påstår därför inte att en båt på en viss rad ägdes av personen på
+motsvarande rad.
+2010 års källa saknar fartygskolumn; det bevaras som en källegenskap och
+tolkas inte som att klubben saknade båtar.
 
-## Datastatus
+Vyn **Medlemsmatris** visar en rad per säkert identifierad person, belagt
+invalsår, personnamn, klubbnamn och födelseår samt ett färgkodat kryss per
+matrikelutgåva. Tabellen har fasta identitetskolumner och en horisontellt
+rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
 
-Den godkända startmastern ligger i `privat/migrering-2026-08-01/` som ett
-privat arkiv, ett operationsdokument och 21 oföränderliga batcher. Den gamla
-HTML-byggkedjan pensionerades efter att migreringen och dess kontrollsummor
-verifierats; källans SHA-256 finns kvar i migreringsmanifestet.
+## Säkerhetskontrakt
 
-Migreringen 2026-08-01 innehåller:
+- privata källkopior hashas före import;
+- varje källrad får ett stabilt förekomst-ID;
+- normalisering skriver aldrig över källtexten;
+- rekonstruktioner har egna evidensfält och får aldrig visas som original;
+- endast entydiga eller tidigare godkända identiteter kopplas automatiskt;
+- osäkra träffar ligger kvar i granskningskön;
+- generation 1:s ändringar finns oföränderliga under `/klubbhistorik/ops`;
+- generation 2:s aktiva master ligger under `/matrikel-generation2/`;
+- publiceringspaketet innehåller endast det datafria appskalet.
 
-- 214 personer;
-- 231 relationer;
-- 5 061 fältoperationer i 21 oföränderliga batcher.
+## Privat master
 
-Den levande Dropbox-mastern har därefter utökats genom separata, oföränderliga
-batcher. Den 2026-08-02 omfattar den 214 personer, 233 personrelationer, 49
-FAMILJ och 25 SLÄKT. Korrigeringar byggs med
-`verktyg/skapa-korrigeringsbatch.mjs` mot en privat, förhandsgranskad plan.
-Verktyget kontrollerar förväntat startläge och slutläge innan en ny batch får
-skapas; äldre batcher ändras aldrig. Planformatet kan även göra en uttrycklig
-tombstone-radering med `"delete": true` och verifiera resultatet med
-`verify_deleted`.
+- `privat/kallkopior/` — bytebevarade källkopior och godkända matchningsbeslut;
+- `privat/kallkopior/matriklar/matrikel-ÅÅÅÅ.json` — samtliga
+  matrikeldokument i samma validerade format; exakt en vald fil per kalenderår.
+  Varianten med ålder eller födelsedatum som ledande fält prioriteras när den
+  finns. Övriga årsvarianter ligger kvar som hashad källproveniens i årsfilen,
+  men skapar inte egna matrikelutgåvor;
+- `privat/kallkopior/matriklar/original/` — kanoniskt namngivna, bytebevarade
+  privata kopior. Originalnamn och originalets SHA-256 ligger i varje JSON;
+- `privat/kallkopior/matriklar-1991-1998.json` — sida-, kategori- och
+  radspårbart äldre importunderlag, nu ersatt som konsumtionsformat av de
+  synkade filerna ovan men bevarat byte för byte för reproducerbarhet; filen
+  omfattar 1991 och 1998;
+- `privat/kallkopior/matrikel-1996-underlag.json` — separat, nytt
+  avskriftsunderlag för 1996, så att 1991/1998-underlagets tidigare
+  kontrollsumma inte ändras;
+- `privat/migrering-2026-08-02/initial-ops.json` — reproducerbar startmaster;
+- `privat/migrering-2026-08-02/kontrollrapport.json` — radtäckning,
+  kontrollsummor, dubbletter och olösta identiteter;
+- `privat/migrering-2026-08-02/kontrollrapport-1991-1998.json` — motsvarande
+  för tilläggsutgåvorna;
+- `privat/migrering-2026-08-02/kontrollrapport-synkade-matriklar.json` —
+  radräkning och återanvändning för hela den gemensamma importen;
+- `privat/migrering-2026-08-02/kontrollrapport-matrikel-2010.json` —
+  radräkning, identitetsförslag och öppna kontrollpunkter för 2010;
+- `privat/migrering-2026-08-02/kontrollrapport-matrikel-1996.json` —
+  radräkning, källhashar och kvarstående person- och båtkopplingar för 1996;
+- `privat/korrigeringar/` — efterhandsbeslut som nya, reproducerbara
+  operationer ovanpå den låsta startmastern, inklusive importen av 1991 och
+  1998, den normaliserade borttagningen av Ted Thunborgs extra 2025-rad,
+  beslutet om en sorteringsvariant och den senare preciseringen till exakt en
+  aktiv matrikel per kalenderår. 2010 ligger i en ny append-only-batch, följd
+  av en ny årsvalsbatch och `2026-08-03-kalltrogen-layout-v3.json` med 1 606
+  layoutrader, separerade flerspersonrader och strukturerade båtårsperioder.
+  De tidigare Dropbox-distribuerade batcherna skrivs inte över.
+  `2026-08-05-matrikel-1996.json` lägger till 1996 som en egen append-only-
+  batch med samtliga källrader och layoutrader.
+  `2026-08-04-grundarmatrikel-1940-tal.json` lägger ovanpå samma master en
+  källkorsläst arbetsrekonstruktion av tio grundare. Exakt år, bostadsö,
+  platsdetalj och säkerhet lagras var för sig;
+  Den gamla startmastern och de ordagranna källraderna byggs aldrig om i
+  Dropbox;
+- fryst generation 1-historik — `/klubbhistorik/ops` i Korpholmens Dropbox App Folder.
+- aktiv generation 2-master — `/matrikel-generation2/active.json` med
+  oföränderliga revisioner och separata ändringskvitton.
+- snabb privat startpunkt — `checkpoints/latest.json` pekar på en
+  innehållsadresserad `snapshots/*.snapshot-v3.json.gz`; den byggs automatiskt
+  efter seedning och innehåller materialiserat tillstånd, konfliktmetadata och
+  vattenmärken, aldrig originalbilder eller PDF:er.
 
-Identitetsrättelsen 2026-08-03 finns som privat plan och genererad batch under
-`privat/korrigeringar/`. Den skapar `peterneretnieks`, tar bort de två
-felaktiga föräldrabanden till `peterholm`, registrerar Anna Neretnieks som
-Anna Holms födelsenamn och lämnar det äldre felläget kvar som återkallad
-operationshistorik. Efter att batchen distribuerats är omfattningen 215
-personer och 235 personrelationer.
+Båtreferenserna är privata snapshots av all strukturerad metadata i
+Båtregistret utom bilder. De används för begripliga matchningsetiketter och
+efterkontroll; Båtregistret förblir ensam master för själva båten.
 
-De separata äldre Chrome- och Safari-exporterna slogs inte ihop. Deras
-kontrollsummor och den uttryckliga behandlingen `arkiverad-men-inte-sammanslagen`
-finns kvar i manifestet, så en äldre uppgift eller tidigare borttagen relation
-kan inte återinföras av misstag.
-
-`privat/` och `publicering/` är ignorerade. `npm run build:publish` använder en
-strikt tillåtelselista och stoppar bygget om ett personnamn eller inbyggd
-datamängd finns i det publika paketet.
-
-## Lokal kontroll
-
-Från denna mapp:
+## Kommandon
 
 ```sh
+npm run build:sources
+npm run build:migration
+npm run validate:sources
 npm test
-python3 -m http.server 8766
-```
-
-Öppna `http://localhost:8766/`. Knappen **Aktivera godkänd startkopia** finns
-bara på localhost och läser den privata migreringen. Efter den kommande
-Dropbox-aktiveringen laddar första enheten upp dessa batcher en gång; övriga
-enheter hämtar dem genom vanlig synk.
-
-## Dropbox och publicering
-
-Den separata Dropbox-appen är skapad och dess publika appnyckel ligger i
-`src/config.js`. Den ska vara en Scoped App med App Folder och behörigheterna
-`files.metadata.read`, `files.content.read` och `files.content.write`.
-App-hemlighet läggs aldrig i klienten. OAuth kör code flow med PKCE/S256.
-Matrikelns oföränderliga batcher ligger i `/matrikel/ops`, parallellt med
-Båtregistrets `/batregister/ops`.
-
-Det datafria paketet byggs till repo-rotens `matrikel/` med:
-
-```sh
 npm run build:publish
+npm run seed:dropbox -- "/Users/.../Dropbox/Appar/Korpholmen"
 ```
 
-Appen publiceras på `https://simonsvahn.github.io/korpholmen/matrikel/`.
-Repo-roten `https://simonsvahn.github.io/korpholmen/` är registrerad som
-**Redirect URI** i Dropbox App Console och skickar OAuth-returen vidare till
-rätt Korpholmen-app.
-
-## Fastighetskopplingar
-
-Fastighet och ö är inte ett fritextfält på personen. Matrikeln har ett
-bekräftat navigationslager:
-
-1. `property` med stabil fastighetsidentitet;
-2. `property-link` som beskriver fastighetsgemenskap;
-3. personens öanknytning kan presenteras från dessa kopplingar.
-
-Sedan 2026-08-02 är appen **Fastighetshistorik** kanonisk master för själva
-fastigheterna, historiska jordenheter, ägande, bruk och transaktioner.
-Matrikelns fastighetslager är en övergångs-/navigationskopia. En
-`property-link` är aldrig i sig bevis för juridiskt ägande.
-
-Det äldre personfältet `legacy_island` bevaras under övergången så att ingen
-befintlig öanknytning tappas innan fastighetskopplingarna har bekräftats.
+GitHub Pages får aldrig den privata datan. Det historiska seed-kommandot skriver
+oföränderliga batcher till `/klubbhistorik/ops`, vägrar andra Dropbox-rötter,
+skriver aldrig över en befintlig batch med annat innehåll och bygger därefter
+en atomisk, komprimerad checkpoint från samtliga batcher i Dropbox-spegeln.
+Den tidigare webbläsarbootstrapen från en hårdkodad lista av stora
+korrigeringsfiler är avvecklad.

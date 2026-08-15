@@ -20,7 +20,7 @@ const ENTITY_TYPES = Object.freeze({
   kartdata: [],
 });
 const TYPE_LABELS = Object.freeze({ person: 'Person', boat: 'Båt', property: 'Fastighet', document: 'Handling', year: 'Tävlingsår', 'source-text': 'Källtext' });
-const SOURCE_LABELS = Object.freeze({ matrikel: 'Matrikeln', batregister: 'Båtregistret', fastigheter: 'Fastigheter', dokumentarkiv: 'Dokumentarkivet', korpholmenrunt: 'Korpholmen runt', klubbhistorik: 'Klubbhistorik' });
+const SOURCE_LABELS = Object.freeze({ matrikel: 'Personer & familjer', batregister: 'Båtregistret', fastigheter: 'Fastigheter', dokumentarkiv: 'Dokumentarkivet', korpholmenrunt: 'Korpholmen runt', klubbhistorik: 'Matrikeln' });
 const viewNode = document.querySelector('#explorer-view');
 const searchForm = document.querySelector('#explorer-search-form');
 const searchInput = document.querySelector('#explorer-search');
@@ -133,7 +133,7 @@ function renderPerson(personId) {
     title: unique([group.referenceCode, group.name]).join(' · '),
     meta: group.role,
     tags: group.confirmed ? [] : [{ label: 'Härledd via öppet underlag', caution: true }],
-    href: `../matrikel/?group=${encode(group.id)}`,
+    href: `../personer-familjer/?group=${encode(group.id)}`,
     hrefLabel: 'Öppna grupp',
   }));
   const boatItems = profile.boats.map(boat => rowHtml({
@@ -163,11 +163,11 @@ function renderPerson(personId) {
   const clubItems = profile.clubOccurrences.map(item => rowHtml({
     title: item.year ? `Matrikel ${item.year}` : item.releaseId,
     meta: unique([item.name, item.clubName, item.membershipStatus]).join(' · '),
-    href: `../klubbhistorik/?release=${encode(item.releaseId)}`,
+    href: `../matrikel/?release=${encode(item.releaseId)}`,
     hrefLabel: 'Öppna utgåva',
   }));
 
-  viewNode.innerHTML = `<header class="profile-head"><div><p class="eyebrow">Person · läsvy</p><h2>${escapeHtml(profile.name)}</h2>${identity ? `<p>${escapeHtml(identity)}</p>` : ''}</div><a class="owner-link" href="../matrikel/?person=${encode(profile.id)}">Öppna och ändra i Matrikeln →</a></header><div class="profile-grid">${cardHtml({ title: 'Familj & släkt', source: 'Matrikeln', sourceHref: `../matrikel/?person=${encode(profile.id)}`, items: [...relationItems, ...groupItems], empty: 'Inga kopplade relationer eller grupper.', note: 'Explorer återger Matrikeln. Härledda gruppmedlemskap skapar inga nya personfakta.' })}${cardHtml({ title: 'Båtar', source: 'Båtregistret', sourceHref: `../batregister/?person=${encode(profile.id)}`, items: boatItems, empty: 'Ingen kopplad båt.' })}${cardHtml({ title: 'Fastigheter', source: 'Fastigheter', sourceHref: '../fastigheter/', items: propertyItems, empty: 'Ingen kopplad fastighet.', note: 'Fastighetsanknytning visas separat från bedömt nuvarande ägande.' })}${cardHtml({ title: 'Korpholmen runt', source: 'Korpholmen runt', sourceHref: `../korpholmenrunt/?person=${encode(profile.id)}`, items: raceItems, empty: 'Inga manuellt kopplade tävlingsresultat.' })}${cardHtml({ title: 'Handlingar', source: 'Dokumentarkivet', sourceHref: '../dokumentarkiv/', items: documentItems, empty: 'Inga kopplade handlingar.' })}${cardHtml({ title: 'Matrikeln över tid', source: 'Klubbhistorik', sourceHref: `../klubbhistorik/?person=${encode(profile.id)}`, items: clubItems, empty: 'Inga bekräftade förekomster i historiska matriklar.' })}</div>`;
+  viewNode.innerHTML = `<header class="profile-head"><div><p class="eyebrow">Person · läsvy</p><h2>${escapeHtml(profile.name)}</h2>${identity ? `<p>${escapeHtml(identity)}</p>` : ''}</div><a class="owner-link" href="../personer-familjer/?person=${encode(profile.id)}">Öppna och ändra i Personer & familjer →</a></header><div class="profile-grid">${cardHtml({ title: 'Familj & släkt', source: 'Personer & familjer', sourceHref: `../personer-familjer/?person=${encode(profile.id)}`, items: [...relationItems, ...groupItems], empty: 'Inga kopplade relationer eller grupper.', note: 'Explorer återger personmastern. Härledda gruppmedlemskap skapar inga nya personfakta.' })}${cardHtml({ title: 'Båtar', source: 'Båtregistret', sourceHref: `../batregister/?person=${encode(profile.id)}`, items: boatItems, empty: 'Ingen kopplad båt.' })}${cardHtml({ title: 'Fastigheter', source: 'Fastigheter', sourceHref: '../fastigheter/', items: propertyItems, empty: 'Ingen kopplad fastighet.', note: 'Fastighetsanknytning visas separat från bedömt nuvarande ägande.' })}${cardHtml({ title: 'Korpholmen runt', source: 'Korpholmen runt', sourceHref: `../korpholmenrunt/?person=${encode(profile.id)}`, items: raceItems, empty: 'Inga manuellt kopplade tävlingsresultat.' })}${cardHtml({ title: 'Handlingar', source: 'Dokumentarkivet', sourceHref: '../dokumentarkiv/', items: documentItems, empty: 'Inga kopplade handlingar.' })}${cardHtml({ title: 'Matrikeln över tid', source: 'Matrikeln', sourceHref: `../matrikel/?person=${encode(profile.id)}`, items: clubItems, empty: 'Inga bekräftade förekomster i historiska matriklar.' })}</div>`;
   viewNode.setAttribute('aria-busy', 'false');
 }
 

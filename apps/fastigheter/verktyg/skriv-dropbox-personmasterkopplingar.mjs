@@ -10,7 +10,7 @@ if (!requestedRoot) throw new Error('Ange den lokala Dropbox-roten');
 const dropboxRoot = await realpath(resolve(requestedRoot));
 if (!dropboxRoot.endsWith('/Dropbox/Appar/Korpholmen')) throw new Error(`Avbryter: oväntat mål ${dropboxRoot}`);
 const documents = [
-  { master: 'matrikel', path: resolve(REPO, 'apps/matrikel/privat/korrigeringar/2026-08-04-externa-fastighetsagare.json') },
+  { master: 'matrikel', path: resolve(REPO, 'apps/personer-familjer/privat/korrigeringar/2026-08-04-externa-fastighetsagare.json') },
   { master: 'fastigheter', path: resolve(ROOT, 'privat/migrering-2026-08-04-personmaster/party-links.json') },
 ];
 let written = 0; let identical = 0; let operations = 0;

@@ -5,23 +5,28 @@ permanenta Git-checkouten. Privat masterdata ligger bredvid koden i ignorerade
 appmappar eller i Korpholmens privata Dropbox App Folder och publiceras aldrig
 till GitHub.
 
-- `apps/matrikel/` — källkod och privata, ignorerade arbetsdata för personer,
-  relationer, klubbnamn och familje-/fastighetsgemenskap.
+- `apps/personer-familjer/` — källkod och privata, ignorerade arbetsdata för
+  personer, relationer och familje-/släktgemenskap.
 - `apps/batregister/` — källkod och privata, ignorerade arbetsdata för båtar,
-  bilder och länkar till Matrikelns person-ID.
+  bilder och länkar till personmasterns stabila person-ID.
 - `apps/fastigheter/` — källkod och privat master för registerenheter,
   historiska jordlotter, ägande, bruk, transaktioner och källbelägg.
 - `apps/dokumentarkiv/` — källkod och privat operationsmaster för ordagranna,
   sökbara avskrifter och granskade registerkopplingar.
 - `apps/korpholmenrunt/` — källkod, privat resultatsmaster och granskade länkar
-  till Matrikelns person-ID och Båtregistrets båt-ID.
-- `apps/klubbhistorik/` — källkod och privat, tidsbunden observationsmaster
-  för matrikelutgåvor, medlemsstatus, klubbnamn och båtförekomster.
+  till personmasterns person-ID och Båtregistrets båt-ID.
+- `apps/matrikel/` — källkod och privat medlemsmaster för medlemskap,
+  klubbnamn, invalsår och historiska matrikelutgåvor.
 - `packages/core/` — gemensam datafri motor för operationer, IndexedDB,
   Dropbox-synk och OAuth.
-- `matrikel/`, `batregister/`, `fastigheter/`, `dokumentarkiv/`,
-  `korpholmenrunt/`, `klubbhistorik/` och `kartdata/` — datafria
+- `personer-familjer/`, `batregister/`, `fastigheter/`, `dokumentarkiv/`,
+  `korpholmenrunt/`, `matrikel/` och `kartdata/` — datafria
   publiceringspaket för GitHub Pages.
+
+Den äldre webbadressen `klubbhistorik/` är endast en omdirigering till
+`matrikel/`. De äldre Dropbox-namnrymderna `/matrikel/ops` och
+`/klubbhistorik/ops` har kvar sina historiska namn för att revisionskedjan
+inte ska brytas; de är inte aktiva appnamn.
 
 Den gemensamma begrepps- och ansvarsfördelningen för nära familj,
 familjegren, släktkrets och fastighetsgemenskap finns i

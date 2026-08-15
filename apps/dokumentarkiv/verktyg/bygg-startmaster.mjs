@@ -60,7 +60,7 @@ const inboxRoot = await childByNfc(digitalRoot, '00 Inkorg');
 const documentRoot = await childByNfc(digitalRoot, '01 Digitaliserade dokument');
 const appsRoot = PRIVATE_DATA_REPO;
 
-const peoplePath = resolve(appsRoot, 'apps/matrikel/privat/migrering-2026-08-01/approved-excel-import.json');
+const peoplePath = resolve(appsRoot, 'apps/personer-familjer/privat/migrering-2026-08-01/approved-excel-import.json');
 const boatsPath = resolve(appsRoot, 'apps/batregister/privat/kallkopior/byggkit/batregister.json');
 const propertiesPath = resolve(appsRoot, 'apps/fastigheter/privat/migrering-2026-08-02/research-export.json');
 const peopleData = JSON.parse(await readFile(peoplePath, 'utf8'));
@@ -509,7 +509,7 @@ for (const entity of entityRegistry.filter(item => usedEntityIds.has(item.id))) 
     map_x: Number.isFinite(entity.map_x) ? entity.map_x : null,
     map_y: Number.isFinite(entity.map_y) ? entity.map_y : null,
     url: entity.app === 'Matrikeln' && entity.external_id
-      ? `../matrikel/?person=${encodeURIComponent(entity.external_id)}`
+      ? `../personer-familjer/?person=${encodeURIComponent(entity.external_id)}`
       : entity.app === 'Båtregistret' && entity.external_id ? `../batregister/?boat=${encodeURIComponent(entity.external_id)}`
         : entity.app === 'Fastigheter' && entity.external_id ? `../fastigheter/?property=${encodeURIComponent(entity.external_id)}` : null,
   };

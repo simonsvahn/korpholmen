@@ -881,7 +881,7 @@ await test('Dokumentarkivets kopplade namn, båtlänkar, fastigheter och platser
   const place = resolveArchiveEntity({ entity_type: 'plats', external_entity_type: 'place', external_id: 'korpholmen', name: 'Gammalt önamn', match_status: 'kopplad' }, masters);
   const house = resolveArchiveEntity({ entity_type: 'hus', external_entity_type: 'data-entry', external_id: 'K99', name: 'Gammalt husnamn', match_status: 'kopplad' }, masters);
   assert.equal(person.name, 'Anna Holm');
-  assert.equal(person.url, '../matrikel/?person=p1');
+  assert.equal(person.url, '../personer-familjer/?person=p1');
   assert.equal(boat.name, 'Fadersfriden');
   assert.equal(boat.url, '../batregister/?boat=b1');
   assert.equal(property.name, 'Alsvik 3:79 (Bethge)');
@@ -1111,7 +1111,7 @@ await test('frånkoppling spärrar återimport och rensar samtliga äldre tokenk
 });
 
 await test('nya mastermoduler importeras direkt så att äldre appcache förblir kompatibel', async () => {
-  const apps = ['batregister', 'fastigheter', 'kartdata', 'klubbhistorik', 'korpholmenrunt'];
+  const apps = ['batregister', 'fastigheter', 'kartdata', 'matrikel', 'korpholmenrunt'];
   for (const app of apps) {
     const source = await readFile(resolve(REPO_ROOT, 'apps', app, 'src/app.js'), 'utf8');
     const barrelFields = source.match(/import\s*\{([\s\S]*?)\}\s*from\s*'\.\.\/\.\.\/\.\.\/packages\/core\/data-layer\.js';/)?.[1] || '';

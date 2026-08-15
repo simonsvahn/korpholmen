@@ -187,7 +187,7 @@ Statusrubriker som »utan känd släktkoppling« skapar ingen släktgrupp. De ä
 etiketterna visas inte som ett parallellt val i apparna och kan avvecklas när
 alla personer är täckta av relationer eller uttryckligt medlemskap.
 
-Verktyget `apps/matrikel/verktyg/utoka-familjemodell.mjs` är återkörbart mot
+Verktyget `apps/personer-familjer/verktyg/utoka-familjemodell.mjs` är återkörbart mot
 den aktuella operationsmastern. Det matchar en familj via dess oföränderliga
 ankaruppsättning, behåller befintligt id, kod, namn och bekräftelsestatus och
 skapar endast saknade grupper eller medlemskap. Varje senare körning får ett

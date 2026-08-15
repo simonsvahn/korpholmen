@@ -1,550 +1,591 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import {
-  DropboxTransport,
-  MemoryRemoteTransport,
-  MemoryStore,
-  Repository,
-  SyncEngine,
-  batchPath,
-  materialize
-} from '../src/data-layer.js';
-import { propertyLinkEntityId, relationEntityId, validateArchive } from '../src/domain/slakt-schema.js';
-import {
-  buildGraph,
-  componentSets,
-  familyCircleLabel,
-  groupPeople,
-  groupPeopleByProperty,
-  nearFamily,
-  relationshipPath,
-  resolvedIslands,
-  shownName,
-  visiblePersonIds,
-} from '../src/landscape-model.js';
-import {
-  FAMILY_UNIT_TYPE,
-  KIN_GROUP_TYPE,
-  buildFamilyContext,
-  familyUnitMemberDetails,
-  kinGroupMemberDetails,
-  nextReferenceCode,
-  readableReference,
-  searchFamilyTargets,
-  wouldCreateParentChildCycle,
-} from '../../../packages/core/family-context.js';
+import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
+import { boatOptionLabel, boatReferenceLines } from '../src/boat-reference.js';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PRIVATE = resolve(ROOT, 'privat/migrering-2026-08-01');
-const sha256 = value => createHash('sha256').update(value).digest('hex');
-let passed = 0;
+const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const REPO=resolve(ROOT,'../..');
+const PRIVATE=resolve(ROOT,'privat');
+const MIGRATION=resolve(PRIVATE,'migrering-2026-08-02');
+const SOURCES=resolve(PRIVATE,'kallkopior');
+const CORRECTIONS=resolve(PRIVATE,'korrigeringar');
+const SUPPLEMENT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-matriklar-1991-1998.json');
+const SUPPLEMENT_REPORT=resolve(MIGRATION,'kontrollrapport-1991-1998.json');
+const SYNC_CORRECTION=resolve(CORRECTIONS,'2026-08-03-synkade-matriklar.json');
+const SYNC_REPORT=resolve(MIGRATION,'kontrollrapport-synkade-matriklar.json');
+const MATRIKEL_2010_CORRECTION=resolve(CORRECTIONS,'2026-08-03-matrikel-2010.json');
+const MATRIKEL_2010_REPORT=resolve(MIGRATION,'kontrollrapport-matrikel-2010.json');
+const MATRIKEL_1996_CORRECTION=resolve(CORRECTIONS,'2026-08-05-matrikel-1996.json');
+const MATRIKEL_1996_REPORT=resolve(MIGRATION,'kontrollrapport-matrikel-1996.json');
+const TED_CORRECTION=resolve(CORRECTIONS,'2026-08-03-ted-thunborg-dublett.json');
+const VARIANT_CORRECTION=resolve(CORRECTIONS,'2026-08-03-en-sorteringsvariant-per-matrikel.json');
+const ANNUAL_CORRECTION=resolve(CORRECTIONS,'2026-08-03-kalltrogen-layout-v3.json');
+const PETER_CORRECTION=resolve(CORRECTIONS,'2026-08-03-peter-identitetsdelning.json');
+const FOUNDER_CORRECTION=resolve(CORRECTIONS,'2026-08-04-grundarmatrikel-1940-tal.json');
+const sha256=value=>createHash('sha256').update(value).digest('hex');
+let passed=0;
 
-async function test(name, action) {
-  try {
-    await action();
-    passed += 1;
-    console.log(`✓ ${name}`);
-  } catch (error) {
-    console.error(`✗ ${name}`);
-    throw error;
+async function test(name,action){
+  try{await action();passed+=1;console.log(`✓ ${name}`)}
+  catch(error){console.error(`✗ ${name}`);throw error}
+}
+
+function buildMigration(){
+  const commands=[
+    ['verktyg/bygg-en-matrikel-per-ar.mjs'],
+    ['verktyg/bygg-matrikel-1996-tillagg.mjs'],
+    ['verktyg/bygg-peter-identitetsdelning.mjs'],
+    ['verktyg/bygg-grundarmatrikel.mjs'],
+  ];
+  for(const command of commands){
+    const result=spawnSync(process.execPath,command,{cwd:ROOT,encoding:'utf8'});
+    assert.equal(result.status,0,result.stderr||result.stdout);
   }
 }
 
-const archiveRaw = await readFile(resolve(PRIVATE, 'initial-archive.json'));
-const opsRaw = await readFile(resolve(PRIVATE, 'initial-ops.json'));
-const manifest = JSON.parse(await readFile(resolve(PRIVATE, 'migreringsmanifest.json'), 'utf8'));
-const archive = JSON.parse(archiveRaw);
-const operationsDocument = JSON.parse(opsRaw);
-const metadataDocument = JSON.parse(await readFile(resolve(PRIVATE, 'ui-metadata-ops.json'), 'utf8'));
-const approvedDocument = JSON.parse(await readFile(resolve(PRIVATE, 'approved-excel-ops.json'), 'utf8'));
-const familyBatch = JSON.parse(await readFile(resolve(ROOT, 'privat/familjemodell-2026-08-02-batch.json'), 'utf8'));
-const peterCorrectionDirectory = resolve(ROOT, 'privat/korrigeringar/utdata-peter-2026-08-03');
-const peterCorrectionFiles = (await readdir(peterCorrectionDirectory)).filter(file => file.endsWith('.json')).sort();
-const peterCorrectionDocuments = await Promise.all(peterCorrectionFiles.map(file => readFile(resolve(peterCorrectionDirectory, file), 'utf8').then(JSON.parse)));
-const peterCorrectionOperations = peterCorrectionDocuments.flatMap(document => document.ops || document.operations || []);
-const externalOwnerDocument = JSON.parse(await readFile(resolve(ROOT, 'privat/korrigeringar/2026-08-04-externa-fastighetsagare.json'), 'utf8'));
+buildMigration();
+const firstBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
+const firstReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
+const firstSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
+const firstSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
+const firstSyncBytes=await readFile(SYNC_CORRECTION);
+const firstSyncReportBytes=await readFile(SYNC_REPORT);
+const first2010Bytes=await readFile(MATRIKEL_2010_CORRECTION);
+const first2010ReportBytes=await readFile(MATRIKEL_2010_REPORT);
+const first1996Bytes=await readFile(MATRIKEL_1996_CORRECTION);
+const first1996ReportBytes=await readFile(MATRIKEL_1996_REPORT);
+const firstTedBytes=await readFile(TED_CORRECTION);
+const firstVariantBytes=await readFile(VARIANT_CORRECTION);
+const firstAnnualBytes=await readFile(ANNUAL_CORRECTION);
+const firstPeterBytes=await readFile(PETER_CORRECTION);
+const firstFounderBytes=await readFile(FOUNDER_CORRECTION);
+buildMigration();
+const secondBytes=await readFile(resolve(MIGRATION,'initial-ops.json'));
+const secondReportBytes=await readFile(resolve(MIGRATION,'kontrollrapport.json'));
+const secondSupplementBytes=await readFile(SUPPLEMENT_CORRECTION);
+const secondSupplementReportBytes=await readFile(SUPPLEMENT_REPORT);
+const secondSyncBytes=await readFile(SYNC_CORRECTION);
+const secondSyncReportBytes=await readFile(SYNC_REPORT);
+const second2010Bytes=await readFile(MATRIKEL_2010_CORRECTION);
+const second2010ReportBytes=await readFile(MATRIKEL_2010_REPORT);
+const second1996Bytes=await readFile(MATRIKEL_1996_CORRECTION);
+const second1996ReportBytes=await readFile(MATRIKEL_1996_REPORT);
+const secondTedBytes=await readFile(TED_CORRECTION);
+const secondVariantBytes=await readFile(VARIANT_CORRECTION);
+const secondAnnualBytes=await readFile(ANNUAL_CORRECTION);
+const secondPeterBytes=await readFile(PETER_CORRECTION);
+const secondFounderBytes=await readFile(FOUNDER_CORRECTION);
+const document=JSON.parse(secondBytes);
+const report=JSON.parse(secondReportBytes);
+const supplementDocument=JSON.parse(secondSupplementBytes);
+const supplementReport=JSON.parse(secondSupplementReportBytes);
+const syncDocument=JSON.parse(secondSyncBytes);
+const syncReport=JSON.parse(secondSyncReportBytes);
+const matrikel2010Document=JSON.parse(second2010Bytes);
+const matrikel2010Report=JSON.parse(second2010ReportBytes);
+const matrikel1996Document=JSON.parse(second1996Bytes);
+const matrikel1996Report=JSON.parse(second1996ReportBytes);
+const tedDocument=JSON.parse(secondTedBytes);
+const variantDocument=JSON.parse(secondVariantBytes);
+const annualDocument=JSON.parse(secondAnnualBytes);
+const peterDocument=JSON.parse(secondPeterBytes);
+const founderDocument=JSON.parse(secondFounderBytes);
+const correctionFiles=(await readdir(CORRECTIONS)).filter(file=>file.endsWith('.json')).sort();
+const correctionDocuments=await Promise.all(correctionFiles.map(file=>readFile(resolve(CORRECTIONS,file),'utf8').then(JSON.parse)));
+const correctionOperations=correctionDocuments.flatMap(item=>item.operations||item.ops||[]);
+const state=materialize([...document.operations,...correctionOperations]);
+const rows=type=>state.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields}));
+const releases=rows('matrikel-release').filter(item=>item.retained!==false);
+const allSourceRows=rows('source-row');
+const sourceRows=allSourceRows.filter(item=>item.retained!==false);
+const people=rows('person-occurrence').filter(item=>item.retained!==false);
+const boats=rows('boat-occurrence').filter(item=>item.retained!==false);
+const personRefs=rows('person-ref');
+const boatRefs=rows('boat-ref');
+const allSourceDocuments=rows('source-document');
+const sourceDocuments=allSourceDocuments.filter(item=>item.retained!==false);
+const activeSourceRows=sourceRows;
 
-await test('startmastern är kryptografiskt låst', async () => {
-  assert.equal(typeof manifest.source.sha256, 'string');
-  assert.equal(manifest.source.sha256.length, 64);
-  assert.equal(sha256(archiveRaw), manifest.archive_sha256);
-  assert.equal(sha256(opsRaw), manifest.operations_sha256);
-  const source = await readFile(resolve(ROOT, 'privat/legacy/Slaktlandskap 3 - redigerbar.html'));
-  assert.equal(sha256(source), manifest.source.sha256);
+await test('startmastern byggs deterministiskt byte för byte',()=>{
+  assert.equal(sha256(firstBytes),sha256(secondBytes));
+  assert.equal(sha256(firstReportBytes),sha256(secondReportBytes));
+  assert.equal(sha256(firstSupplementBytes),sha256(secondSupplementBytes));
+  assert.equal(sha256(firstSupplementReportBytes),sha256(secondSupplementReportBytes));
+  assert.equal(sha256(firstSyncBytes),sha256(secondSyncBytes));
+  assert.equal(sha256(firstSyncReportBytes),sha256(secondSyncReportBytes));
+  assert.equal(sha256(first2010Bytes),sha256(second2010Bytes));
+  assert.equal(sha256(first2010ReportBytes),sha256(second2010ReportBytes));
+  assert.equal(sha256(first1996Bytes),sha256(second1996Bytes));
+  assert.equal(sha256(first1996ReportBytes),sha256(second1996ReportBytes));
+  assert.equal(sha256(firstTedBytes),sha256(secondTedBytes));
+  assert.equal(sha256(firstVariantBytes),sha256(secondVariantBytes));
+  assert.equal(sha256(firstAnnualBytes),sha256(secondAnnualBytes));
+  assert.equal(sha256(firstPeterBytes),sha256(secondPeterBytes));
+  assert.equal(sha256(firstFounderBytes),sha256(secondFounderBytes));
+  assert.equal(document.operations_sha256,sha256(Buffer.from(JSON.stringify(document.operations))));
+  assert.equal(supplementDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(supplementDocument.operations))));
+  assert.equal(syncDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(syncDocument.operations))));
+  assert.equal(matrikel2010Document.operations_sha256,sha256(Buffer.from(JSON.stringify(matrikel2010Document.operations))));
+  assert.equal(matrikel1996Document.operations_sha256,sha256(Buffer.from(JSON.stringify(matrikel1996Document.operations))));
+  assert.equal(tedDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(tedDocument.operations))));
+  assert.equal(variantDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(variantDocument.operations))));
+  assert.equal(annualDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(annualDocument.operations))));
+  assert.equal(peterDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(peterDocument.operations))));
+  assert.equal(founderDocument.operations_sha256,sha256(Buffer.from(JSON.stringify(founderDocument.operations))));
 });
 
-await test('arkivet har 214 personer, 231 relationer och inga lösa ändpunkter', () => {
-  validateArchive(archive);
-  assert.equal(archive.persons.length, 214);
-  assert.equal(archive.relations.length, 231);
+await test('alla operationer är giltiga och unika',()=>{
+  document.operations.forEach(validateOperation);
+  correctionOperations.forEach(validateOperation);
+  assert.equal(new Set(document.operations.map(operation=>operation.op_id)).size,document.operations.length);
+  assert.equal(new Set([...document.operations,...correctionOperations].map(operation=>operation.op_id)).size,document.operations.length+correctionOperations.length);
+  assert.equal(document.counts.operations,document.operations.length);
+  assert.equal(document.counts.operations,10138);
+  assert.equal(supplementDocument.counts.operations,supplementDocument.operations.length);
+  assert.equal(supplementDocument.counts.operations,10970);
+  assert.equal(syncDocument.counts.operations,syncDocument.operations.length);
+  assert.equal(syncDocument.counts.operations,92701);
+  assert.equal(matrikel2010Document.counts.operations,matrikel2010Document.operations.length);
+  assert.equal(matrikel2010Document.counts.operations,2571);
+  assert.equal(matrikel1996Document.counts.operations,matrikel1996Document.operations.length);
+  assert.equal(matrikel1996Document.counts.operations,9844);
+  assert.equal(tedDocument.operations.length,5);
+  assert.equal(variantDocument.counts.operations,variantDocument.operations.length);
+  assert.equal(annualDocument.counts.operations,annualDocument.operations.length);
 });
 
-await test('äldre Chrome- och Safari-exporter är registrerade men inte importerade', () => {
-  assert.deepEqual(manifest.excluded_sources.map(source => source.changes).sort((a, b) => a - b), [180, 222]);
-  assert.ok(manifest.excluded_sources.every(source => source.treatment === 'arkiverad-men-inte-sammanslagen'));
+await test('källkopiorna är kryptografiskt låsta',async()=>{
+  const paths={historic:'matriklar-1980-1986.md',current:'vem-ar-vem-2025.txt',people:'matrikel-initial-archive.json',boats:'batregister-initial-ops.json',decisions:'godkanda-personmatchningar.json'};
+  for(const [key,file] of Object.entries(paths))assert.equal(sha256(await readFile(resolve(SOURCES,file))),document.source_hashes[key],key);
+  assert.equal(sha256(await readFile(resolve(SOURCES,'matriklar-1991-1998.json'))),supplementDocument.source_sha256);
+  assert.equal(Object.keys(supplementReport.source_file_hashes).length,6);
+  assert.ok(Object.values(supplementReport.source_file_hashes).every(value=>/^[a-f0-9]{64}$/.test(value)));
+  assert.equal(sha256(await readFile(resolve(SOURCES,'matriklar/matrikel-1996.json'))),matrikel1996Document.source_sha256);
+  assert.equal(Object.keys(matrikel1996Report.source_file_hashes).length,3);
 });
 
-await test('personidentiteter och visningsnamn är kompletta och unika', () => {
-  const ids = new Set(archive.persons.map(person => person.id));
-  const names = new Set(archive.persons.map(person => person.fields.display_name));
-  assert.equal(ids.size, archive.persons.length);
-  assert.equal(names.size, archive.persons.length);
-  assert.ok([...names].every(Boolean));
+await test('alla matrikel-JSON följer samma schema och källhashar',()=>{
+  const result=spawnSync(process.execPath,['verktyg/validera-matrikel-json.mjs'],{cwd:ROOT,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr||result.stdout);
+  const validation=JSON.parse(result.stdout);
+  assert.equal(validation.schema_version,2);
+  assert.equal(validation.documents,15);
+  assert.equal(validation.releases,15);
+  assert.deepEqual(validation.years,[1980,1982,1986,1987,1988,1991,1996,1998,2010,2020,2021,2022,2023,2024,2025]);
+  assert.equal(validation.source_files,82);
+  assert.equal(validation.member_rows_in_primary_documents,1652);
+  assert.equal(validation.person_occurrences_in_primary_documents,1660);
+  assert.equal(validation.layout_rows_in_primary_documents,1738);
+  assert.equal(validation.boat_occurrences_in_primary_documents,671);
+  assert.equal(validation.source_duplicate_groups.length,0);
+  for(const year of validation.years)assert.ok(validation.release_counts[`matrikel-${year}`],year);
+  assert.equal(validation.release_counts['matrikel-2020'].member_rows,134);
+  assert.equal(validation.release_counts['matrikel-2010'].member_rows,77);
+  assert.equal(validation.release_counts['matrikel-2025'].member_rows,154);
 });
 
-await test('alla 5 061 startoperationer materialiserar exakt samma antal entiteter', () => {
-  assert.equal(operationsDocument.operations.length, 5061);
-  const state = materialize(operationsDocument.operations);
-  assert.equal(state.listEntities('person').length, 214);
-  assert.equal(state.listEntities('relation').length, 231);
-  assert.equal(state.getEntity('root', 'slaktlandskap').fields.source_sha256, manifest.source.sha256);
+await test('varje kalenderår har en aktiv JSON utan att äldre operationer raderas',()=>{
+  const originalReleases=releases.filter(release=>!release.is_reconstruction);
+  assert.equal(sourceDocuments.length,15);
+  assert.ok(allSourceDocuments.length>sourceDocuments.length);
+  assert.equal(originalReleases.length,15);
+  assert.ok(originalReleases.every(release=>release.source_document_ids.length===1));
+  assert.deepEqual(releases.find(release=>release.id==='matrikel-grundare-1940-tal').source_document_ids,[]);
+  assert.equal(annualDocument.counts.active_releases,14);
+  assert.equal(annualDocument.counts.retired_releases,15);
+  assert.equal(annualDocument.counts.active_person_occurrences,1539);
+  assert.equal(annualDocument.counts.active_boat_occurrences,559);
+  assert.equal(annualDocument.counts.active_source_layout_rows,1606);
+  assert.equal(annualDocument.selection['matrikel-2020'].selected_source_release_id,'matrikel-2020-08-05');
+  assert.equal(annualDocument.selection['matrikel-2010'].selected_source_release_id,'matrikel-2010');
+  assert.equal(annualDocument.selection['matrikel-2025'].selected_source_release_id,'matrikel-2025-08-01');
+  assert.equal(people.length,1670);
+  const splitIds=new Set(people.filter(item=>item.source_entity_kind==='multiple_people').map(item=>item.id));
+  assert.ok(annualDocument.operations.filter(operation=>operation.entity_type==='person-occurrence'&&['person_id','confirmed','candidate_ids','match_status','match_method'].includes(operation.field)).every(operation=>splitIds.has(operation.entity_id)));
 });
 
-await test('1 927 presentationsoperationer kompletterar utan att ändra sakdatans antal', () => {
-  assert.equal(metadataDocument.operations.length, 1927);
-  const state = materialize([...operationsDocument.operations, ...metadataDocument.operations]);
-  assert.equal(state.listEntities('person').length, 214);
-  assert.equal(state.listEntities('relation').length, 231);
-  const presented = state.listEntities('person').filter(person => person.fields.ui_clan);
-  assert.equal(presented.length, 214);
-  assert.ok(presented.some(person => Number.isFinite(person.fields.ui_generation)));
+await test('15 originalutgåvor, en grundarrekonstruktion och 1 670 personförekomster finns',()=>{
+  assert.equal(releases.length,16);
+  assert.deepEqual(releases.filter(release=>!release.is_reconstruction&&release.id!=='matrikel-1996').map(release=>release.id).sort(),Object.keys(annualDocument.selection).sort());
+  assert.equal(releases.find(release=>release.id==='matrikel-1996').source_document_id,'source-document:matrikel-1996:foto');
+  assert.deepEqual(report.release_counts['matrikel-1980'],{person_rows:41,boat_source_rows:32,boat_occurrences:46,connected_person_rows:40,unresolved_person_rows:1});
+  assert.deepEqual(report.release_counts['matrikel-1986'],{person_rows:47,boat_source_rows:35,boat_occurrences:51,connected_person_rows:44,unresolved_person_rows:3});
+  assert.deepEqual(report.release_counts['matrikel-2025'],{person_rows:156,boat_source_rows:0,boat_occurrences:0,connected_person_rows:156,unresolved_person_rows:0});
+  assert.deepEqual(supplementReport.release_counts['matrikel-1991'].person_categories,{active:58,passive:10,junior:26,corresponding:2});
+  assert.deepEqual(supplementReport.release_counts['matrikel-1998'].person_categories,{active:63,passive:2,junior:42,corresponding:4});
+  assert.equal(supplementReport.release_counts['matrikel-1991'].person_rows,96);
+  assert.equal(supplementReport.release_counts['matrikel-1998'].person_rows,111);
+  assert.equal(people.length,1670);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='active').length,35);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='passive').length,6);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1980'&&item.membership_status==='junior').length,30);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1982').length,78);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1987').length,86);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1988').length,89);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1991'&&item.membership_status==='junior').length,26);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1996').length,121);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998').length,113);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.membership_status==='corresponding').length,6);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2010').length,77);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='active').length,64);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='passive').length,8);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='listed').length,3);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2010'&&item.membership_status==='corresponding').length,2);
+  assert.equal(matrikel2010Report.counts.unresolved_new_people,39);
 });
 
-await test('1 114 godkända Exceloperationer ger livsstatus och fastighetskopplingar', () => {
-  assert.equal(approvedDocument.operations.length, 1114);
-  assert.deepEqual(approvedDocument.counts, {
-    people: 214,
-    living_yes: 185,
-    living_no: 27,
-    living_unknown: 2,
-    properties: 34,
-    property_links: 137,
-    people_with_property: 137,
-    people_with_island_without_property: 73,
-  });
-  const state = materialize([
-    ...operationsDocument.operations,
-    ...metadataDocument.operations,
-    ...approvedDocument.operations,
+await test('grundarmatrikeln är en källredovisad rekonstruktion och inte ett fingerat original',()=>{
+  const release=releases.find(item=>item.id==='matrikel-grundare-1940-tal');
+  const founders=people.filter(item=>item.release_id===release.id);
+  assert.equal(release.is_reconstruction,true);
+  assert.equal(release.release_class,'reconstruction');
+  assert.equal(release.year,1945);
+  assert.equal(release.date_from,1943);
+  assert.equal(release.date_to,1945);
+  assert.equal(release.date_confidence,'medel');
+  assert.equal(release.source_document_id,null);
+  assert.deepEqual(release.source_document_ids,[]);
+  assert.deepEqual(release.evidence_source_ids,['TRY-HEDSTROM','TRY-MAMMA','TRY-SLAKTEN','ARK-1954','MATR-1986']);
+  assert.equal(founders.length,10);
+  assert.equal(new Set(founders.map(item=>item.person_id)).size,10);
+  assert.ok(founders.every(item=>item.membership_status==='founder'&&item.induction_year===null&&item.induction_year_estimate===1945));
+  assert.ok(founders.every(item=>item.confirmed&&item.match_method==='källkorsläst rekonstruktion'));
+  assert.ok(!founders.some(item=>['perolofbethge','ingerbethge'].includes(item.person_id)));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('hedström')).map(item=>item.island_raw)),new Set(['Korpholmen']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('nordlander')).map(item=>item.island_raw)),new Set(['Yxlan']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.includes('weslien')).map(item=>`${item.island_raw}:${item.place_detail_raw}`)),new Set(['Yxlan:Alsvassen']));
+  assert.deepEqual(new Set(founders.filter(item=>item.person_id.endsWith('une')).map(item=>item.island_raw)),new Set(['Stugholmen']));
+  assert.ok(founders.every(item=>item.place_confidence==='hög'&&item.place_evidence));
+  assert.equal(sourceRows.filter(item=>item.release_id===release.id).length,0);
+  assert.equal(sourceDocuments.some(item=>item.id.includes('grundare')),false);
+});
+
+await test('alla aktiva källrader och båtförekomster redovisas utan tyst bortfall',()=>{
+  assert.equal(activeSourceRows.length,2092);
+  assert.equal(activeSourceRows.filter(row=>row.id.startsWith('source-row:canonical:')).length,2092);
+  assert.equal(boats.length,671);
+  assert.equal(rows('source-layout-row').filter(row=>row.retained!==false).length,1738);
+  assert.equal(new Set(sourceRows.map(row=>row.id)).size,sourceRows.length);
+  assert.ok(sourceRows.every(row=>typeof row.raw_text==='string'&&(row.raw_text.length>0||row.category==='blank')));
+  assert.ok(people.every(item=>typeof item.raw_text==='string'&&item.raw_text.length>0));
+  assert.ok(boats.every(item=>typeof item.raw_text==='string'&&item.raw_text.length>0));
+  for(const row of sourceRows)for(const id of row.occurrence_ids||[])assert.ok(people.some(item=>item.id===id)||boats.some(item=>item.id===id),id);
+  assert.equal(activeSourceRows.filter(row=>row.release_id==='matrikel-1991'&&row.kind==='boat'&&row.id.startsWith('source-row:canonical:')).length,71);
+  assert.equal(activeSourceRows.filter(row=>row.release_id==='matrikel-1996'&&row.kind==='boat'&&row.id.startsWith('source-row:canonical:')).length,67);
+  assert.equal(activeSourceRows.filter(row=>row.release_id==='matrikel-1998'&&row.kind==='boat'&&row.id.startsWith('source-row:canonical:')).length,67);
+  assert.equal(activeSourceRows.filter(row=>row.release_id==='matrikel-2010'&&row.kind==='person'&&row.id.startsWith('source-row:canonical:')).length,77);
+  assert.equal(boats.filter(item=>item.release_id==='matrikel-1991').length,93);
+  assert.equal(boats.filter(item=>item.release_id==='matrikel-1996').length,112);
+  assert.equal(boats.filter(item=>item.release_id==='matrikel-1998').length,119);
+  assert.equal(people.find(item=>item.release_id==='matrikel-1991'&&item.person_name_raw==='Per-Olof Bethge').source_annotation,'orange överstrykning i källfotot');
+  assert.equal(boats.find(item=>item.release_id==='matrikel-1991'&&item.boat_name_raw==='Lasse-Maja (1985').source_annotation,'slutparentes saknas i källan');
+});
+
+await test('den tryckta radlayouten är explicit och 1998 återges utan indexparning',()=>{
+  const layouts=rows('source-layout-row').filter(item=>item.retained!==false&&item.release_id==='matrikel-1998');
+  const firstMember='source-row:canonical:source-document:matrikel-1998:foto:member:001';
+  const first=layouts.find(item=>item.member_source_row_id===firstMember);
+  assert.deepEqual(first.boat_source_row_ids,[
+    'source-row:canonical:source-document:matrikel-1998:foto:boat:001',
+    'source-row:canonical:source-document:matrikel-1998:foto:boat:002',
   ]);
-  assert.equal(state.listEntities('person').length, 214);
-  assert.equal(state.listEntities('relation').length, 231);
-  assert.equal(state.listEntities('property').length, 34);
-  assert.equal(state.listEntities('property-link').length, 137);
+  const nanna='source-row:canonical:source-document:matrikel-1998:foto:member:088';
+  const yngve='source-row:canonical:source-document:matrikel-1998:foto:member:089';
+  assert.equal(layouts.filter(item=>item.member_source_row_id===nanna).length,2);
+  assert.equal(layouts.filter(item=>item.member_source_row_id===yngve).length,2);
+  assert.ok(layouts.some(item=>item.kind==='heading'&&item.text_raw==='KORRESPONDERANDE MEDLEMMAR'));
+  assert.ok(layouts.some(item=>item.kind==='note'&&item.text_raw.includes('5 års tystnad')));
+  assert.ok(layouts.some(item=>item.kind==='heading'&&item.text_raw==='AVREGISTRERADE OCH/ELLER NAMNÄNDRADE FARTYG'));
+  const historicBoats=activeSourceRows.filter(row=>row.kind==='boat'&&Number(row.release_id.slice(-4))<=1998&&row.category!=='blank');
+  assert.ok(historicBoats.filter(row=>row.category!=='deregistered-or-renamed').every(row=>row.associated_member_source_row_id));
+  assert.ok(historicBoats.filter(row=>row.category==='deregistered-or-renamed').every(row=>!row.associated_member_source_row_id));
+});
 
-  const people = state.listEntities('person');
-  assert.equal(people.filter(person => person.fields.living === 'ja').length, 185);
-  assert.equal(people.filter(person => person.fields.living === 'nej').length, 27);
-  assert.equal(people.filter(person => person.fields.living === 'okänt').length, 2);
-  const personIds = new Set(people.map(person => person.entity_id));
-  const propertyIds = new Set(state.listEntities('property').map(property => property.entity_id));
-  for (const link of state.listEntities('property-link')) {
-    assert.ok(personIds.has(link.fields.person_id), `Okänd person i fastighetskoppling: ${link.entity_id}`);
-    assert.ok(propertyIds.has(link.fields.property_id), `Okänd fastighet i fastighetskoppling: ${link.entity_id}`);
-    assert.equal(link.fields.confirmed, true);
+await test('person- och båtkopplingar pekar bara på respektive master',()=>{
+  const personIds=new Set(personRefs.map(ref=>ref.external_id));
+  const boatIds=new Set(boatRefs.map(ref=>ref.external_id));
+  assert.equal(personIds.size,215);
+  assert.equal(boatIds.size,169);
+  for(const item of people.filter(row=>row.person_id&&row.confirmed))assert.ok(personIds.has(item.person_id),item.person_id);
+  for(const item of boats.filter(row=>row.boat_id&&row.confirmed))assert.ok(boatIds.has(item.boat_id),item.boat_id);
+});
+
+await test('osäkra identiteter ligger öppet i granskningskön',()=>{
+  const unresolved=people.filter(item=>!item.person_id||!item.confirmed);
+  assert.equal(unresolved.length,214);
+  const originalUnresolved=unresolved.filter(item=>['matrikel-1980','matrikel-1986'].includes(item.release_id)&&!item.id.includes(':canonical:'));
+  assert.deepEqual(originalUnresolved.map(item=>`${item.release_id}:${item.person_name_raw}`).sort(),['matrikel-1980:Gunnel Söderberg','matrikel-1986:Agneta Åkerman','matrikel-1986:Annika Söderberg','matrikel-1986:Gunnel Söderberg']);
+  assert.ok(unresolved.every(item=>item.confirmed===false&&Array.isArray(item.candidate_ids)));
+  assert.equal(supplementReport.unresolved_people.length,43);
+  assert.equal(report.counts.unresolved_boats,14);
+  assert.equal(supplementReport.unresolved_boats.length,31);
+  assert.equal(boats.filter(item=>!item.boat_id||!item.confirmed).length,83);
+});
+
+await test('alla båtreferenser bär full strukturerad metadata och får entydiga etiketter',()=>{
+  assert.equal(boatRefs.length,169);
+  assert.ok(boatRefs.every(item=>item.snapshot_version===2&&item.snapshot&&typeof item.snapshot==='object'));
+  assert.ok(boatRefs.every(item=>!Object.hasOwn(item.snapshot,'images')));
+  const oldMajsol=boatRefs.find(item=>item.external_id==='majsol_neretnieks');
+  const newMajsol=boatRefs.find(item=>item.external_id==='majsol_holm');
+  assert.match(boatOptionLabel(oldMajsol),/Majsol — Neretnieks.*S\/S.*1975/);
+  assert.match(boatOptionLabel(newMajsol),/Majsol — Holm.*M\/S.*2013/);
+  assert.notEqual(boatOptionLabel(oldMajsol),boatOptionLabel(newMajsol));
+  const unknownBaseName=boatRefs.find(item=>item.external_id==='bustermagnum');
+  assert.match(boatOptionLabel(unknownBaseName),/^Buster Magnum/);
+  assert.equal(boatReferenceLines(oldMajsol).owner,'Neretnieks → 1993 Junior Åsa');
+});
+
+await test('alla redan gjorda manuella båtkopplingar är eftergranskade och korrekta',()=>{
+  const expected=new Map([
+    ['boat-occurrence:matrikel-1980:019:1','carlphilipper'],
+    ['boat-occurrence:matrikel-1980:021:1','myran2'],
+    ['boat-occurrence:matrikel-1980:018:1','majsol_neretnieks'],
+  ]);
+  for(const [id,boatId] of expected){
+    const occurrence=boats.find(item=>item.id===id);
+    assert.equal(occurrence.boat_id,boatId);
+    assert.equal(occurrence.confirmed,true);
+    assert.equal(occurrence.audit_status,'eftergranskad');
+    assert.match(occurrence.decision_note,/Eftergranskad 2026-08-03/);
   }
+  const externallyDecidedIds=new Set([
+    'boat-occurrence:matrikel-1980:018:1','boat-occurrence:matrikel-1980:019:1','boat-occurrence:matrikel-1980:021:1',
+    'boat-occurrence:matrikel-1986:022:1','boat-occurrence:matrikel-1986:033:1','person-occurrence:matrikel-1980:023',
+    'person-occurrence:matrikel-1986:033','person-occurrence:matrikel-1986:034','person-occurrence:matrikel-1986:047',
+  ]);
+  const decisionFields=new Set(['person_id','boat_id','confirmed','candidate_ids','match_status','match_method','decision_note']);
+  assert.equal(annualDocument.operations.filter(operation=>externallyDecidedIds.has(operation.entity_id)&&decisionFields.has(operation.field)).length,0);
 });
 
-await test('Peter-identiteterna och Annas namnbyte är rättade additivt', () => {
-  const state = materialize([
-    ...operationsDocument.operations,
-    ...metadataDocument.operations,
-    ...approvedDocument.operations,
-    ...familyBatch.ops,
-    ...peterCorrectionOperations,
-  ]);
-  assert.equal(state.listEntities('person').length, 215);
-  assert.equal(state.listEntities('relation').length, 235);
-  const peterNeretnieks = state.getEntity('person', 'peterneretnieks');
-  const peterHolm = state.getEntity('person', 'peterholm');
-  const annaHolm = state.getEntity('person', 'annaholm');
-  assert.equal(peterNeretnieks.fields.birth, 1965);
-  assert.equal(peterNeretnieks.fields.club_name, 'Broder Peter-K');
-  assert.equal(peterHolm.fields.birth, 1971);
-  assert.equal(peterHolm.fields.family, 'Holm');
-  assert.equal(peterHolm.fields.ui_is_inlaw, true);
-  assert.equal(annaHolm.fields.birth_name, 'Anna Neretnieks');
-  assert.equal(annaHolm.fields.ui_is_inlaw, false);
-  assert.ok(annaHolm.fields.aliases.includes('Anna Neretnieks'));
-  assert.equal(state.getEntity('relation', 'relation:foralder-barn:ivarsneretnieks:peterholm'), null);
-  assert.equal(state.getEntity('relation', 'relation:foralder-barn:margaretaneretnieks:peterholm'), null);
-  assert.equal(state.getEntity('relation', 'relation:foralder-barn:ivarsneretnieks:peterneretnieks').fields.user_confirmed, true);
-  assert.equal(state.getEntity('relation', 'relation:foralder-barn:margaretaneretnieks:annaholm').fields.user_confirmed, true);
-  assert.equal(state.getEntity('relation', 'relation:partner:annaholm:peterholm').fields.form, 'gift');
+await test('Majsol 1986 avgörs av typ och år utan att källraden ändras',()=>{
+  const occurrence=boats.find(item=>item.id==='boat-occurrence:matrikel-1986:019:1');
+  assert.equal(occurrence.raw_text,'S/S Majsol (1975)');
+  assert.equal(occurrence.boat_id,'majsol_neretnieks');
+  assert.equal(occurrence.match_status,'godkand');
+  assert.equal(occurrence.confirmed,true);
+  assert.deepEqual(occurrence.candidate_ids,['majsol_neretnieks']);
+  const laterMajsols=boats.filter(item=>['matrikel-1991','matrikel-1998'].includes(item.release_id)&&item.boat_name_raw==='Majsol');
+  assert.equal(laterMajsols.length,2);
+  assert.ok(laterMajsols.every(item=>item.raw_text.includes('S/S Majsol')&&item.boat_id==='majsol_neretnieks'&&item.confirmed===true));
 });
 
-await test('externa nuvarande fastighetsägare har separata person-ID:n utan namnmatchning', () => {
-  assert.equal(externalOwnerDocument.parties.length, 24);
-  assert.match(externalOwnerDocument.identity_rule, /Ingen namnmatchning/);
-  externalOwnerDocument.operations.forEach(operation => assert.equal(operation.entity_type, 'person'));
-  const state = materialize([
-    ...operationsDocument.operations,
-    ...metadataDocument.operations,
-    ...approvedDocument.operations,
-    ...familyBatch.ops,
-    ...peterCorrectionOperations,
-    ...externalOwnerDocument.operations,
-  ]);
-  const external = state.listEntities('person').filter(person => person.fields.person_scope === 'extern');
-  assert.equal(external.length, 24);
-  assert.equal(new Set(external.map(person => person.entity_id)).size, 24);
-  assert.equal(new Set(external.map(person => person.fields.display_name)).size, 24);
-  assert.ok(external.every(person => person.fields.source_master === 'fastigheter' && person.fields.source_external_id.startsWith('party-')));
+await test('Filifjonkan-raderna behåller källformen men länkas till den första båten',()=>{
+  const firstRef=boatRefs.find(item=>item.external_id==='filifjonkaniii');
+  const secondRef=boatRefs.find(item=>item.external_id==='filifjonkanii');
+  assert.equal(firstRef.name,'Filifjonkan I');
+  assert.deepEqual(firstRef.aliases,['Filifjonkan']);
+  assert.equal(secondRef.name,'Filifjonkan II');
+  const occurrences=boats.filter(item=>item.boat_name_raw==='Filifjonkan');
+  assert.deepEqual(occurrences.map(item=>item.release_id).sort(),['matrikel-1980','matrikel-1982','matrikel-1986','matrikel-1987','matrikel-1988','matrikel-1991','matrikel-1996','matrikel-1998']);
+  assert.ok(occurrences.every(item=>item.raw_text.includes('Filifjonkan')&&item.boat_id==='filifjonkaniii'&&item.confirmed===true));
+  assert.ok(occurrences.every(item=>item.match_status==='godkand'&&['källbelagd identitetsrättning','tidigare källbelagd båtidentitet'].includes(item.match_method)));
 });
 
-await test('livs- och fastighetsfilter samt härledd ö fungerar tillsammans', () => {
-  const state = materialize([
-    ...operationsDocument.operations,
-    ...metadataDocument.operations,
-    ...approvedDocument.operations,
+await test('1991, 1996 och 1998 bevarar medlems- och fartygskategorierna',()=>{
+  const junior=people.find(item=>item.release_id==='matrikel-1991'&&item.person_name_raw==='Elin Dalaryd');
+  const junior1996=people.find(item=>item.release_id==='matrikel-1996'&&item.person_name_raw==='Kerstin Dalaryd');
+  const corresponding1996=people.find(item=>item.release_id==='matrikel-1996'&&item.person_name_raw==='Else Wallén');
+  const retired1996=boats.find(item=>item.release_id==='matrikel-1996'&&item.boat_name_raw==='Pillegur');
+  const corresponding=people.find(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Else Wallén');
+  const retired=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Annikahn');
+  const commaName=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Smör, Ost och Sill');
+  assert.equal(junior.membership_status,'junior');
+  assert.equal(junior.source_page,3);
+  assert.equal(junior1996.membership_status,'junior');
+  assert.equal(junior1996.source_page,2);
+  assert.equal(corresponding1996.membership_status,'corresponding');
+  assert.equal(corresponding1996.source_page,3);
+  assert.equal(retired1996.source_category,'deregistered-or-renamed');
+  assert.equal(corresponding.membership_status,'corresponding');
+  assert.equal(corresponding.source_page,3);
+  assert.equal(retired.source_category,'deregistered-or-renamed');
+  assert.equal(retired.registry_year_raw,'1991-96');
+  assert.equal(commaName.registry_year,1994);
+  assert.equal(commaName.raw_text,'S/S Smör, Ost och Sill(1994)');
+  const babb=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Babb');
+  assert.equal(babb.raw_text,'M/S Babb (1960-84)');
+  assert.deepEqual(babb.registry_periods,[{raw:'1960-84',kind:'range',from:1960,to:1984,from_open:false,to_open:false}]);
+  const hostsol=boats.find(item=>item.release_id==='matrikel-1998'&&item.boat_name_raw==='Höstsol');
+  assert.deepEqual(hostsol.registry_periods,[
+    {raw:'-1997',kind:'range',from:null,to:1997,from_open:true,to_open:false},
+    {raw:'1997-',kind:'range',from:1997,to:null,from_open:false,to_open:true},
   ]);
-  const properties = state.listEntities('property').map(entity => ({ id: entity.entity_id, ...entity.fields }));
-  const propertyById = new Map(properties.map(property => [property.id, property]));
-  const linksByPerson = new Map();
-  for (const entity of state.listEntities('property-link')) {
-    const link = { id: entity.entity_id, ...entity.fields };
-    if (!linksByPerson.has(link.person_id)) linksByPerson.set(link.person_id, []);
-    linksByPerson.get(link.person_id).push(link);
+});
+
+await test('flerspersonrader blir personer men gruppetiketter blir inte personer',()=>{
+  const ulla=people.filter(item=>item.person_name_raw==='Ulla Freyschuss');
+  const stig=people.filter(item=>item.person_name_raw==='Stig Freyschuss');
+  assert.equal(ulla.length,8);
+  assert.equal(stig.length,8);
+  assert.ok(ulla.every(item=>item.source_person_name_raw==='Ulla och Stig Freyschuss'&&!item.confirmed));
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Ditte Thufvesson').length,1);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-1998'&&item.person_name_raw==='Holger Thufvesson').length,1);
+  assert.equal(people.filter(item=>item.person_name_raw==='Familjen Wagstaff').length,0);
+  const wagstaffRows=activeSourceRows.filter(row=>row.raw_text.includes('Familjen Wagstaff'));
+  assert.equal(wagstaffRows.length,2);
+  assert.ok(wagstaffRows.every(row=>row.source_entity_kind==='group'&&row.occurrence_ids.length===0));
+});
+
+await test('källdubbletter bevaras medan Ted Thunborg bara räknas en gång',()=>{
+  assert.equal(report.duplicate_person_groups.length,2);
+  const activePeterNeretnieks=people.filter(item=>item.retained!==false&&item.person_name_raw==='Peter Neretnieks');
+  const activePeterHolm=people.filter(item=>item.retained!==false&&item.person_name_raw==='Peter Holm');
+  assert.equal(activePeterNeretnieks.length,15);
+  assert.equal(activePeterHolm.length,6);
+  assert.ok(activePeterNeretnieks.every(item=>item.person_id==='peterneretnieks'));
+  assert.ok(activePeterHolm.every(item=>item.person_id==='peterholm'));
+  for(const year of [2020,2021,2022,2023,2024,2025]){
+    const pair=people.filter(item=>item.retained!==false&&item.release_id===`matrikel-${year}`&&['Peter Neretnieks','Peter Holm'].includes(item.person_name_raw));
+    assert.equal(pair.length,2);
+    assert.equal(new Set(pair.map(item=>item.person_id)).size,2);
   }
-  const people = state.listEntities('person').map(entity => {
-    const person = { id: entity.entity_id, ...entity.fields };
-    const propertyIds = (linksByPerson.get(person.id) || []).map(link => link.property_id);
-    return {
-      ...person,
-      property_ids: propertyIds,
-      property_islands: [...new Set(propertyIds.map(id => propertyById.get(id)?.island).filter(Boolean))],
-    };
-  });
-  const relations = state.listEntities('relation').map(entity => ({ id: entity.entity_id, ...entity.fields }));
-  const graph = buildGraph(people, relations);
-  const islandConflicts = people.filter(person => {
-    const propertyIslands = person.property_islands || [];
-    return person.legacy_island && propertyIslands.length && !propertyIslands.includes(person.legacy_island);
-  });
-  assert.equal(islandConflicts.length, 0);
-  const defaults = { generations: new Set(), includeInlaws: true, onlyUnlinked: false, yearOn: false };
-  assert.equal(visiblePersonIds(people, graph, { ...defaults, living: 'nej' }).size, 27);
-  assert.equal(visiblePersonIds(people, graph, { ...defaults, living: 'okänt' }).size, 2);
-  const sampleLink = state.listEntities('property-link')[0];
-  assert.ok(visiblePersonIds(people, graph, { ...defaults, property: sampleLink.fields.property_id }).has(sampleLink.fields.person_id));
-  assert.equal(visiblePersonIds(people, graph, { ...defaults, property: '__none__' }).size, 77);
-  const historicalPeople = [
-    { id: 'living', birth: '1950', death: null },
-    { id: 'dead', birth: '1950', death: '1990' },
-    { id: 'future', birth: '2010', death: null },
-    { id: 'unknown', birth: null, death: null },
-  ];
-  const historicalGraph = buildGraph(historicalPeople, []);
-  assert.deepEqual(
-    [...visiblePersonIds(historicalPeople, historicalGraph, { ...defaults, yearOn: true, year: 2000 })].sort(),
-    ['living', 'unknown'],
-  );
-  assert.deepEqual(resolvedIslands({ property_islands: ['Svanö'], legacy_island: 'Ängsholmen' }), ['Svanö', 'Ängsholmen']);
-  const propertyGroup = groupPeopleByProperty(people, properties).find(group => group.id === sampleLink.fields.property_id);
-  assert.ok(propertyGroup.people.some(person => person.id === sampleLink.fields.person_id));
-  assert.ok(propertyGroup.people.every(person => Array.isArray(person.property_ids)));
+  assert.ok(report.duplicate_person_groups.some(group=>group.raw_names.filter(name=>name==='Ted Thunborg').length===2));
+  assert.equal(people.some(item=>item.id==='person-occurrence:matrikel-2025:145'),false);
+  assert.equal(people.filter(item=>item.release_id==='matrikel-2025'&&item.person_id==='tedthunborg').length,1);
+  const duplicateSource=allSourceRows.find(item=>item.id==='source-row:canonical:source-document:matrikel-2025:numbers-export:member:145');
+  assert.deepEqual(duplicateSource.occurrence_ids,[]);
+  assert.match(duplicateSource.normalization_note,/Källdubblett/);
+  assert.deepEqual(report.invalid_birth_dates.map(item=>item.raw),['200991020']);
 });
 
-await test('fastighetsgrupper visar bara relationer mellan personer på samma fastighet', () => {
-  const people = [
-    { id: 'mamma', display_name: 'Mamma', property_ids: ['A'] },
-    { id: 'partner', display_name: 'Partner', property_ids: ['A'] },
-    { id: 'barn', display_name: 'Barn', property_ids: ['B'] },
-  ];
-  const relations = [
-    { id: 'partnerband', kind: 'partner', from_person_id: 'mamma', to_person_id: 'partner' },
-    { id: 'barnband', kind: 'foralder-barn', from_person_id: 'mamma', to_person_id: 'barn' },
-  ];
-  const propertyA = groupPeopleByProperty(people, [{ id: 'A' }, { id: 'B' }]).find((group) => group.id === 'A');
-  const components = componentSets(propertyA.people, relations);
-  assert.deepEqual([...components[0]].sort(), ['mamma', 'partner']);
-  assert.equal(components.some((component) => component.has('barn')), false);
+await test('bara belagda verkliga namnbyten registreras som kandidater',()=>{
+  const changes=rows('name-change-candidate');
+  assert.equal(changes.length,3);
+  assert.deepEqual(changes.map(item=>`${item.from_name} → ${item.to_name}`).sort(),['Anna Neretnieks → Anna Holm','Christina Une → Christina Lindblom','Lotta Bethge → Lotta Svahn']);
+  assert.ok(changes.find(item=>item.person_id==='christinakisselindblom').basis.includes('källform Christina Lindbom'));
+  assert.ok(people.filter(item=>item.retained!==false&&item.person_name_raw==='Anna Neretnieks').every(item=>item.person_id==='annaholm'));
+  assert.equal(rows('person-ref').find(item=>item.external_id==='peterneretnieks').club_name,'Broder Peter-K');
+  assert.ok(changes.every(item=>item.writes_to_person_master===false&&item.status==='belagd kandidat'));
 });
 
-await test('landskapsmodellen tål saknade ändpunkter och hittar släktskapsvägar', () => {
-  const people = archive.persons.map(person => ({ id: person.id, ...person.fields }));
-  const relations = archive.relations.map(relation => ({ id: relation.id, ...relation.fields }));
-  const graph = buildGraph(people, [...relations, { id: 'trasig', kind: 'partner', from_person_id: 'saknas', to_person_id: people[0].id }]);
-  assert.equal(graph.byId.size, 214);
-  assert.equal(shownName(undefined), 'Okänd person');
-  assert.ok(groupPeople(people).length > 1);
-  const sampleRelation = relations[0];
-  const path = relationshipPath(sampleRelation.from_person_id, sampleRelation.to_person_id, graph);
-  assert.equal(path.length, 1);
+await test('fartygskolumnen skapar aldrig ett dolt ägarpåstående',()=>{
+  assert.equal(rows('ownership-observation').length,0);
+  assert.equal(rows('boat-person-link').length,0);
+  assert.ok(boats.every(item=>!Object.hasOwn(item,'person_id')&&!Object.hasOwn(item,'owner_id')));
 });
 
-await test('förälder-barn-cykler terminerar och kan inte skapas i redigeraren', async () => {
-  const people = ['a', 'b', 'c', 'd'].map(id => ({ id, display_name: id.toUpperCase() }));
-  const chain = [
-    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'b', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'b', to_person_id: 'c', user_confirmed: true },
-  ];
-  const chainContext = buildFamilyContext({ people, relations: chain });
-  assert.equal(wouldCreateParentChildCycle('c', 'a', chainContext), true);
-  assert.equal(wouldCreateParentChildCycle('a', 'c', chainContext), false);
-
-  const cycleContext = buildFamilyContext({ people, relations: [
-    ...chain,
-    { kind: 'foralder-barn', from_person_id: 'c', to_person_id: 'a', user_confirmed: true },
-  ] });
-  const group = { id: 'cykel', anchor_person_ids: ['a'], membership_rule: 'anchors_and_descendants', confirmed: true };
-  assert.deepEqual(kinGroupMemberDetails(group, cycleContext).map(member => [member.person_id, member.generation]), [
-    ['a', 1],
-    ['b', 2],
-    ['c', 3],
-  ]);
-  assert.equal(wouldCreateParentChildCycle('d', 'a', cycleContext), false);
-
-  const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  assert.ok(app.includes("wouldCreateParentChildCycle(from, to, familyContext)"));
-  assert.ok(app.includes('skulle skapa en cirkel mellan förälder och barn'));
-});
-
-await test('familjenivåerna är begripliga utan ny sakdata', () => {
-  const people = [
-    { id: 'mor', display_name: 'Mor' },
-    { id: 'far', display_name: 'Far' },
-    { id: 'barn-a', display_name: 'Barn A' },
-    { id: 'barn-b', display_name: 'Barn B' },
-  ];
-  const relations = [
-    { id: 'r1', kind: 'partner', from_person_id: 'mor', to_person_id: 'far' },
-    { id: 'r2', kind: 'foralder-barn', from_person_id: 'mor', to_person_id: 'barn-a' },
-    { id: 'r3', kind: 'foralder-barn', from_person_id: 'far', to_person_id: 'barn-a' },
-    { id: 'r4', kind: 'foralder-barn', from_person_id: 'mor', to_person_id: 'barn-b' },
-  ];
-  const graph = buildGraph(people, relations);
-  const family = nearFamily('barn-a', graph);
-  assert.deepEqual(family.parents.map((link) => link.id), ['far', 'mor']);
-  assert.deepEqual(family.siblings.map((link) => link.id), ['barn-b']);
-  assert.equal(family.siblings[0].relation.derived, true);
-  assert.equal(familyCircleLabel('Hedström-klanen (Carl Gunder & Bibbi)'), 'Hedström');
-});
-
-await test('direkta syskon fungerar utan registrerade föräldrar', () => {
-  const people = [
-    { id: 'broder-a', display_name: 'Broder A' },
-    { id: 'broder-b', display_name: 'Broder B' },
-  ];
-  const relations = [{ id: 'syskon', kind: 'syskon', from_person_id: 'broder-a', to_person_id: 'broder-b', user_confirmed: true }];
-  const graph = buildGraph(people, relations);
-  const family = nearFamily('broder-a', graph);
-  assert.deepEqual(family.siblings.map(link => link.id), ['broder-b']);
-  assert.equal(family.siblings[0].relation.derived, undefined);
-  assert.equal(graph.partners.get('broder-a'), undefined);
-});
-
-await test('FAMILJ- och SLÄKT-koder är läsbara medan släktled är grupprelativa', () => {
-  const people = [
-    { id: 'a', display_name: 'Ankare A' },
-    { id: 'b', display_name: 'Ankare B' },
-    { id: 'barn', display_name: 'Barnet' },
-    { id: 'barnbarn', display_name: 'Barnbarnet' },
-  ];
-  const relations = [
-    { kind: 'syskon', from_person_id: 'a', to_person_id: 'b', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'barn', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'barn', to_person_id: 'barnbarn', user_confirmed: false },
-  ];
-  const familyUnits = [{ id: 'f1', reference_code: 'FAMILJ-001', name: 'Ankare A och B', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_children', confirmed: true }];
-  const kinGroups = [{ id: 's1', reference_code: 'SLÄKT-001', name: 'Syskonen', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_descendants', confirmed: true }];
-  const context = buildFamilyContext({ people, relations, familyUnits, kinGroups });
-  assert.equal(nextReferenceCode(FAMILY_UNIT_TYPE, familyUnits), 'FAMILJ-002');
-  assert.equal(nextReferenceCode(KIN_GROUP_TYPE, kinGroups), 'SLÄKT-002');
-  assert.equal(readableReference(kinGroups[0]), 'SLÄKT-001--syskonen');
-  assert.deepEqual(familyUnitMemberDetails(familyUnits[0], context).map(member => [member.person_id, member.generation]), [['a', 1], ['b', 1], ['barn', 2]]);
-  const descendants = kinGroupMemberDetails(kinGroups[0], context);
-  assert.deepEqual(descendants.map(member => [member.person_id, member.generation]), [['a', 1], ['b', 1], ['barn', 2], ['barnbarn', 3]]);
-  assert.equal(descendants.find(member => member.person_id === 'barnbarn').confirmed, false);
-
-  const hierarchyGroups = [
-    { ...kinGroups[0], child_group_ids: ['s2'] },
-    { id: 's2', reference_code: 'SLÄKT-002', name: 'Barnets gren', anchor_person_ids: ['barn'], membership_rule: 'anchors_and_descendants', confirmed: true },
-  ];
-  const hierarchyContext = buildFamilyContext({ people, relations, kinGroups: hierarchyGroups });
-  const hierarchy = kinGroupMemberDetails(hierarchyGroups[0], hierarchyContext);
-  assert.equal(hierarchy.find(member => member.person_id === 'barn').generation, 2);
-  assert.equal(hierarchy.find(member => member.person_id === 'barnbarn').generation, 3);
-});
-
-await test('familjebildningar blandar inte barn från olika relationer', () => {
-  const people = [
-    { id: 'a', display_name: 'A' },
-    { id: 'b', display_name: 'B' },
-    { id: 'c', display_name: 'C' },
-    { id: 'gemensamt', display_name: 'Gemensamt barn' },
-    { id: 'tidigare', display_name: 'Barn från tidigare relation' },
-  ];
-  const relations = [
-    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'gemensamt', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'b', to_person_id: 'gemensamt', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'a', to_person_id: 'tidigare', user_confirmed: true },
-    { kind: 'foralder-barn', from_person_id: 'c', to_person_id: 'tidigare', user_confirmed: true },
-  ];
-  const familyUnits = [{ id: 'familj-ab', reference_code: 'FAMILJ-001', name: 'A och B', anchor_person_ids: ['a', 'b'], membership_rule: 'anchors_and_shared_children', confirmed: true }];
-  const context = buildFamilyContext({ people, relations, familyUnits });
-  assert.deepEqual(familyUnitMemberDetails(familyUnits[0], context).map(member => member.person_id), ['a', 'b', 'gemensamt']);
-});
-
-await test('stabila grupper kan sökas via kod, äldre namn och medlemmar', () => {
-  const people = [{ id: 'lotta', display_name: 'Lotta Svahn', family: 'Svahn' }];
-  const kinGroups = [{ id: 'slakt', reference_code: 'SLÄKT-005', name: 'Inger–Bethge', legacy_labels: ['Svahn'], explicit_person_ids: ['lotta'], membership_rule: 'explicit' }];
-  const context = buildFamilyContext({ people, kinGroups });
-  assert.equal(kinGroupMemberDetails(kinGroups[0], context)[0].generation, null);
-  assert.equal(searchFamilyTargets(context, 'svahn')[0].id, 'slakt');
-  assert.equal(searchFamilyTargets(context, 'SLÄKT-005')[0].id, 'slakt');
-  assert.equal(searchFamilyTargets(context, 'Lotta')[0].id, 'slakt');
-});
-
-await test('fältändringar från två enheter överlever och synkas åt båda håll', async () => {
-  const remote = new MemoryRemoteTransport({ id: 'dropbox-test' });
-  const a = await new Repository({ store: new MemoryStore(), deviceId: 'web-a', now: () => 1000 }).init();
-  const b = await new Repository({ store: new MemoryStore(), deviceId: 'web-b', now: () => 1000 }).init();
-  const syncA = new SyncEngine({ repository: a, transport: remote });
-  const syncB = new SyncEngine({ repository: b, transport: remote });
-  await a.setField('person', 'person-1', 'display_name', 'A');
-  await b.setField('person', 'person-1', 'note', 'B');
-  await syncA.syncOnce();
-  await syncB.syncOnce();
-  await syncA.syncOnce();
-  assert.equal(a.getEntity('person', 'person-1').fields.note, 'B');
-  assert.equal(b.getEntity('person', 'person-1').fields.display_name, 'A');
-});
-
-await test('en tombstone kan inte återupplivas av en vanlig senare redigering', async () => {
-  let now = 2000;
-  const repository = await new Repository({ store: new MemoryStore(), deviceId: 'web-delete', now: () => ++now }).init();
-  await repository.setField('person', 'person-delete', 'display_name', 'Raderas');
-  await repository.deleteEntity('person', 'person-delete');
-  await repository.setField('person', 'person-delete', 'note', 'senare not');
-  assert.equal(repository.getEntity('person', 'person-delete'), null);
-  assert.equal(repository.getEntity('person', 'person-delete', { includeDeleted: true }).deleted, true);
-  await repository.restoreEntity('person', 'person-delete');
-  assert.equal(repository.getEntity('person', 'person-delete').fields.note, 'senare not');
-});
-
-await test('publiceringsbygget innehåller bara det datafria appskalet', async () => {
-  const build = spawnSync(process.execPath, ['verktyg/bygg-publicering.mjs'], { cwd: ROOT, encoding: 'utf8' });
-  assert.equal(build.status, 0, build.stderr || build.stdout);
-  const walk = async directory => {
-    const files = [];
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) files.push(...await walk(path));
-      else files.push(path);
-    }
-    return files;
-  };
-  const files = await walk(resolve(ROOT, '../../matrikel'));
-  const relativeFiles = files.map(file => file.slice(resolve(ROOT, '../../matrikel').length + 1));
-  assert.equal(relativeFiles.some(file => /(?:initial-|privat|slaktled_tillagg|\.csv$|\.json$)/.test(file)), false);
-  const bundle = (await Promise.all(files.map(file => readFile(file, 'utf8').catch(() => '')))).join('\n');
-  const leakedNames = archive.persons.map(person => person.fields.display_name).filter(name => bundle.includes(name));
-  assert.deepEqual(leakedNames, []);
-});
-
-await test('Dropbox-namnrymden placerar Matrikeln i matrikel/ops', async () => {
-  assert.equal(batchPath('web-enhet', 1, 2), '/matrikel/ops/web-enhet-0000000001-0000000002.json');
-  const calls = [];
-  const transport = new DropboxTransport({
-    accessToken: 'test-token',
-    opsRoot: '/matrikel/ops',
-    fetchImpl: async (url, options) => {
-      calls.push({ url, body: JSON.parse(options.body) });
-      return { ok: true, json: async () => ({ entries: [], cursor: 'cursor-1', has_more: false }) };
-    },
-  });
-  await transport.listChanges(null, { createRoot: false });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].url.endsWith('/files/list_folder'));
-  assert.equal(calls[0].body.path, '/matrikel/ops');
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  assert.ok(appSource.includes("id: 'dropbox-matrikel-v2'"));
-  assert.ok(appSource.includes("opsRoot: MATRIKEL_OPS_ROOT"));
-  assert.ok(appSource.includes("opsRoot: LEGACY_OPS_ROOT"));
-  assert.ok(appSource.includes("migration:legacy-ops-to-matrikel-v1"));
-  assert.ok(appSource.includes('LEGACY_MIGRATION_META'));
-});
-
-await test('fastighetslistan läses skrivskyddat från Fastigheter och visar beteckningen utan ägarsuffix', async () => {
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  assert.ok(appSource.includes("new ReadOnlyMaster({ store, cacheKey: 'fastigheter' })"));
-  assert.ok(appSource.includes("opsRoot: '/fastigheter/ops', readOnly: true"));
-  assert.ok(appSource.includes('resolvePropertyReferences('));
-  assert.ok(appSource.includes('fastigheterMaster,\n    fallbacks,'));
-  assert.ok(appSource.includes('{ includeOwnerLabel: false }'));
-  assert.equal(appSource.includes('resolvePropertyDisplayName(property.id, fastigheterMaster)'), false);
-  assert.ok(appSource.includes('${escapeHtml(property.display_name)}'));
-});
-
-await test('fastigheternas öetiketter läses skrivskyddat från Kartdata', async () => {
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  assert.ok(appSource.includes("new ReadOnlyMaster({ store, cacheKey: 'kartdata' })"));
-  assert.ok(appSource.includes("opsRoot: '/kartdata/ops', readOnly: true"));
-  assert.ok(appSource.includes('resolvePropertyIslandNames(id, kartdataMaster'));
-  assert.ok(appSource.includes("island: islandNames.join(' / ')"));
-});
-
-await test('Dropbox-knappen synkar befintlig anslutning och tom master rapporteras ärligt', async () => {
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  assert.ok(appSource.includes("connectButton.addEventListener('click', () => connectOrSyncDropbox()"));
-  assert.ok(appSource.includes("connectButton.textContent = 'Synka Dropbox'"));
-  assert.ok(appSource.includes('Dropbox ansluten · ingen privat master hittades ännu'));
-  assert.equal(appSource.includes("connectButton.addEventListener('click', connectDropbox)"), false);
-});
-
-await test('Matrikeln startar och sparar lokalt utan nät efter första anslutningen', async () => {
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  const serviceWorker = await readFile(resolve(ROOT, 'sw.js'), 'utf8');
-  assert.ok(appSource.includes("navigator.onLine === false"));
-  assert.ok(appSource.includes("Offline · lokalt sparat · synkas automatiskt"));
-  assert.ok(appSource.includes('const serviceWorkerPromise = registerServiceWorker()'));
-  assert.ok(serviceWorker.includes("return cached || network"));
-  assert.ok(serviceWorker.includes("cache: 'reload'"));
-  assert.ok(serviceWorker.includes("self.location.pathname.includes('/apps/matrikel/')"));
-  assert.ok(serviceWorker.includes("'../../packages/core/family-context.js'"));
-});
-
-await test('den visuella huvudvyn och direkta redigeringen finns i appskalet', async () => {
-  const appSource = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
-  const html = await readFile(resolve(ROOT, 'index.html'), 'utf8');
+await test('gränssnittet skiljer källa, normalisering och tidsjämförelse',async()=>{
+  const [app,html,model,matrixCss,serviceWorker]=await Promise.all([readFile(resolve(ROOT,'src/app.js'),'utf8'),readFile(resolve(ROOT,'index.html'),'utf8'),readFile(resolve(ROOT,'DATAMODELL.md'),'utf8'),readFile(resolve(ROOT,'matrix.css'),'utf8'),readFile(resolve(ROOT,'sw.js'),'utf8')]);
+  assert.ok(app.includes('Som källan skrevs'));
+  assert.ok(app.includes('Strukturerad matrikel'));
+  assert.ok(app.includes('Ej nämnd betyder inte utträde'));
+  assert.ok(app.includes('all strukturerad metadata från Båtregistret utom bilder'));
+  assert.ok(app.includes('Spara ändring'));
+  assert.ok(app.includes("junior:'Junior'"));
+  assert.ok(app.includes("corresponding:'Korresponderande'"));
+  assert.ok(app.includes('Avregistrerat eller namnändrat'));
+  assert.ok(app.includes('source_page'));
+  assert.ok(app.includes('releaseMoment'));
+  assert.ok(app.includes('canonicalSourceRows'));
+  assert.ok(app.includes('item.retained!==false'));
+  assert.ok(app.includes('selectedDocumentId'));
+  assert.ok(app.includes('renderPagedSourceEdition'));
+  assert.ok(app.includes('renderLayoutSourceEdition'));
+  assert.ok(app.includes('canonicalSourceLayoutRows'));
+  assert.ok(!app.includes('Flera båtrader kan höra till samma tryckta rad'));
+  assert.ok(app.includes('INV. ÅR'));
+  assert.ok(!app.includes('Placeringen visar källans layout, inte vem som ägde båten'));
+  assert.ok(app.includes("ui.layer==='normalized'?kindSwitch(release):''"));
+  assert.ok(app.includes('renderMatrix'));
+  assert.ok(app.includes('Tom ruta betyder endast'));
+  assert.ok(app.includes('Exakt invalsår visas bara när det uttryckligen står i en källa'));
+  assert.ok(!app.includes('Grundarnas ”ca 1945” är en märkt uppskattning'));
+  assert.ok(app.includes("value!==null&&value!==undefined&&value!==''"));
+  assert.ok(app.includes("opsRoot:'/klubbhistorik/ops'"));
+  assert.ok(app.includes("name:'kbk-klubbhistorik'"));
   assert.ok(html.includes('<h1>Matrikel</h1>'));
-  assert.ok(html.includes('Hur är de släkt?'));
-  assert.ok(html.includes('Markera relationsluckor'));
-  assert.ok(html.includes('id="living-filter"'));
-  assert.ok(html.includes('id="property-filter"'));
-  assert.ok(html.includes('data-view-mode="kinship"'));
-  assert.ok(html.includes('data-view-mode="property"'));
-  assert.ok(html.includes('data-view-mode="register"'));
-  assert.ok(html.includes('data-view-mode="groups"'));
-  assert.ok(html.includes('Familjer &amp; släkter'));
-  assert.ok(html.includes('<b>FAMILJ</b>'));
-  assert.ok(html.includes('<b>SLÄKT</b>'));
-  assert.ok(appSource.includes('Nära familj'));
-  assert.ok(appSource.includes('renderGroupView'));
-  assert.ok(appSource.includes('familyUnitMemberDetails'));
-  assert.ok(appSource.includes('kinGroupMemberDetails'));
-  assert.ok(appSource.includes("repository.setField('person'"));
-  assert.ok(appSource.includes("repository.deleteEntities"));
-  assert.ok(appSource.includes('renderLandscape'));
-  assert.ok(appSource.includes('renderPropertyLandscape'));
-  assert.ok(appSource.includes('componentSets(group.people, currentRelations)'));
-  assert.ok(appSource.includes('nearFamily(person.id, graph)'));
-  assert.ok(appSource.includes('addPropertyLink'));
-  assert.ok(appSource.includes('data-family-kin-group'));
-  assert.ok(appSource.includes('updateFamilyKinGroup'));
-  assert.ok(appSource.includes("field: 'child_group_ids'"));
-  assert.ok(appSource.includes('data-new-group-member'));
-  assert.ok(appSource.includes('data-remove-group-member'));
-  assert.ok(appSource.includes('data-person-field="birth_name"'));
-  assert.ok(appSource.includes('Okänd livsstatus'));
-  assert.ok(appSource.includes('Ö och fastighet säger olika'));
-  assert.ok(appSource.includes('Ö men ingen fastighet'));
-  assert.equal(appSource.includes('showSaveFilePicker'), false);
+  assert.ok(html.includes('data-view="matris"'));
+  assert.ok(html.includes('matrix.css'));
+  assert.ok(matrixCss.includes('position:sticky'));
+  assert.ok(matrixCss.includes('.matriscell.status-junior'));
+  assert.ok(matrixCss.includes('.kallmatrikel'));
+  assert.ok(matrixCss.includes('.kallrubrik'));
+  assert.ok(matrixCss.includes('min-width:760px'));
+  assert.ok(serviceWorker.includes("url.pathname.endsWith('/index.html')"));
+  assert.ok(serviceWorker.includes("isAppNavigation?'./index.html':request"));
+  assert.ok(model.includes('HLC på en'));
+  assert.ok(model.includes('operation är transaktionstid'));
+  assert.ok(model.includes('inte automatiskt vem'));
 });
 
-console.log(`\n${passed} säkerhets- och datakontrakt godkända.`);
+await test('personnamn löses skrivskyddat från Personer & familjer utan att källformer ändras',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  assert.ok(app.includes('mergePersonReferences(storedPersonRefs(),matrikelMaster,{includeUnreferenced:matrikelCanaryMode})'));
+  assert.ok(app.includes("opsRoot:'/matrikel/ops',readOnly:true"));
+  assert.ok(app.includes("new ReadOnlyMaster({store,cacheKey:'matrikel'})"));
+  assert.ok(app.includes('person_name_raw'));
+});
+
+await test('båtnamn och val använder Matrikels stabila Båtregisterreferenser',async()=>{
+  const app=await readFile(resolve(ROOT,'src/app.js'),'utf8');
+  assert.ok(app.includes("recordList('boat-ref')"));
+  assert.ok(app.includes('boatOptionLabel'));
+  assert.ok(app.includes('boatReferenceLines'));
+  assert.ok(app.includes("item.boat_ref?.master==='boats'"));
+  assert.ok(app.includes('boat_name_raw'));
+});
+
+await test('den tänkta apparkitekturen är dokumenterad och länkad',async()=>{
+  const appReadmePaths=['personer-familjer','batregister','fastigheter','dokumentarkiv','korpholmenrunt','matrikel'].map(name=>resolve(REPO,'apps',name,'README.md'));
+  const [architecture,localArchitecture,rootReadme,localModel,...appReadmes]=await Promise.all([
+    readFile(resolve(REPO,'ARKITEKTUR.md'),'utf8'),
+    readFile(resolve(ROOT,'ARKITEKTUR.md'),'utf8'),
+    readFile(resolve(REPO,'README.md'),'utf8'),
+    readFile(resolve(ROOT,'DATAMODELL.md'),'utf8'),
+    ...appReadmePaths.map(path=>readFile(path,'utf8')),
+  ]);
+  for(const name of ['Personer & familjer','Matrikel','Båtregister','Fastighetshistorik','Dokumentarkiv','Korpholmen runt'])assert.ok(architecture.includes(`**${name}**`),name);
+  assert.ok(architecture.includes('härledd, skrivskyddad totalbild'));
+  assert.ok(architecture.includes('Ingen app får skriva direkt i en annan apps operationsmapp'));
+  assert.ok(architecture.includes('Rena skrivfel, OCR-fel och typografiska variationer'));
+  assert.ok((architecture.match(/```mermaid/g)||[]).length>=4);
+  assert.ok((localArchitecture.match(/```mermaid/g)||[]).length>=6);
+  assert.ok(localArchitecture.includes('ownership-observation'));
+  assert.ok(localArchitecture.includes('aldrig genom radparning'));
+  assert.ok(localArchitecture.includes('typografisk rekonstruktion'));
+  assert.ok(localArchitecture.includes('15 valda JSON-källdokument'));
+  assert.ok(localArchitecture.includes('Grundarmatrikel cirka 1945'));
+  assert.ok(localArchitecture.includes('får inte öka antalet'));
+  assert.ok(rootReadme.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
+  assert.ok(localModel.includes('[`ARKITEKTUR.md`](ARKITEKTUR.md)'));
+  assert.ok(appReadmes.every(readme=>readme.includes('ARKITEKTUR.md')));
+});
+
+await test('Dropbox-startmastern kan seedas utan överskrivning',async()=>{
+  const [seed,appPackage,config,app]=await Promise.all([
+    readFile(resolve(ROOT,'verktyg/skriv-dropbox-startmaster.mjs'),'utf8'),
+    readFile(resolve(ROOT,'package.json'),'utf8'),
+    readFile(resolve(ROOT,'src/config.js'),'utf8'),
+    readFile(resolve(ROOT,'src/app.js'),'utf8'),
+  ]);
+  assert.ok(seed.includes("endsWith('/Dropbox/Appar/Korpholmen')"));
+  assert.ok(seed.includes("'/klubbhistorik/ops'"));
+  assert.ok(seed.includes("{flag:'wx'}"));
+  assert.ok(seed.includes('Befintlig operationsbatch skiljer sig och skrivs inte över'));
+  assert.ok(seed.includes('buildCheckpointForApp'));
+  assert.equal(JSON.parse(appPackage).scripts['seed:dropbox'],'node verktyg/skriv-dropbox-startmaster.mjs');
+  assert.ok(!config.includes('LOCAL_BOOTSTRAP_URLS'));
+  assert.ok(!app.includes('bootstrapLocal'));
+  assert.ok(app.includes('requireCheckpointOnEmpty:true'));
+  assert.ok(app.includes('komprimerade historiksnapshoten'));
+  assert.ok(app.includes("if(release?.is_reconstruction)return ''"));
+});
+
+await test('publiceringsbygget är datafritt och länkat från appfamiljen',async()=>{
+  const result=spawnSync(process.execPath,['verktyg/bygg-publicering.mjs'],{cwd:ROOT,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr||result.stdout);
+  const [publishedApp,publishedCore,publishedCheckpoint,rootHtml]=await Promise.all([readFile(resolve(REPO,'matrikel/src/app.js'),'utf8'),readFile(resolve(REPO,'matrikel/core/data-layer.js'),'utf8'),readFile(resolve(REPO,'matrikel/core/sync/checkpoint-format.js'),'utf8'),readFile(resolve(REPO,'index.html'),'utf8')]);
+  assert.ok(publishedApp.includes("../core/data-layer.js"));
+  assert.ok(!publishedApp.includes('person-occurrence:matrikel-'));
+  assert.ok(publishedCore.includes("./storage/indexeddb.js"));
+  assert.ok(publishedCheckpoint.includes('decodeCheckpointPayload'));
+  assert.ok(rootHtml.includes('./matrikel/'));
+  assert.ok(rootHtml.includes('En installerad app'));
+});
+
+console.log(`\n${passed} Matrikelkontrakt godkända.`);

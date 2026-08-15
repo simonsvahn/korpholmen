@@ -5,1554 +5,297 @@ import {
   SyncEngine,
   beginDropboxOAuth,
   completeDropboxOAuth,
+  createRevisionCache,
   createBatch,
   debounce,
+  exchangeDropboxRefreshToken,
   isOfflineError,
   openSlaktlandskapDB,
   registerKorpholmenServiceWorker,
   resolveDeviceId,
-  validateOperation,
-} from './data-layer.js?v=2026-08-02-3';
-import { propertyLinkEntityId, relationEntityId } from './domain/slakt-schema.js?v=2026-08-01-10';
+} from '../../../packages/core/data-layer.js';
+import { GenerationCutoverGuard } from '../../../packages/core/generation-cutover.js';
+import { mergePersonReferences } from '../../../packages/core/master-data.js';
+import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js';
+import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js';
+import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES } from './config.js';
+import { boatOptionLabel, boatReferenceLines } from './boat-reference.js';
 import {
-  buildGraph,
-  clanBase,
-  clanDetail,
-  componentSets,
-  familyCircleLabel,
-  familyHue,
-  familyStemLabel,
-  generationFor,
-  groupPeople,
-  groupPeopleByProperty,
-  lineageIds,
-  membership,
-  nearFamily,
-  normalizeText,
-  personPropertyIds,
-  relationDescription,
-  relationshipPath,
-  resolvedIslands,
-  shownName,
-  visiblePersonIds,
-} from './landscape-model.js?v=2026-08-01-12';
-import {
-  FAMILY_UNIT_TYPE,
-  KIN_GROUP_KINDS,
-  KIN_GROUP_TYPE,
-  MEMBERSHIP_RULES,
-  buildFamilyContext,
-  displayReference,
-  familyUnitMemberDetails,
-  groupsForPerson,
-  isConfirmed,
-  kinGroupMemberDetails,
-  nextReferenceCode,
-  relativeGenerationLabel,
-  wouldCreateParentChildCycle,
-} from '../../../packages/core/family-context.js?v=2026-08-05-paket-3';
-import { resolvePropertyIslandNames, resolvePropertyReferences } from '../../../packages/core/master-data.js?v=2026-08-07-master-integrations';
-import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js?v=2026-08-06-property-owner-display';
-import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
-import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
+  MatrikelCanaryReadOnlyError,
+  createMatrikelCanaryRepository,
+  createMatrikelPersonReadOnlyMaster,
+  loadMatrikelCanaryBundle,
+  loadMatrikelMembershipReview,
+  matrikelDerivedMembershipStatus,
+  matrikelMembershipPersonId,
+  matrikelOccurrenceClubName,
+  matrikelOccurrenceLifeData,
+  matrikelPersonLifeYears,
+  matrikelCanaryRequestState,
+} from './matrikel-canary.js?v=2026-08-11-phase5i-1';
+import { createMatrikelActiveRuntime } from './matrikel-runtime.js?v=2026-08-15-phase12d-1';
+import { createMatrikelMembershipWriter } from './matrikel-writer.js?v=2026-08-15-phase12e-1';
 
-const $ = (selector) => document.querySelector(selector);
-const statusNode = $('#sync-status');
-const undoNode = $('#undo-status');
-const editStatusNode = $('#edit-status');
-const contentNode = $('#content');
-const connectButton = $('#connect-dropbox');
-const bootstrapButton = $('#bootstrap-local');
-const familyModelButton = $('#family-model-local');
-const drawer = $('#person-drawer');
-const drawerContent = $('#drawer-content');
-const personSearch = $('#person-search');
-const clanJump = $('#clan-jump');
-const islandFilter = $('#island-filter');
-const livingFilter = $('#living-filter');
-const propertyFilter = $('#property-filter');
-const generationButtons = $('#generation-buttons');
-const relationPathNode = $('#relation-path');
-const filterPanel = $('#filter-panel');
-const filterBackdrop = $('#filter-backdrop');
-const filterToggle = $('#filter-panel-toggle');
-const relationToggle = $('#relation-panel-toggle');
-const relationTools = $('#relation-tools');
-const activeFiltersNode = $('#active-filters');
-const isSourceTree = location.pathname.includes('/apps/matrikel/');
-const TOKEN_META = 'dropbox:refresh-token-v1';
-const BOOTSTRAP_META = 'bootstrap:migration-2026-08-01';
-const LEGACY_MIGRATION_META = 'migration:legacy-ops-to-matrikel-v1';
-const FAMILY_MODEL_META = 'migration:familjemodell-2026-08-02';
-const MATRIKEL_OPS_ROOT = '/matrikel/ops';
-const LEGACY_OPS_ROOT = '/ops';
+const $=selector=>document.querySelector(selector);
+const app=$('#app');const statusNode=$('#sync-status');const connectButton=$('#connect-dropbox');
+const isSourceTree=location.pathname.includes('/apps/matrikel/');
+const TOKEN_META='dropbox:refresh-token';const BOOTSTRAP_META='bootstrap:klubbhistorik-pilot-2026-08-02';
+const ui={view:'utgava',search:'',releaseId:'matrikel-1980',layer:'normalized',kind:'person',personId:null,membershipStatus:'included',membershipLevel:'all',membershipForm:'all',membershipLife:'all',membershipYear:'all',membershipPresence:'mentioned'};
+let store;let repository;let matrikelMaster;let matrikelLifeSyncReport=null;let accessToken=null;let accessTokenExpiresAt=0;let syncPromise=null;let matrikelCanaryMode=false;let matrikelReviewMode=false;let matrikelActiveMode=false;let matrikelV2PreviewMode=false;let matrikelV2Runtime=null;let matrikelV2Writer=null;let matrikelV2Saving=false;
+const viewCache=createRevisionCache(()=>`${repository?.revision||0}:${matrikelMaster?.revision||0}`);
 
-let repository;
-let store;
-let fastigheterMaster;
-let kartdataMaster;
-let accessToken = null;
-let accessTokenExpiresAt = 0;
-let syncPromise = null;
-let graph = null;
-let currentPeople = [];
-let currentRelations = [];
-let currentProperties = [];
-let currentPropertyLinks = [];
-let currentFamilyUnits = [];
-let currentKinGroups = [];
-let refreshedRepositoryRevision = -1;
-let familyContext = null;
-let propertyById = new Map();
-let requestedPersonApplied = false;
-let requestedGroupApplied = false;
-let filterReturnFocus = null;
+const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+const escapeAttribute=escapeHtml;
+const normalize=value=>String(value||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('sv').replace(/[^a-z0-9]+/g,' ').trim();
+const confirmed=item=>Boolean(item?.confirmed&&item?.person_id||item?.confirmed&&item?.boat_id);
+const reviewDecisionResolved=item=>item?.confirmed===true&&item?.review_decision==='bevarad okopplad';
+const recordList=type=>viewCache(`records:${type}`,()=>repository?repository.listEntities(type).map(entity=>({id:entity.entity_id,...entity.fields})):[]);
+const releaseMoment=release=>String(release?.as_of||release?.year||'');
+const releaseName=release=>String(release?.display_name||release?.title||'');
+const releaseCompare=(a,b)=>(Number(a?.year)||9999)-(Number(b?.year)||9999)||releaseMoment(a).localeCompare(releaseMoment(b),'sv')||releaseName(a).localeCompare(releaseName(b),'sv')||a.id.localeCompare(b.id,'sv');
+const releases=()=>viewCache('releases',()=>recordList('matrikel-release').filter(item=>item.retained!==false).map(item=>({...item,lifecycle_status:item.lifecycle_status||'active'})).sort(releaseCompare));
+function personOccurrenceForView(item){if(!item.raw_name)return item;const personId=item.person_ref?.master==='people'&&item.person_ref?.entity_type==='person'?item.person_ref.entity_id:null;return {...item,person_id:personId,person_name_raw:item.raw_name,club_name_core_raw:item.club_name_raw||'',membership_status:item.category_raw||'listed',induction_year_raw:item.induction_year==null?'':String(item.induction_year),birth_year_raw:item.birth_year==null?'':String(item.birth_year),island_raw:item.place_raw||'',place_detail_raw:'',confirmed:Boolean(personId),match_status:personId?'kopplad':'saknas',match_method:personId?'stabil masterreferens':'ingen stabil masterreferens',retained:true,source_page:item.source_locator?.page||1,source_row_id:item.source_locator?.source_row_id||null};}
+function boatOccurrenceForView(item){if(!item.raw_name)return item;const boatId=item.boat_ref?.master==='boats'&&item.boat_ref?.entity_type==='boat'?item.boat_ref.entity_id:null;return {...item,boat_id:boatId,boat_name_raw:item.raw_name,registry_year_raw:item.registry_year==null?'':String(item.registry_year),source_category:item.category_raw||'',source_line_raw:item.raw_text||item.raw_name,confirmed:Boolean(boatId),match_status:boatId?'kopplad':'saknas',match_method:boatId?'stabil masterreferens':'ingen stabil masterreferens',retained:true,source_page:item.source_locator?.page||1,source_line_order:item.source_locator?.line_order||item.order};}
+const personOccurrences=()=>viewCache('person-occurrences',()=>recordList('person-occurrence').filter(item=>item.retained!==false).map(personOccurrenceForView).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
+const boatOccurrences=()=>viewCache('boat-occurrences',()=>recordList('boat-occurrence').filter(item=>item.retained!==false).map(boatOccurrenceForView).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
+const sourceRows=()=>viewCache('source-rows',()=>recordList('source-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.kind.localeCompare(b.kind)||a.order-b.order));
+const sourceLayoutRows=()=>viewCache('source-layout-rows',()=>recordList('source-layout-row').filter(item=>item.retained!==false).sort((a,b)=>a.release_id.localeCompare(b.release_id)||a.order-b.order));
+const storedPersonRefs=()=>recordList('person-ref');
+const personRefs=()=>viewCache('person-refs',()=>mergePersonReferences(storedPersonRefs(),matrikelMaster,{includeUnreferenced:matrikelCanaryMode}).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')));
+const boatRefs=()=>viewCache('boat-refs',()=>[...recordList('boat-ref')].sort((a,b)=>boatOptionLabel(a).localeCompare(boatOptionLabel(b),'sv')));
+const personMap=()=>viewCache('person-map',()=>new Map(personRefs().map(item=>[item.external_id,item])));
+const boatMap=()=>viewCache('boat-map',()=>new Map(boatRefs().map(item=>[item.external_id,item])));
+const releaseMap=()=>viewCache('release-map',()=>new Map(releases().map(item=>[item.id,item])));
+const statusLabel=status=>({active:'Aktiv',passive:'Passiv',junior:'Junior',corresponding:'Korresponderande',listed:'Listad',founder:'Grundare'}[status]||status||'Okänd');
+const boatCategoryLabel=category=>({registered:'Inregistrerat fartyg','registered-passive':'Fartyg vid passivavsnitt','registered-junior':'Fartyg vid junioravsnitt','registered-corresponding':'Fartyg vid korresponderande','deregistered-or-renamed':'Avregistrerat eller namnändrat'}[category]||category||'Fartyg');
+const matchLabel=status=>({kopplad:'Kopplad',godkand:'Godkänd',foreslagen:'Föreslagen',saknas:'Saknas',manuell:'Manuell','bevarad okopplad':'Bevarad utan koppling'}[status]||status||'Okänd');
+const membershipLabel=status=>({active:'Aktiv medlem',passive:'Passiv medlem',previous:'Tidigare medlem',unclear:'Oklart – livsstatus saknas',current:'Medlem',former:'Tidigare medlem',not_member:'Ej medlem'}[status]||status||'Okänd');
+function setStatus(text,tone=''){statusNode.textContent=text;statusNode.className=tone?`status-${tone}`:''}
+const deviceId=()=>resolveDeviceId({store,key:'korpholmen:klubbhistorik-device-id',prefix:'klubbhistorik-web-'});
+function redirectUri(){return new URL(isSourceTree?'../../':'../',location.href).href}
 
-const ui = {
-  selectedPersonId: null,
-  selectedGroup: null,
-  clubNamesFirst: false,
-  showGaps: false,
-  island: '',
-  living: '',
-  property: '',
-  generations: new Set(),
-  includeInlaws: true,
-  onlyUnlinked: false,
-  yearOn: false,
-  year: new Date().getFullYear(),
-  view: 'groups',
-  review: false,
-  pathIds: new Set(),
-};
-
-const escapeHtml = (value) => String(value ?? '')
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
-
-const escapeAttribute = escapeHtml;
-const unique = (items) => [...new Set(items)];
-const slug = (value) => normalizeText(value).replace(/\s+/g, '-') || 'grupp';
-
-async function registerServiceWorker() {
-  try {
-    return await registerKorpholmenServiceWorker({ sourceTree: isSourceTree });
-  } catch (error) {
-    console.warn('Appskalet kunde inte uppdateras', error);
-    return null;
-  }
-}
-
-function setStatus(text, tone = '') {
-  statusNode.textContent = text;
-  statusNode.dataset.tone = tone;
-}
-
-function setUndoStatus(text, tone = '') {
-  undoNode.hidden = !text;
-  undoNode.textContent = text;
-  undoNode.dataset.tone = tone;
-}
-
-function offerUndo(message, restoreEntries, restoredMessage) {
-  const actionId = crypto.randomUUID();
-  setUndoStatus(message, 'warning');
-  undoNode.dataset.undoAction = actionId;
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'undo-action';
-  button.textContent = 'Ångra';
-  button.addEventListener('click', async () => {
-    if (undoNode.dataset.undoAction !== actionId) return;
-    delete undoNode.dataset.undoAction;
-    button.disabled = true;
-    setUndoStatus('Återställer…', 'warning');
-    try {
-      await repository.restoreEntities(restoreEntries);
-      render();
-      try { await syncNow(); } catch (_) { /* Lokalt återställd. */ }
-      setUndoStatus(restoredMessage, 'ok');
-    } catch (error) {
-      setUndoStatus(`Kunde inte återställa · ${error.message}`, 'error');
+function duplicateGroups(){
+  const groups=[];
+  for(const release of releases()){
+    const byPerson=new Map();
+    for(const item of personOccurrences().filter(entry=>entry.release_id===release.id&&entry.person_id&&entry.confirmed)){
+      if(!byPerson.has(item.person_id))byPerson.set(item.person_id,[]);byPerson.get(item.person_id).push(item);
     }
-  }, { once: true });
-  undoNode.append(' · ', button);
-  window.setTimeout(() => {
-    if (undoNode.dataset.undoAction === actionId) {
-      delete undoNode.dataset.undoAction;
-      setUndoStatus(`${message} · återställningshistoriken är bevarad`, 'ok');
-    }
-  }, 15_000);
-}
-
-function setEditStatus(text, tone = '') {
-  editStatusNode.textContent = text;
-  editStatusNode.dataset.tone = tone;
-}
-
-function redirectUri() {
-  return new URL(isSourceTree ? '../../' : '../', location.href).href;
-}
-
-const deviceId = () => resolveDeviceId({ store, key: 'slaktlandskap:device-id', prefix: 'slakt-web-' });
-
-function personRecords() {
-  return repository.listEntities('person')
-    .map((entity) => ({ id: entity.entity_id, ...entity.fields }))
-    .sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv'));
-}
-
-function relationRecords() {
-  return repository.listEntities('relation')
-    .map((entity) => ({ id: entity.entity_id, ...entity.fields }));
-}
-
-function propertyRecords() {
-  const fallbacks = repository.listEntities('property')
-    .map((entity) => ({ id: entity.entity_id, external_id: entity.entity_id, ...entity.fields }));
-  return resolvePropertyReferences(
-    fastigheterMaster,
-    fallbacks,
-    null,
-    { includeOwnerLabel: false },
-  )
-    .map((property) => {
-      const id = property.external_id || property.id;
-      const islandNames = resolvePropertyIslandNames(id, kartdataMaster, { fallback: [property.island] });
-      return { ...property, id, display_name: id, island: islandNames.join(' / '), island_names: islandNames };
-    })
-    .sort((a, b) => a.id.localeCompare(b.id, 'sv', { numeric: true }));
-}
-
-function propertyLinkRecords() {
-  return repository.listEntities('property-link')
-    .map((entity) => ({ id: entity.entity_id, ...entity.fields }));
-}
-
-function familyUnitRecords() {
-  return repository.listEntities(FAMILY_UNIT_TYPE)
-    .map(entity => ({ id: entity.entity_id, ...entity.fields }))
-    .sort((a, b) => String(a.reference_code).localeCompare(String(b.reference_code), 'sv', { numeric: true }));
-}
-
-function kinGroupRecords() {
-  return repository.listEntities(KIN_GROUP_TYPE)
-    .map(entity => ({ id: entity.entity_id, ...entity.fields }))
-    .sort((a, b) => String(a.reference_code).localeCompare(String(b.reference_code), 'sv', { numeric: true }));
-}
-
-function refreshData() {
-  if (refreshedRepositoryRevision === repository.revision) return;
-  const people = personRecords();
-  currentRelations = relationRecords();
-  currentProperties = propertyRecords();
-  currentPropertyLinks = propertyLinkRecords();
-  currentFamilyUnits = familyUnitRecords();
-  currentKinGroups = kinGroupRecords();
-  propertyById = new Map(currentProperties.map((property) => [property.id, property]));
-  const linksByPerson = new Map();
-  for (const link of currentPropertyLinks) {
-    if (!linksByPerson.has(link.person_id)) linksByPerson.set(link.person_id, []);
-    linksByPerson.get(link.person_id).push(link);
+    for(const [personId,items] of byPerson)if(items.length>1)groups.push({release_id:release.id,person_id:personId,items});
   }
-  currentPeople = people.map((person) => {
-    const links = (linksByPerson.get(person.id) || []).filter((link) => propertyById.has(link.property_id));
-    const propertyIds = links.map((link) => link.property_id);
-    return {
-      ...person,
-      property_ids: propertyIds,
-      property_islands: unique(propertyIds.map((propertyId) => propertyById.get(propertyId)?.island).filter(Boolean)),
-    };
-  });
-  graph = buildGraph(currentPeople, currentRelations);
-  familyContext = buildFamilyContext({
-    people: currentPeople,
-    relations: currentRelations,
-    familyUnits: currentFamilyUnits,
-    kinGroups: currentKinGroups,
-    properties: currentProperties,
-    propertyLinks: currentPropertyLinks,
-  });
-  if (!requestedPersonApplied) {
-    const requestedPersonId = new URL(location.href).searchParams.get('person');
-    if (requestedPersonId && graph.byId.has(requestedPersonId)) ui.selectedPersonId = requestedPersonId;
-    if (requestedPersonId && graph.byId.has(requestedPersonId)) requestedPersonApplied = true;
+  return groups;
+}
+function invalidDates(){return personOccurrences().filter(item=>item.birth_date_raw&&!item.birth_date)}
+function unresolvedPeople(){return personOccurrences().filter(item=>(!item.person_id||!item.confirmed)&&!reviewDecisionResolved(item))}
+function unresolvedBoats(){return boatOccurrences().filter(item=>(!item.boat_id||!item.confirmed)&&!reviewDecisionResolved(item))}
+function reviewCount(){return unresolvedPeople().length+unresolvedBoats().length+duplicateGroups().length+invalidDates().length}
+function updateControls(){
+  const all=releases();const select=$('#release-filter');const current=select.value||ui.releaseId;
+  select.innerHTML=all.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(releaseName(item))}</option>`).join('');
+  ui.releaseId=all.some(item=>item.id===current)?current:all[0]?.id||'';select.value=ui.releaseId;
+  $('#review-count').textContent=String(reviewCount());
+  document.querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('aktiv',button.dataset.view===ui.view));
+  if(matrikelCanaryMode){const releaseControl=$('.utgaveval');if(releaseControl)releaseControl.hidden=ui.view==='medlemmar';const exportButton=$('#export-audit');if(exportButton)exportButton.hidden=ui.view==='medlemmar'}
+}
+function emptyState(){return '<section class="tomt"><span>◎</span><h2>Matrikeln väntar</h2><p>Anslut Dropbox för att hämta den privata, komprimerade historiksnapshoten.</p></section>'}
+function coverage(release){const items=personOccurrences().filter(item=>item.release_id===release.id);return {total:items.length,connected:items.filter(item=>item.person_id&&item.confirmed).length}}
+
+function filtered(values,fields){const query=normalize(ui.search);return !query?values:values.filter(item=>normalize(fields.map(field=>item[field]).join(' ')).includes(query))}
+function boatReferenceHtml(reference){
+  if(!reference)return '<p class="batreferens-tom">Ingen båt vald.</p>';
+  const lines=boatReferenceLines(reference);
+  return `<article class="batreferens"><h4>${escapeHtml(lines.title)}</h4>${lines.technical?`<p><b>Typ, modell och tid</b><span>${escapeHtml(lines.technical)}</span></p>`:''}${lines.owner?`<p><b>Ägare/anknytning</b><span>${escapeHtml(lines.owner)}</span></p>`:''}${lines.names?`<p><b>Namnhistorik</b><span>${escapeHtml(lines.names)}</span></p>`:''}${lines.sources?`<p><b>Källor</b><span>${escapeHtml(lines.sources)}</span></p>`:''}<a href="${escapeAttribute(reference.url)}">Öppna i Båtregister ↗</a></article>`;
+}
+function layerSwitch(release){if(release?.is_reconstruction)return '';return `<div class="lagervaxel"><button class="${ui.layer==='source'?'aktiv':''}" data-layer="source">Som källan skrevs</button><button class="${ui.layer==='normalized'?'aktiv':''}" data-layer="normalized">Strukturerad matrikel</button></div>`}
+function kindSwitch(release){if(!boatOccurrences().some(item=>item.release_id===release?.id))return '';return `<div class="typvaxel"><button class="${ui.kind==='person'?'aktiv':''}" data-kind="person">Personer</button><button class="${ui.kind==='boat'?'aktiv':''}" data-kind="boat">Båtar</button></div>`}
+function canonicalSourceRows(releaseId,kind){const all=sourceRows().filter(item=>item.release_id===releaseId&&item.kind===kind);const selectedDocumentId=releaseMap().get(releaseId)?.source_document_id;const selected=all.filter(item=>item.source_document_id===selectedDocumentId&&item.id.startsWith('source-row:canonical:'));if(selected.length)return selected;const canonical=all.filter(item=>item.source_document_id&&item.id.startsWith('source-row:canonical:'));return canonical.length?canonical:all}
+function canonicalSourceLayoutRows(releaseId){const selectedDocumentId=releaseMap().get(releaseId)?.source_document_id;const all=sourceLayoutRows().filter(item=>item.release_id===releaseId);const selected=all.filter(item=>item.source_document_id===selectedDocumentId);return (selected.length?selected:all).sort((a,b)=>a.order-b.order)}
+function sourcePage(item){const page=Number(item?.source_page);return Number.isFinite(page)&&page>0?page:1}
+function sourceRowsByPage(rows){const pages=new Map();for(const item of rows){const page=sourcePage(item);if(!pages.has(page))pages.set(page,[]);pages.get(page).push(item)}return pages}
+function splitHistoricMemberRow(item){
+  const raw=String(item?.raw_text||'');const leadingYear=raw.match(/^\s*(\d{4})\s+/);const year=String(item?.induction_year_raw||leadingYear?.[1]||'').trim();
+  if(!year)return {year:'',member:raw.replace(/^\s+/,'')};
+  const start=raw.indexOf(year);return {year,member:(start>=0?raw.slice(start+year.length):raw).replace(/^\s+/,'')};
+}
+function sourceCode(value){const raw=String(value??'');return `<code class="kallkod${raw?'':' kalltom'}">${raw?escapeHtml(raw):'&nbsp;'}</code>`}
+function sourceNotes(item){if(!item)return '';const notes=[item.normalization_note?`Normaliseringsnot: ${item.normalization_note}`:''].filter(Boolean);return notes.length?`<small class="kallnot">${escapeHtml(notes.join(' · '))}</small>`:''}
+function sourceSearchClass(...items){const query=normalize(ui.search);return query&&!normalize(items.filter(Boolean).map(item=>item.raw_text).join(' ')).includes(query)?' kallrad-dim':''}
+function renderPagedSourceEdition(release,members,boats){
+  const memberPages=sourceRowsByPage(members),boatPages=sourceRowsByPage(boats);const pages=[...new Set([...memberPages.keys(),...boatPages.keys()])].sort((a,b)=>a-b);
+  return `<section class="kallsidor">${pages.map(page=>{const memberRows=memberPages.get(page)||[],boatRows=boatPages.get(page)||[],length=Math.max(memberRows.length,boatRows.length);return `<article class="kallsida"><header class="kallsidhuvud"><p class="overrad">Som källan skrevs</p><h3>${escapeHtml(releaseName(release))} · sida ${page}</h3></header><div class="kalltabellskal" tabindex="0" aria-label="Källans sida ${page}, medlemmar och båtar sida vid sida"><table class="kallmatrikel"><caption class="sr-only">${escapeHtml(releaseName(release))}, sida ${page}</caption><colgroup><col class="kall-inval"><col class="kall-medlem"><col class="kall-bat"></colgroup><thead><tr><th>INV. ÅR</th><th>MEDLEMMAR</th><th>INREG. FARTYG</th></tr></thead><tbody>${Array.from({length},(_,index)=>{const member=memberRows[index],boat=boatRows[index],memberCells=splitHistoricMemberRow(member);return `<tr class="kallrad${sourceSearchClass(member,boat)}"><td>${sourceCode(memberCells.year)}</td><td>${sourceCode(memberCells.member)}${sourceNotes(member)}</td><td>${sourceCode(boat?.raw_text)}${sourceNotes(boat)}</td></tr>`}).join('')}</tbody></table></div></article>`}).join('')}</section>`;
+}
+function renderLayoutSourceEdition(release,layoutRows){
+  const rowMap=new Map(sourceRows().map(row=>[row.id,row]));const pages=sourceRowsByPage(layoutRows);
+  return `<section class="kallsidor">${[...pages].sort(([a],[b])=>a-b).map(([page,rows])=>`<article class="kallsida"><header class="kallsidhuvud"><p class="overrad">Som källan skrevs</p><h3>${escapeHtml(releaseName(release))} · sida ${page}</h3></header><div class="kalltabellskal" tabindex="0" aria-label="Källans sida ${page}, medlemmar och båtar sida vid sida"><table class="kallmatrikel"><caption class="sr-only">${escapeHtml(releaseName(release))}, sida ${page}</caption><colgroup><col class="kall-inval"><col class="kall-medlem"><col class="kall-bat"></colgroup><thead><tr><th>INV. ÅR</th><th>MEDLEMMAR</th><th>INREG. FARTYG</th></tr></thead><tbody>${rows.map(layout=>{
+    if(layout.kind==='heading')return `<tr class="kallrubrik${sourceSearchClass(layout)}"><th colspan="3">${escapeHtml(layout.text_raw)}</th></tr>`;
+    if(layout.kind==='note')return `<tr class="kallnotrad${sourceSearchClass(layout)}"><td colspan="3">${sourceCode(layout.text_raw)}</td></tr>`;
+    const member=layout.member_source_row_id?rowMap.get(layout.member_source_row_id):null;const boats=(layout.boat_source_row_ids||[]).map(id=>rowMap.get(id)).filter(Boolean);
+    if(layout.kind==='boat')return `<tr class="kallfristående${sourceSearchClass(...boats)}"><td colspan="3">${sourceCode(boats.map(boat=>boat.raw_text).join('\n'))}${boats.map(sourceNotes).join('')}</td></tr>`;
+    const memberCells=splitHistoricMemberRow(member);return `<tr class="kallrad${sourceSearchClass(member,...boats)}"><td>${sourceCode(memberCells.year)}</td><td>${sourceCode(memberCells.member)}${sourceNotes(member)}</td><td>${sourceCode(boats.map(boat=>boat.raw_text).join('\n'))}${boats.map(sourceNotes).join('')}</td></tr>`;
+  }).join('')}</tbody></table></div></article>`).join('')}</section>`;
+}
+function renderLinearSourceEdition(release,rows){
+  if(!rows.length)return '<section class="tomt"><h2>Inga källrader i denna utgåva</h2></section>';
+  const pages=sourceRowsByPage(rows);
+  return `<section class="kallsidor">${[...pages].sort(([a],[b])=>a-b).map(([page,pageRows])=>`<article class="kallsida"><header class="kallsidhuvud"><p class="overrad">Som källan skrevs</p><h3>${escapeHtml(releaseName(release))}${pages.size>1?` · sida ${page}`:''}</h3></header><div class="kallrader">${pageRows.map(item=>`<div class="kallhelrad${sourceSearchClass(item)}">${sourceCode(item.raw_text)}${sourceNotes(item)}</div>`).join('')}</div></article>`).join('')}</section>`;
+}
+function renderSourceEdition(release){
+  if(release.is_reconstruction)return renderNormalizedEdition(release);
+  const members=canonicalSourceRows(release.id,'person'),boats=canonicalSourceRows(release.id,'boat'),layoutRows=canonicalSourceLayoutRows(release.id);
+  if(!members.length&&!boats.length){const cleanMembers=personOccurrences().filter(item=>item.release_id===release.id).map(item=>({raw_text:item.raw_text,source_page:item.source_page||1}));const cleanBoats=boatOccurrences().filter(item=>item.release_id===release.id).map(item=>({raw_text:item.raw_text,source_page:item.source_page||1}));return `${renderLinearSourceEdition(release,cleanMembers)}${cleanBoats.length?`<section class="panel"><p class="overrad">Fartyg i samma utgåva</p>${cleanBoats.map(item=>`<p>${escapeHtml(item.raw_text)}</p>`).join('')}</section>`:''}`}
+  return boats.length?(layoutRows.length?renderLayoutSourceEdition(release,layoutRows):renderPagedSourceEdition(release,members,boats)):renderLinearSourceEdition(release,members);
+}
+function membershipByPerson(){return viewCache('membership-by-person',()=>new Map(recordList('membership').filter(item=>!item.deleted_at).map(item=>[matrikelMembershipPersonId(item),item]).filter(([personId])=>personId)))}
+function occurrenceClubName(item,release,person){return matrikelOccurrenceClubName({occurrence:item,releaseYear:release.year,membershipClubName:membershipByPerson().get(item.person_id)?.club_name||'',referenceClubName:person?.club_name||''})}
+const lifeFieldLabel=field=>field==='death_year'?'Dödsår':'Födelseår';
+function occurrenceLife(item,person){return matrikelOccurrenceLifeData({occurrence:item,person})}
+function personLifeSyncCatalog(){return viewCache('person-life-sync-catalog',()=>{const pMap=personMap(),rMap=releaseMap(),grouped=new Map(),resolutionMap=new Map((matrikelLifeSyncReport?.issues||[]).filter(item=>item.resolution).map(item=>[[item.person_id,item.field,item.kind,item.source_year,item.master_year||''].join('|'),item]));for(const item of personOccurrences()){if(!item.person_id||item.confirmed!==true)continue;const person=pMap.get(item.person_id);if(!person)continue;for(const issue of occurrenceLife(item,person).issues){const key=[item.person_id,issue.field,issue.kind,issue.source_year,issue.master_year||''].join('|');if(!grouped.has(key))grouped.set(key,{...issue,...resolutionMap.get(key),person_id:item.person_id,display_name:person.display_name,person_url:person.url,releases:[],occurrence_ids:[]});const entry=grouped.get(key),release=rMap.get(item.release_id);entry.releases.push({id:item.release_id,year:release?.year||null,name:releaseName(release)});entry.occurrence_ids.push(item.id)}}return [...grouped.values()].map(item=>({...item,releases:[...new Map(item.releases.map(release=>[release.id,release])).values()].sort((a,b)=>(a.year||9999)-(b.year||9999))})).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv')||a.field.localeCompare(b.field))})}
+function personLifeSummary(personId,person){const master=matrikelPersonLifeYears(person||{}),issues=personLifeSyncCatalog().filter(item=>item.person_id===personId);return {birthYear:master.birthLabel||issues.find(item=>item.field==='birth_year'&&item.kind==='missing_in_person_master')?.source_year||null,deathYear:master.deathLabel||issues.find(item=>item.field==='death_year'&&item.kind==='missing_in_person_master')?.source_year||null,masterBirthYear:master.birthYear,masterDeathYear:master.deathYear,masterBirthValue:master.birthLabel,masterDeathValue:master.deathLabel,issues}}
+function lifeCell(life,field,{linked=true,personId=null,sourceOnly=false}={}){const isBirth=field==='birth_year',sourceYear=isBirth?life.sourceBirthYear:life.sourceDeathYear,value=sourceOnly?sourceYear:(isBirth?life.displayBirthYear:life.displayDeathYear);let issue=life.issues.find(item=>item.field===field);if(issue&&personId){const resolved=personLifeSyncCatalog().find(item=>item.person_id===personId&&item.field===issue.field&&item.kind===issue.kind&&item.source_year===issue.source_year&&item.master_year===issue.master_year);if(resolved)issue=resolved}let note='';if(issue?.kind==='missing_in_person_master')note='Från matrikeln · saknas i Personer & familjer';else if(issue?.resolution==='keep_person_master')note=`Matrikeln anger ${issue.source_year} · avgjort: personmastern ${issue.master_year} gäller`;else if(issue?.kind==='conflict')note=`Matrikeln anger ${issue.source_year} · personmastern ${issue.master_year}`;else if(!linked&&sourceYear)note='Källuppgift · personen är inte kopplad';return `<span class="livsarvarde">${escapeHtml(value||'—')}</span>${note?`<small class="personlivssynknot">${escapeHtml(note)}</small>`:''}`}
+function summaryLifeCell(summary,field){const value=field==='birth_year'?summary.birthYear:summary.deathYear,masterValue=field==='birth_year'?summary.masterBirthValue:summary.masterDeathValue,missing=summary.issues.find(item=>item.field===field&&item.kind==='missing_in_person_master');return `<span class="livsarvarde">${escapeHtml(value||'—')}</span>${!masterValue&&missing?'<small class="personlivssynknot">Från matrikel · synka</small>':''}`}
+function renderPersonLifeSyncNotice(){const issues=personLifeSyncCatalog(),missing=issues.filter(item=>item.kind==='missing_in_person_master'),conflicts=issues.filter(item=>item.kind==='conflict'&&!item.resolution),resolved=issues.filter(item=>item.resolution);if(!issues.length)return '';const summary=[missing.length?`${missing.length} livsår saknas i Personer & familjer`:'',conflicts.length?`${conflicts.length} skillnader behöver kontrolleras`:'',resolved.length?`${resolved.length} källavvikelse avgjord`:''].filter(Boolean).join(' · ');return `<details class="personlivssynk"><summary><strong>${escapeHtml(summary)}</strong></summary><p>Personer & familjer äger livsåren. Källavvikelser bevaras utan att ersätta ett avgjort mastervärde.</p><ul>${issues.map(item=>`<li><a href="${escapeAttribute(item.person_url)}">${escapeHtml(item.display_name)}</a> · ${escapeHtml(lifeFieldLabel(item.field).toLowerCase())} ${escapeHtml(item.source_year)}${item.resolution==='keep_person_master'?` · avgjort: behåll personmasterns ${escapeHtml(item.master_year)}`:item.kind==='conflict'?` (personmastern: ${escapeHtml(item.master_year)})`:' saknas i personmastern'} · ${escapeHtml(item.releases.map(release=>release.name).join(', '))}</li>`).join('')}</ul></details>`}
+function renderNormalizedPersonEdition(release){
+  const map=personMap();const rows=filtered(personOccurrences().filter(item=>item.release_id===release.id),['person_name_raw','club_name_core_raw','club_name_raw','island_raw']);
+  return `<div class="tabellskal normaliseradtabellskal"><table class="normaliserad-matrikel"><colgroup><col class="norm-ordning"><col class="norm-kallnamn"><col class="norm-person"><col class="norm-klubbnamn"><col class="norm-status"><col class="norm-inval"><col class="norm-fodd"><col class="norm-plats"><col class="norm-koppling"></colgroup><thead><tr><th>#</th><th>Källans namn</th><th>Person</th><th>Klubbnamn</th><th>Status</th><th>Invalsår</th><th>Född</th><th>Ö / plats</th><th>Koppling</th></tr></thead><tbody>${rows.map(item=>{const person=map.get(item.person_id);const clubName=occurrenceClubName(item,release,person);const life=occurrenceLife(item,person);const place=[item.island_raw,item.place_detail_raw].filter(Boolean).join(' · '),linked=Boolean(person&&item.confirmed);return `<tr><td>${item.order}</td><td><strong>${escapeHtml(item.person_name_raw)}</strong></td><td>${person?`<a href="${escapeAttribute(person.url)}">${escapeHtml(person.display_name)}</a>`:'—'}</td><td>${escapeHtml(clubName||'—')}</td><td>${escapeHtml(statusLabel(item.membership_status))}</td><td>${escapeHtml(release.is_reconstruction?'—':item.induction_year_raw||'—')}</td><td>${lifeCell(life,'birth_year',{linked:Boolean(person),personId:item.person_id,sourceOnly:true})}</td><td>${escapeHtml(place||'—')}</td><td><span class="statuschip ${linked?'kopplad':'saknas'}">${linked?'Kopplad':'Ej kopplad'}</span></td></tr>`}).join('')}</tbody></table></div>`;
+}
+function renderNormalizedEdition(release){
+  if(ui.kind==='boat'){
+    const map=boatMap();const rows=filtered(boatOccurrences().filter(item=>item.release_id===release.id),['boat_name_raw','source_line_raw']);
+    if(!rows.length)return `<section class="tomt"><h2>Utgåvan innehåller ingen fartygskolumn</h2><p>Det är en egenskap hos källan, inte ett påstående om att klubben saknade båtar.</p></section>`;
+    return `<div class="tabellskal normaliseradtabellskal"><table class="normaliserad-matrikel normaliserad-batmatrikel"><colgroup><col class="norm-ordning"><col class="norm-kallbat"><col class="norm-registerbat"><col class="norm-batar"><col class="norm-koppling"></colgroup><thead><tr><th>#</th><th>Källans båtnamn</th><th>Båt i registret</th><th>Prefix / år</th><th>Koppling</th></tr></thead><tbody>${rows.map(item=>{const boat=map.get(item.boat_id);const lines=boat?boatReferenceLines(boat):null;return `<tr><td>${item.order}</td><td><strong>${escapeHtml(item.boat_name_raw)}</strong><small>${escapeHtml(item.source_line_raw)}</small><small>${escapeHtml(boatCategoryLabel(item.source_category))}</small></td><td>${boat?`<a href="${escapeAttribute(boat.url)}">${escapeHtml(lines.title)}</a><small>${escapeHtml([lines.technical,lines.owner].filter(Boolean).join(' · '))}</small>`:'—'}</td><td>${escapeHtml([item.prefix,item.registry_year_raw].filter(Boolean).join(' · ')||'—')}</td><td><span class="statuschip ${escapeAttribute(item.match_status)}">${escapeHtml(matchLabel(item.match_status))}</span><small>${escapeHtml(item.match_method)}</small></td></tr>`}).join('')}</tbody></table></div>`;
   }
-  if (!requestedGroupApplied) {
-    const requestedGroupId = new URL(location.href).searchParams.get('group');
-    const family = currentFamilyUnits.find(entry => entry.id === requestedGroupId);
-    const kin = currentKinGroups.find(entry => entry.id === requestedGroupId);
-    if (family || kin) {
-      ui.selectedGroup = { entityType: family ? FAMILY_UNIT_TYPE : KIN_GROUP_TYPE, id: requestedGroupId };
-      ui.view = 'groups';
-      requestedGroupApplied = true;
-    }
-  }
-  if (ui.selectedPersonId && !graph.byId.has(ui.selectedPersonId)) ui.selectedPersonId = null;
-  if (ui.selectedGroup) {
-    const records = ui.selectedGroup.entityType === FAMILY_UNIT_TYPE ? currentFamilyUnits : currentKinGroups;
-    if (!records.some(group => group.id === ui.selectedGroup.id)) ui.selectedGroup = null;
-  }
-  refreshedRepositoryRevision = repository.revision;
-}
-
-function propertyNames(person) {
-  return personPropertyIds(person).map((propertyId) => propertyById.get(propertyId)?.display_name || propertyId);
-}
-
-function islandNames(person) {
-  return resolvedIslands(person);
-}
-
-function islandPropertyConflict(person) {
-  const propertyIslands = Array.isArray(person.property_islands) ? person.property_islands.filter(Boolean) : [];
-  return Boolean(person.legacy_island && propertyIslands.length && !propertyIslands.includes(person.legacy_island));
-}
-
-function years(person) {
-  if (person.birth && person.death) return `${person.birth}–${String(person.death).slice(0, 4)}`;
-  if (person.birth) return `f. ${person.birth}`;
-  if (person.death) return `d. ${String(person.death).slice(0, 4)}`;
-  return 'år okänt';
-}
-
-function familyColor(person) {
-  if (person.ui_color === 'stam') return 'hsl(38 20% 55%)';
-  if (Number.isFinite(Number(person.ui_color))) return `hsl(${Number(person.ui_color)} 60% 45%)`;
-  return `hsl(${familyHue(person.family)} 42% 46%)`;
-}
-
-function personLabel(person) {
-  return `${person.display_name}${person.birth ? ` (f. ${person.birth})` : ''} · ${person.family || 'utan släktgrupp'}`;
-}
-
-function lookupPerson(text) {
-  const query = normalizeText(text);
-  if (!query) return null;
-  let matches = currentPeople.filter((person) => normalizeText(personLabel(person)) === query);
-  if (matches.length !== 1) {
-    matches = currentPeople.filter((person) => [
-      person.display_name,
-      person.full_name,
-      person.birth_name,
-      person.club_name,
-      person.ui_constructed_club_name,
-      ...(Array.isArray(person.aliases) ? person.aliases : []),
-    ].some((value) => normalizeText(value) === query));
-  }
-  if (matches.length !== 1) {
-    matches = currentPeople.filter((person) => normalizeText(person.display_name).includes(query));
-  }
-  return matches.length === 1 ? matches[0] : null;
-}
-
-function refreshControls() {
-  const labels = currentPeople.map((person) => `<option value="${escapeAttribute(personLabel(person))}"></option>`).join('');
-  $('#person-options').innerHTML = labels;
-  $('#drawer-person-options').innerHTML = labels;
-
-  const selectedClan = clanJump.value;
-  const groups = groupPeople(currentPeople);
-  clanJump.innerHTML = '<option value="">Välj släktkrets …</option>' + groups
-    .map((group) => `<option value="${escapeAttribute(group.name)}">${escapeHtml(familyCircleLabel(group.name))}</option>`).join('');
-  if (groups.some((group) => group.name === selectedClan)) clanJump.value = selectedClan;
-  clanJump.disabled = ui.view !== 'kinship';
-  generationButtons.closest('.generation-filter').hidden = ui.view !== 'kinship';
-  $('.kinship-filter').hidden = ui.view !== 'kinship';
-
-  const islands = unique(currentPeople.flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
-  islandFilter.innerHTML = '<option value="">Alla öar</option>' + islands
-    .map((island) => `<option value="${escapeAttribute(island)}">${escapeHtml(island)}</option>`).join('');
-  islandFilter.value = islands.includes(ui.island) ? ui.island : '';
-
-  livingFilter.value = ui.living;
-  const propertyCounts = new Map(currentProperties.map((property) => [property.id, 0]));
-  let withoutProperty = 0;
-  for (const person of currentPeople) {
-    const propertyIds = personPropertyIds(person);
-    if (!propertyIds.length) withoutProperty += 1;
-    for (const propertyId of propertyIds) propertyCounts.set(propertyId, (propertyCounts.get(propertyId) || 0) + 1);
-  }
-  propertyFilter.innerHTML = '<option value="">Alla fastigheter</option>'
-    + currentProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.display_name)} · ${propertyCounts.get(property.id) || 0}</option>`).join('')
-    + `<option value="__none__">Utan fastighet · ${withoutProperty}</option>`;
-  propertyFilter.value = ui.property && (ui.property === '__none__' || propertyById.has(ui.property)) ? ui.property : '';
-
-  const generations = unique(currentPeople.map((person) => generationFor(person) ?? 'okand'))
-    .sort((a, b) => String(a).localeCompare(String(b), 'sv', { numeric: true }));
-  generationButtons.innerHTML = `<button type="button" class="generation-button" data-generation="all" aria-pressed="${ui.generations.size ? 'false' : 'true'}">Alla</button>`
-    + generations.map((generation) => `<button type="button" class="generation-button" data-generation="${generation}" aria-pressed="${ui.generations.has(String(generation))}">${generation === 'okand' ? 'Okänd' : generation}</button>`).join('');
-}
-
-function relevantGap(person) {
-  return !(graph.parents.get(person.id) || []).length
-    && generationFor(person) !== 1
-    && person.ui_generation_source !== 'gifte'
-    && person.membership_status !== 'ej';
-}
-
-function cardClasses(person, relatedIds) {
-  return [
-    'person-card',
-    `living-${person.living || 'okänt'}`,
-    relevantGap(person) ? 'has-gap' : '',
-    ui.selectedPersonId === person.id ? 'is-selected' : '',
-    relatedIds.has(person.id) && ui.selectedPersonId !== person.id ? 'is-related' : '',
-    ui.pathIds.has(person.id) ? 'is-path' : '',
-  ].filter(Boolean).join(' ');
-}
-
-function renderPersonCard(person, relatedIds) {
-  const member = membership(person);
-  const club = person.club_name || person.ui_constructed_club_name || '';
-  const primary = shownName(person, ui.clubNamesFirst);
-  const secondary = ui.clubNamesFirst && club ? person.display_name : club;
-  const generation = generationFor(person);
-  const livingLabel = person.living === 'ja' ? 'Levande' : person.living === 'nej' ? 'Avliden' : 'Livsstatus okänd';
-  const livingMark = person.living === 'nej' ? '<span class="living-mark" title="Avliden">†</span>' : person.living === 'okänt' || !person.living ? '<span class="living-mark unknown" title="Livsstatus okänd">?</span>' : '';
-  const approximate = generation && person.ui_generation_source !== 'kedja' && person.ui_generation_source !== 'gifte';
-  return `<button type="button" class="${cardClasses(person, relatedIds)}" data-person-id="${escapeAttribute(person.id)}" style="--family-accent:${familyColor(person)}" aria-label="${escapeAttribute(`${primary}. ${livingLabel}. ${member.label}. Generation ${generation ?? 'okänd'}. Familj ${person.family || 'okänd'}.`)}">
-    <span class="family-name">${escapeHtml(person.family || 'utan familjegrupp')}</span>
-    <span class="name-line"><span class="member-symbol ${member.className}" aria-hidden="true">${member.symbol}</span><span class="primary-name">${escapeHtml(primary)}</span><span class="gap-mark" aria-label="Relevant föräldrakoppling saknas">⚑</span></span>
-    <span class="meta-line"><span class="secondary-name">${escapeHtml(secondary || ' ')}</span><span class="years">${escapeHtml(years(person))}</span>${livingMark}${approximate ? '<span class="provenance" title="Generation uppskattad">≈</span>' : ''}</span>
-  </button>`;
-}
-
-function renderBranch(id, component, visited, visible, relatedIds, uncertain = false) {
-  if (visited.has(id)) return '';
-  const person = graph.byId.get(id);
-  if (!person) return '';
-  visited.add(id);
-  const partnerLinks = (graph.partners.get(id) || [])
-    .filter((link) => component.has(link.id) && !visited.has(link.id))
-    .sort((a, b) => (a.relation.kind === 'tidigare') - (b.relation.kind === 'tidigare') || shownName(graph.byId.get(a.id)).localeCompare(shownName(graph.byId.get(b.id)), 'sv'));
-  partnerLinks.forEach((link) => visited.add(link.id));
-  const householdIds = [id, ...partnerLinks.map((link) => link.id)];
-  const childIds = unique(householdIds.flatMap((personId) => (graph.children.get(personId) || []).map((link) => link.id)))
-    .filter((childId) => component.has(childId) && !visited.has(childId))
-    .sort((a, b) => (generationFor(graph.byId.get(a)) ?? 99) - (generationFor(graph.byId.get(b)) ?? 99) || shownName(graph.byId.get(a)).localeCompare(shownName(graph.byId.get(b)), 'sv'));
-  const childHtml = childIds.map((childId) => {
-    const links = currentRelations.filter((relation) => relation.kind === 'foralder-barn' && relation.to_person_id === childId && householdIds.includes(relation.from_person_id));
-    const isUncertain = links.some((relation) => !isConfirmed(relation.user_confirmed));
-    return renderBranch(childId, component, visited, visible, relatedIds, isUncertain);
-  }).join('');
-  const visibleHousehold = householdIds.filter((personId) => visible.has(personId));
-  if (!visibleHousehold.length && !childHtml) return '';
-
-  let row;
-  if (!visibleHousehold.length) {
-    const names = householdIds.map((personId) => shownName(graph.byId.get(personId))).filter(Boolean);
-    row = `<button type="button" class="bridge-row" data-person-id="${escapeAttribute(id)}">via ${escapeHtml(names.join(' och '))} · ${names.length > 1 ? 'dolda' : 'dold'} av filtret</button>`;
-  } else {
-    row = `<div class="couple-row">
-      ${visible.has(id) ? renderPersonCard(person, relatedIds) : `<button type="button" class="bridge-chip" data-person-id="${escapeAttribute(id)}">via ${escapeHtml(shownName(person))} · dold</button>`}
-      ${partnerLinks.map((link) => {
-        const partner = graph.byId.get(link.id);
-        const previous = link.relation.kind === 'tidigare';
-        const coparent = link.relation.kind === 'coparent';
-        const marker = `<span class="partner-mark ${previous ? 'previous' : coparent ? 'coparent' : ''}" aria-label="${previous ? 'Tidigare partner' : coparent ? 'Har barn tillsammans' : 'Partner'}">${previous ? 'förr' : coparent ? '+' : '—'}</span>`;
-        return marker + (visible.has(link.id) ? renderPersonCard(partner, relatedIds) : `<button type="button" class="bridge-chip" data-person-id="${escapeAttribute(link.id)}">via ${escapeHtml(shownName(partner))} · dold</button>`);
-      }).join('')}
-    </div>`;
-  }
-  return `<div class="tree-node ${uncertain ? 'uncertain' : ''}">${row}${childHtml ? `<div class="children">${childHtml}</div>` : ''}</div>`;
-}
-
-function renderComponent(component, visible, relatedIds) {
-  const visited = new Set();
-  const roots = [...component]
-    .map((id) => graph.byId.get(id))
-    .filter(Boolean)
-    .filter((person) => !(graph.parents.get(person.id) || []).some((link) => component.has(link.id)))
-    .sort((a, b) => (generationFor(a) ?? 99) - (generationFor(b) ?? 99) || shownName(a).localeCompare(shownName(b), 'sv'));
-  const html = [];
-  for (const root of roots) if (!visited.has(root.id)) html.push(renderBranch(root.id, component, visited, visible, relatedIds));
-  for (const id of component) if (!visited.has(id)) html.push(renderBranch(id, component, visited, visible, relatedIds));
-  return `<div class="component">${html.join('')}</div>`;
-}
-
-function renderFamilyStem(name, people, visible, relatedIds) {
-  const visiblePeople = people.filter((person) => visible.has(person.id));
-  if (!visiblePeople.length) return '';
-  const families = unique(visiblePeople.map((person) => person.family || 'utan familjegrupp')).sort((a, b) => a.localeCompare(b, 'sv'));
-  const stem = familyStemLabel(name);
-  const components = componentSets(people, currentRelations);
-  const connected = components.filter((component) => component.size > 1 && [...component].some((id) => visible.has(id)));
-  const isolated = components.filter((component) => component.size === 1)
-    .flatMap((component) => [...component])
-    .filter((id) => visible.has(id))
-    .map((id) => graph.byId.get(id))
-    .filter(Boolean)
-    .sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv'));
-  return `<section class="family-stem">
-    <div class="family-stem-header"><div><p class="section-kicker">${stem ? 'Stamfamilj' : 'Familjegrupp'}</p><h3>${escapeHtml(stem || clanDetail(name))}</h3></div><div class="family-list">${visiblePeople.length} personer · familjegrenar: ${escapeHtml(families.join(' · '))}</div></div>
-    <div class="forest">${connected.map((component) => renderComponent(component, visible, relatedIds)).join('') || '<p class="empty-note">Inga belagda relationer inom gruppen.</p>'}</div>
-    ${isolated.length ? `<section class="unlinked"><h4>Ännu inte kopplade till en bestämd släktgren · ${isolated.length}</h4><div class="unlinked-grid">${isolated.map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>` : ''}
-  </section>`;
-}
-
-function confirmationBadge(value) {
-  return isConfirmed(value)
-    ? '<span class="confirmation confirmed">Bekräftad</span>'
-    : '<span class="confirmation unconfirmed">Ej bekräftad</span>';
-}
-
-function memberButtons(details, limit = 10) {
-  const shown = details.slice(0, limit).map(member => {
-    const person = familyContext.peopleById.get(member.person_id);
-    if (!person) return '';
-    return `<button type="button" class="group-person ${member.confirmed ? '' : 'unconfirmed'}" data-person-id="${escapeAttribute(person.id)}" title="${escapeAttribute(relativeGenerationLabel(member, { name: 'gruppen' }))}">${escapeHtml(person.display_name)}${member.generation > 1 ? ` · led ${member.generation}` : ''}</button>`;
-  }).join('');
-  return `${shown}${details.length > limit ? `<span class="more-members">+ ${details.length - limit} till</span>` : ''}`;
-}
-
-function countNoun(count, singular, plural) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function renderFamilyUnitCard(group, visible) {
-  const members = familyUnitMemberDetails(group, familyContext);
-  if (members.length && !members.some(member => visible.has(member.person_id))) return '';
-  const confirmedMembers = members.filter(member => member.confirmed).length;
-  const anchorCount = (group.anchor_person_ids || []).filter(id => familyContext.peopleById.has(id)).length;
-  return `<article class="family-unit-card">
-    <button type="button" class="group-card-heading" data-group-type="${FAMILY_UNIT_TYPE}" data-group-id="${escapeAttribute(group.id)}">
-      <span><small>${escapeHtml(group.reference_code || 'FAMILJ')}</small><b>${escapeHtml(group.name || 'Namnlös familj')}</b></span>${confirmationBadge(group.confirmed)}
-    </button>
-    <p>${countNoun(anchorCount, 'ankarperson', 'ankarpersoner')} · ${countNoun(members.length, 'person i familjen', 'personer i familjen')} · ${confirmedMembers} genom helt bekräftade led</p>
-    <div class="group-people">${memberButtons(members)}</div>
-  </article>`;
-}
-
-function renderKinGroupNode(group, visible, rendered) {
-  if (!group || rendered.has(group.id)) return '';
-  rendered.add(group.id);
-  const members = kinGroupMemberDetails(group, familyContext);
-  if (members.length && !members.some(member => visible.has(member.person_id))) return '';
-  const confirmedMembers = members.filter(member => member.confirmed).length;
-  const anchorCount = (group.anchor_person_ids || []).filter(id => familyContext.peopleById.has(id)).length;
-  const childIds = new Set(group.child_group_ids || []);
-  for (const candidate of currentKinGroups) if ((candidate.parent_group_ids || []).includes(group.id)) childIds.add(candidate.id);
-  const families = currentFamilyUnits.filter(unit => (unit.kin_group_ids || []).includes(group.id));
-  return `<section class="kin-group-card kind-${escapeAttribute(group.kind || 'family_circle')}">
-    <header class="kin-group-heading">
-      <button type="button" data-group-type="${KIN_GROUP_TYPE}" data-group-id="${escapeAttribute(group.id)}"><small>${escapeHtml(group.reference_code || 'SLÄKT')}</small><b>${escapeHtml(group.name || 'Namnlös släktgrupp')}</b></button>
-      <div><span class="group-kind">${escapeHtml(KIN_GROUP_KINDS[group.kind] || 'Släktgrupp')}</span>${confirmationBadge(group.confirmed)}</div>
-    </header>
-    <p class="group-summary">${countNoun(anchorCount, 'ankarperson', 'ankarpersoner')} · ${countNoun(members.length, 'person synlig', 'personer synliga')} i gruppen och dess undergrupper · ${confirmedMembers} genom helt bekräftade led · släktleden räknas från denna grupp</p>
-    <div class="group-people">${memberButtons(members)}</div>
-    ${families.length ? `<div class="family-unit-list">${families.map(unit => renderFamilyUnitCard(unit, visible)).join('')}</div>` : ''}
-    ${childIds.size ? `<div class="child-groups">${[...childIds].map(id => renderKinGroupNode(familyContext.kinGroupById.get(id), visible, rendered)).join('')}</div>` : ''}
-  </section>`;
-}
-
-function renderGroupView(visible) {
-  if (!currentFamilyUnits.length && !currentKinGroups.length) return `<section class="model-empty"><h2>Familjer och släkter har ännu inte strukturerats</h2><p>Personrelationerna finns kvar. Skapa stabila familjer och släktgrupper utan att ändra de underliggande fakta som ännu inte är bekräftade.</p><div class="button-row"><button type="button" data-action="create-family-unit">Ny familj</button><button type="button" data-action="create-kin-group">Ny släktgrupp</button></div></section>`;
-  const childIds = new Set(currentKinGroups.flatMap(group => group.child_group_ids || []));
-  const roots = currentKinGroups.filter(group => !(group.parent_group_ids || []).length && !childIds.has(group.id));
-  const rendered = new Set();
-  const rootHtml = roots.map(group => renderKinGroupNode(group, visible, rendered)).join('');
-  const orphanHtml = currentKinGroups.filter(group => !rendered.has(group.id)).map(group => renderKinGroupNode(group, visible, rendered)).join('');
-  const unplacedFamilies = currentFamilyUnits.filter(unit => !(unit.kin_group_ids || []).some(id => familyContext.kinGroupById.has(id)));
-  return `<section class="group-model-intro"><div><p class="section-kicker">Stabila identiteter</p><h2>Familjer och släkter</h2><p>FAMILJ är en konkret familjebildning. SLÄKT är en namngiven syskongrupp, gren, stamlinje eller släktkrets. Bekräftelse av en grupp ändrar aldrig automatiskt en personrelation.</p></div><div class="button-row"><button type="button" data-action="create-family-unit">Ny familj</button><button type="button" data-action="create-kin-group">Ny släktgrupp</button></div></section>
-    <div class="kin-group-list">${rootHtml}${orphanHtml}</div>
-    ${unplacedFamilies.length ? `<section class="unplaced-families"><h2>Familjer utan vald släktgrupp</h2><div class="family-unit-list">${unplacedFamilies.map(group => renderFamilyUnitCard(group, visible)).join('')}</div></section>` : ''}`;
-}
-
-function renderLandscape(visible, relatedIds) {
-  const groups = groupPeople(currentPeople);
-  const accents = [205, 145, 18, 278, 188, 332];
-  return groups.map((group, index) => {
-    const people = [...group.families.values()].flat();
-    const visibleCount = people.filter((person) => visible.has(person.id)).length;
-    if (!visibleCount) return '';
-    const islands = unique(people.filter((person) => visible.has(person.id)).flatMap(islandNames)).sort((a, b) => a.localeCompare(b, 'sv'));
-    return `<section class="clan" id="clan-${slug(group.name)}" style="--clan-accent:hsl(${accents[index % accents.length]} 42% 42%)">
-      <header class="clan-header"><div><p class="section-kicker">Släktkrets</p><h2>${escapeHtml(familyCircleLabel(group.name))}</h2></div><div class="clan-meta">${visibleCount} personer${islands.length ? ` · ${escapeHtml(islands.join(' · '))}` : ''}</div></header>
-      ${[...group.families.entries()].map(([name, entries]) => renderFamilyStem(name, entries, visible, relatedIds)).join('')}
-    </section>`;
-  }).join('');
-}
-
-function renderPropertyLandscape(visible, relatedIds) {
-  return groupPeopleByProperty(currentPeople, currentProperties).map((group) => {
-    const people = group.people.filter((person) => visible.has(person.id));
-    if (!people.length) return '';
-    const components = componentSets(group.people, currentRelations)
-      .filter((component) => [...component].some((id) => visible.has(id)));
-    const connected = components.filter((component) => component.size > 1);
-    const isolated = components.filter((component) => component.size === 1)
-      .flatMap((component) => [...component])
-      .filter((id) => visible.has(id))
-      .map((id) => graph.byId.get(id))
-      .filter(Boolean)
-      .sort((a, b) => shownName(a).localeCompare(shownName(b), 'sv'));
-    const property = group.property;
-    const island = group.id === '__none__'
-      ? unique(people.flatMap(islandNames)).join(' · ')
-      : property.island;
-    return `<section class="property-group" id="property-${slug(group.id)}">
-      <header class="property-header"><div><p class="property-kicker">${group.id === '__none__' ? 'Ofullständig koppling' : 'Fastighet'}</p><h2>${escapeHtml(property.display_name)}</h2></div><div class="property-meta">${people.length} personer${island ? ` · ${escapeHtml(island)}` : ''}</div></header>
-      <div class="property-families">
-        ${connected.map((component) => {
-          const visibleIds = [...component].filter((id) => visible.has(id));
-          const familyNames = unique([...component]
-            .map((id) => graph.byId.get(id)?.family || 'Utan känd familj/släkt'))
-            .sort((a, b) => a.localeCompare(b, 'sv'));
-          return `<section class="property-family"><h3>${escapeHtml(familyNames.join(' · '))} <small>${visibleIds.length}</small></h3><div class="forest">${renderComponent(component, visible, relatedIds)}</div></section>`;
-        }).join('')}
-        ${isolated.length ? `<section class="property-family property-unlinked"><h3>Personer utan registrerad relation på fastigheten <small>${isolated.length}</small></h3><div class="unlinked-grid">${isolated.map((person) => renderPersonCard(person, relatedIds)).join('')}</div></section>` : ''}
-      </div>
-    </section>`;
-  }).join('');
-}
-
-function renderRegister(visible) {
-  const rows = currentPeople.filter((person) => visible.has(person.id)).map((person) => `<tr>
-    <td><button type="button" data-person-id="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button>${person.club_name ? `<small>${escapeHtml(person.club_name)}</small>` : ''}</td>
-    <td>${escapeHtml(person.living || 'okänt')}</td><td>${escapeHtml(years(person))}</td><td>${escapeHtml(person.family || '—')}</td><td>${escapeHtml(propertyNames(person).join(' · ') || '—')}</td><td>${escapeHtml(islandNames(person).join(' · ') || '—')}</td><td>${escapeHtml(person.membership_status || '—')}</td>
-  </tr>`).join('');
-  return `<section class="register"><table><thead><tr><th>Person</th><th>Lever</th><th>År</th><th>Familjegren</th><th>Fastighet</th><th>Ö</th><th>Medlemsläge</th></tr></thead><tbody>${rows}</tbody></table></section>`;
-}
-
-function renderReview() {
-  const inlaws = currentPeople.filter((person) => person.ui_is_inlaw);
-  const gaps = currentPeople.filter(relevantGap);
-  const estimated = currentPeople.filter((person) => generationFor(person) != null && !['kedja', 'gifte'].includes(person.ui_generation_source));
-  const unknownLiving = currentPeople.filter((person) => !person.living || person.living === 'okänt');
-  const islandWithoutProperty = currentPeople.filter((person) => islandNames(person).length && !personPropertyIds(person).length);
-  const islandConflicts = currentPeople.filter(islandPropertyConflict);
-  const section = (title, description, people) => `<section class="review-section"><h2>${escapeHtml(title)} (${people.length})</h2><p>${escapeHtml(description)}</p>${people.map((person) => `<div class="review-row"><span><b>${escapeHtml(person.display_name)}</b> · ${escapeHtml(person.family || '—')}</span><button type="button" data-person-id="${escapeAttribute(person.id)}">Öppna</button></div>`).join('') || '<p>Inga.</p>'}</section>`;
-  return `<div class="review-list">
-    ${section('Okänd livsstatus', 'Komplettera levande eller avliden direkt i personpanelen.', unknownLiving)}
-    ${section('Ö och fastighet säger olika', 'Båda uppgifterna bevaras tills motsägelsen är avgjord.', islandConflicts)}
-    ${section('Ö men ingen fastighet', 'Ö-kopplingen är bevarad manuellt tills en fastighet kan anges.', islandWithoutProperty)}
-    ${section('Ingifta enligt presentationsdata', 'Kontrollera genom att öppna personen och ändra presentationsrollen om den är fel.', inlaws)}
-    ${section('Relevanta relationsluckor', 'Personer utan kända föräldrar trots att de ligger efter första generationen.', gaps)}
-    ${section('Uppskattade generationer', 'Generationer som inte vilar på en fullständig föräldra–barn-kedja.', estimated)}
-  </div>`;
-}
-
-function render() {
-  refreshData();
-  refreshControls();
-  renderActiveFilters();
-  if (!currentPeople.length) {
-    contentNode.innerHTML = '<section class="empty-card"><h2>Ingen privat släktdata på den här enheten ännu</h2><p>Anslut Dropbox för att hämta den privata mastern.</p></section>';
-    closeDrawer(false);
-    return;
-  }
-  const visible = visiblePersonIds(currentPeople, graph, ui);
-  const relatedIds = ui.selectedPersonId ? lineageIds(ui.selectedPersonId, graph) : new Set();
-  const body = ui.review
-    ? renderReview()
-    : ui.view === 'groups'
-      ? renderGroupView(visible)
-      : ui.view === 'register'
-      ? renderRegister(visible)
-      : ui.view === 'property'
-        ? renderPropertyLandscape(visible, relatedIds)
-        : renderLandscape(visible, relatedIds);
-  contentNode.innerHTML = `<section class="summary" aria-label="Datasammanfattning"><div><strong>${currentPeople.length}</strong><span>personer</span></div><div><strong>${currentRelations.length}</strong><span>relationer</span></div><div><strong>${currentFamilyUnits.length}</strong><span>familjer</span></div><div><strong>${currentKinGroups.length}</strong><span>släktgrupper</span></div><div><strong>${visible.size}</strong><span>personer visas</span></div></section>${body || '<p class="empty-note">Inga personer matchar filtren.</p>'}`;
-  $('#filter-count').textContent = `${visible.size} av ${currentPeople.length} personer`;
-  document.body.classList.toggle('show-gaps', ui.showGaps);
-  document.body.classList.toggle('has-selection', Boolean(ui.selectedPersonId));
-  document.querySelectorAll('[data-view-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.viewMode === ui.view)));
-  $('#review-button').setAttribute('aria-pressed', String(ui.review));
-  if (ui.selectedPersonId) renderDrawer(ui.selectedPersonId);
-  else if (ui.selectedGroup) renderGroupDrawer(ui.selectedGroup.entityType, ui.selectedGroup.id);
-}
-
-function filterLabel(key) {
-  if (key === 'living') return ui.living === 'ja' ? 'Levande' : ui.living === 'nej' ? 'Avlidna' : 'Okänd livsstatus';
-  if (key === 'property') return ui.property === '__none__' ? 'Utan fastighet' : propertyById.get(ui.property)?.display_name || ui.property;
-  if (key === 'generations') return 'Presentationsled ' + [...ui.generations].join(', ');
-  if (key === 'year') return 'Levde år ' + ui.year;
-  if (key === 'inlaws') return 'Utan ingifta';
-  if (key === 'unlinked') return 'Utan kända band';
-  return ui.island;
-}
-
-function renderActiveFilters() {
-  const keys = [];
-  if (ui.island) keys.push('island');
-  if (ui.living) keys.push('living');
-  if (ui.property) keys.push('property');
-  if (ui.generations.size) keys.push('generations');
-  if (ui.yearOn) keys.push('year');
-  if (!ui.includeInlaws) keys.push('inlaws');
-  if (ui.onlyUnlinked) keys.push('unlinked');
-  activeFiltersNode.innerHTML = keys
-    .map((key) => '<button type="button" class="active-filter-chip" data-clear-filter="' + key + '">' + escapeHtml(filterLabel(key)) + '<span aria-hidden="true">×</span></button>')
-    .join('');
-  $('#filter-badge').hidden = keys.length === 0;
-  $('#filter-badge').textContent = keys.length ? String(keys.length) : '';
-}
-
-function clearFilter(key) {
-  if (key === 'island') ui.island = '';
-  if (key === 'living') ui.living = '';
-  if (key === 'property') ui.property = '';
-  if (key === 'generations') ui.generations.clear();
-  if (key === 'year') ui.yearOn = false;
-  if (key === 'inlaws') ui.includeInlaws = true;
-  if (key === 'unlinked') ui.onlyUnlinked = false;
-  $('#year-on').setAttribute('aria-pressed', String(ui.yearOn));
-  $('#year-slider').disabled = !ui.yearOn;
-  $('#year-out').textContent = ui.yearOn ? ui.year : 'alla år';
-  $('#include-inlaws').checked = ui.includeInlaws;
-  $('#toggle-lonely').setAttribute('aria-pressed', String(ui.onlyUnlinked));
-  render();
-}
-
-function visibleFilterControls() {
-  return [...filterPanel.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')]
-    .filter((node) => node.offsetParent !== null);
-}
-
-function openFilterPanel() {
-  filterReturnFocus = document.activeElement;
-  filterPanel.hidden = false;
-  filterBackdrop.hidden = false;
-  filterToggle.setAttribute('aria-expanded', 'true');
-  document.body.classList.add('filter-open');
-  filterPanel.querySelector('[data-close-filter]')?.focus();
-}
-
-function closeFilterPanel(restoreFocus = true) {
-  if (filterPanel.hidden) return;
-  filterPanel.hidden = true;
-  filterBackdrop.hidden = true;
-  filterToggle.setAttribute('aria-expanded', 'false');
-  document.body.classList.remove('filter-open');
-  if (restoreFocus && filterReturnFocus instanceof HTMLElement) filterReturnFocus.focus();
-}
-
-function toggleRelationTools() {
-  relationTools.hidden = !relationTools.hidden;
-  relationToggle.setAttribute('aria-expanded', String(!relationTools.hidden));
-  if (!relationTools.hidden) $('#rel-a').focus();
-}
-
-function handleGlobalKeydown(event) {
-  if (event.key === 'Escape' && !filterPanel.hidden) {
-    event.preventDefault();
-    closeFilterPanel();
-    return;
-  }
-  if (event.key === 'Tab' && !filterPanel.hidden) {
-    const controls = visibleFilterControls();
-    if (!controls.length) return;
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-    return;
-  }
-  if (event.key === 'Escape' && !relationTools.hidden) {
-    relationTools.hidden = true;
-    relationToggle.setAttribute('aria-expanded', 'false');
-    relationToggle.focus();
-    return;
-  }
-  if (event.key === 'Escape') closeDrawer();
-}
-
-function relationRows(links) {
-  if (!links.length) return '<li class="empty-note">Inga registrerade</li>';
-  return links.map((link) => {
-    const person = graph.byId.get(link.id);
-    const relation = link.relation;
-    if (!person) return '';
-    const derived = relation.derived;
-    return `<li class="relation-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button>${derived ? `<span class="derived-label">via gemensam förälder</span>` : `<select data-relation-field="user_confirmed" data-value-type="boolean" data-relation-id="${escapeAttribute(relation.id)}" aria-label="Bekräftelse"><option value="true" ${isConfirmed(relation.user_confirmed) ? 'selected' : ''}>bekräftad</option><option value="false" ${!isConfirmed(relation.user_confirmed) ? 'selected' : ''}>ej bekräftad</option></select><button type="button" class="icon-button" data-delete-relation="${escapeAttribute(relation.id)}" aria-label="Ta bort relation till ${escapeAttribute(person.display_name)}">×</button>`}</li>`;
-  }).join('');
-}
-
-function selectOptions(values, selected) {
-  return values.map(([value, label]) => `<option value="${escapeAttribute(value)}" ${String(value) === String(selected ?? '') ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
-}
-
-function renderDrawer(personId) {
-  const person = graph.byId.get(personId);
-  if (!person) {
-    closeDrawer(false);
-    return;
-  }
-  const closeFamily = nearFamily(person.id, graph);
-  const groupMemberships = groupsForPerson(person.id, familyContext);
-  const familyMemberships = groupMemberships.filter(entry => entry.type === FAMILY_UNIT_TYPE);
-  const kinMemberships = groupMemberships.filter(entry => entry.type === KIN_GROUP_TYPE);
-  const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id && propertyById.has(link.property_id));
-  const linkedPropertyIds = new Set(propertyLinks.map((link) => link.property_id));
-  const availableProperties = currentProperties.filter((property) => !linkedPropertyIds.has(property.id));
-  const islands = unique([...currentProperties.map((property) => property.island), ...currentPeople.map((entry) => entry.legacy_island)].filter(Boolean)).sort((a, b) => a.localeCompare(b, 'sv'));
-  const propertyRows = propertyLinks.map((link) => {
-    const property = propertyById.get(link.property_id);
-    return `<li class="property-link-row"><span><b>${escapeHtml(property.display_name)}</b>${property.island ? ` · ${escapeHtml(property.island)}` : ''}</span><button type="button" class="icon-button" data-delete-property-link="${escapeAttribute(link.id)}" aria-label="Ta bort fastighetskopplingen till ${escapeAttribute(property.display_name)}">×</button></li>`;
-  }).join('');
-  drawerContent.innerHTML = `<h2>${escapeHtml(person.display_name)}</h2><p class="drawer-meta">${escapeHtml([person.club_name, years(person), ...islandNames(person)].filter(Boolean).join(' · '))}</p>
-    <section class="belonging-card" aria-label="Personens tillhörigheter">
-      <div><span>Familjer</span><strong>${familyMemberships.length ? familyMemberships.map(entry => escapeHtml(displayReference(entry.group))).join('<br>') : 'Ingen strukturerad'}</strong></div>
-      <div><span>Släkter</span><strong>${kinMemberships.length ? kinMemberships.map(entry => `${escapeHtml(displayReference(entry.group))}<small>${escapeHtml(relativeGenerationLabel(entry.membership, entry.group))}${entry.membership.confirmed ? '' : ' · ej helt bekräftat'}</small>`).join('<br>') : 'Ingen strukturerad'}</strong></div>
-      <div><span>Fastighet</span><strong>${escapeHtml(propertyNames(person).join(' · ') || 'Ingen registrerad')}</strong></div>
-    </section>
-    <h3>Personuppgifter</h3>
-    <div class="editor-grid">
-      <label class="editor-field wide"><span>Visningsnamn</span><input data-person-field="display_name" value="${escapeAttribute(person.display_name || '')}"></label>
-      <label class="editor-field wide"><span>Fullständigt namn</span><input data-person-field="full_name" value="${escapeAttribute(person.full_name || '')}"></label>
-      <label class="editor-field wide"><span>Födelsenamn</span><input data-person-field="birth_name" value="${escapeAttribute(person.birth_name || '')}" placeholder="Tidigare efternamn eller fullständigt födelsenamn"></label>
-      <label class="editor-field"><span>Född</span><input inputmode="numeric" data-person-field="birth" data-value-type="number" value="${escapeAttribute(person.birth ?? '')}"></label>
-      <label class="editor-field"><span>Död</span><input inputmode="numeric" data-person-field="death" data-value-type="number" value="${escapeAttribute(person.death ?? '')}"></label>
-      <label class="editor-field"><span>Lever</span><select data-person-field="living">${selectOptions([['okänt', 'okänt'], ['ja', 'ja'], ['nej', 'nej']], person.living || 'okänt')}</select></label>
-      <label class="editor-field"><span>Medlemsläge</span><select data-person-field="membership_status">${selectOptions([['aktuell', 'aktuell'], ['tidigare', 'tidigare'], ['förväntad', 'förväntad'], ['ej', 'ej medlem']], person.membership_status)}</select></label>
-      <label class="editor-field wide"><span>KBK-namn</span><input data-person-field="club_name" value="${escapeAttribute(person.club_name || '')}"></label>
-      <label class="editor-field"><span>Presentationsroll</span><select data-person-field="ui_is_inlaw" data-value-type="boolean">${selectOptions([['false', 'född i/fristående'], ['true', 'ingift']], String(Boolean(person.ui_is_inlaw)))}</select></label>
-      <label class="editor-field"><span>Manuell ö utan fastighet</span><select data-person-field="legacy_island"><option value="">Ingen angiven</option>${islands.map((island) => `<option value="${escapeAttribute(island)}" ${person.legacy_island === island ? 'selected' : ''}>${escapeHtml(island)}</option>`).join('')}</select></label>
-      <label class="editor-field"><span>Ö-status</span><select data-person-field="residence_status">${selectOptions([['okänt', 'okänt'], ['bor', 'bor'], ['avflyttad', 'avflyttad']], person.residence_status || 'okänt')}</select></label>
-      <label class="editor-field wide"><span>Roll</span><input data-person-field="role" value="${escapeAttribute(person.role || '')}"></label>
-      <label class="editor-field wide"><span>Not</span><textarea data-person-field="note">${escapeHtml(person.note || '')}</textarea></label>
-    </div>
-    <p class="drawer-note${islandPropertyConflict(person) ? ' warning' : ''}">${islandPropertyConflict(person)
-      ? `Motsägelse: godkänd ö är ${escapeHtml(person.legacy_island)}, men fastigheten ligger på ${escapeHtml(person.property_islands.join(' · '))}. Båda uppgifterna bevaras tills detta är rättat.`
-      : 'Om personen har en fastighet hämtas ön automatiskt därifrån. Den manuella ön ligger kvar som reservuppgift.'}</p>
-    <h3>Fastigheter</h3>
-    <ul class="property-link-list">${propertyRows || '<li class="empty-note">Ingen fastighet registrerad</li>'}</ul>
-    <div class="add-property"><select data-new-property-id><option value="">Välj fastighet …</option>${availableProperties.map((property) => `<option value="${escapeAttribute(property.id)}">${escapeHtml(property.display_name)}${property.island ? ` · ${escapeHtml(property.island)}` : ''}</option>`).join('')}</select><button type="button" data-action="add-property">Lägg till</button></div>
-    <h3>Nära familj</h3>
-    <div class="close-family-grid">
-      <section><h4>Föräldrar</h4><ul class="relation-list">${relationRows(closeFamily.parents)}</ul></section>
-      <section><h4>Syskon</h4><ul class="relation-list">${relationRows(closeFamily.siblings)}</ul></section>
-      <section><h4>Partner</h4><ul class="relation-list">${relationRows(closeFamily.partners)}</ul></section>
-      ${closeFamily.formerPartners.length ? `<section><h4>Tidigare partner</h4><ul class="relation-list">${relationRows(closeFamily.formerPartners)}</ul></section>` : ''}
-      ${closeFamily.coparents.length ? `<section><h4>Medföräldrar</h4><ul class="relation-list">${relationRows(closeFamily.coparents)}</ul></section>` : ''}
-      <section><h4>Barn</h4><ul class="relation-list">${relationRows(closeFamily.children)}</ul></section>
-    </div>
-    <h3>Lägg till relation</h3>
-    <div class="add-relation"><input list="drawer-person-options" data-new-relation-person placeholder="Välj person …"><select data-new-relation-kind><option value="parent">är förälder till vald person</option><option value="child">är barn till vald person</option><option value="sibling">är syskon med vald person</option><option value="partner">är partner med vald person</option><option value="former">var tidigare partner</option></select><button type="button" data-action="add-relation">Lägg till</button></div>
-    <p><a class="cross-app-link" href="../batregister/?person=${encodeURIComponent(person.id)}">Visa båtar kopplade till ${escapeHtml(person.display_name)}</a></p>
-    <div class="danger-zone"><button type="button" class="danger-button" data-action="delete-person">Ta bort personen…</button></div>`;
-  drawer.classList.add('open');
-  drawer.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('drawer-open');
-}
-
-function closeDrawer(clearSelection = true) {
-  drawer.classList.remove('open');
-  drawer.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('drawer-open');
-  if (clearSelection) {
-    ui.selectedPersonId = null;
-    ui.selectedGroup = null;
-    document.body.classList.remove('has-selection');
-    contentNode.querySelectorAll('.is-selected,.is-related').forEach((node) => node.classList.remove('is-selected', 'is-related'));
-  }
-}
-
-function selectPerson(personId, scroll = false) {
-  if (!graph.byId.has(personId)) return;
-  ui.selectedPersonId = personId;
-  ui.selectedGroup = null;
-  ui.review = false;
-  render();
-  if (scroll) {
-    const card = contentNode.querySelector(`[data-person-id="${CSS.escape(personId)}"]`);
-    card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-}
-
-function parseFieldValue(element) {
-  const text = element.value.trim();
-  if (element.dataset.valueType === 'number') return text === '' ? null : Number(text);
-  if (element.dataset.valueType === 'boolean') return text === 'true';
-  return text === '' ? null : text;
-}
-
-function groupRecordsForType(entityType) {
-  return entityType === FAMILY_UNIT_TYPE ? currentFamilyUnits : currentKinGroups;
-}
-
-function groupTypeName(entityType) {
-  return entityType === FAMILY_UNIT_TYPE ? 'Familj' : 'Släktgrupp';
-}
-
-function kinGroupDescendantIds(groupId) {
-  const descendants = new Set();
-  const queue = [groupId];
-  while (queue.length) {
-    const parentId = queue.shift();
-    for (const group of currentKinGroups) {
-      const isChild = (group.parent_group_ids || []).includes(parentId)
-        || (currentKinGroups.find(entry => entry.id === parentId)?.child_group_ids || []).includes(group.id);
-      if (!isChild || descendants.has(group.id) || group.id === groupId) continue;
-      descendants.add(group.id);
-      queue.push(group.id);
-    }
-  }
-  return descendants;
-}
-
-function renderGroupDrawer(entityType, groupId) {
-  const group = groupRecordsForType(entityType).find(entry => entry.id === groupId);
-  if (!group) return closeDrawer(false);
-  ui.selectedPersonId = null;
-  ui.selectedGroup = { entityType, id: groupId };
-  const anchors = (group.anchor_person_ids || []).map(personId => familyContext.peopleById.get(personId)).filter(Boolean);
-  const explicitMembers = (group.explicit_person_ids || []).map(personId => familyContext.peopleById.get(personId)).filter(Boolean);
-  const parentId = entityType === KIN_GROUP_TYPE ? group.parent_group_ids?.[0] || '' : '';
-  const disallowedParentIds = entityType === KIN_GROUP_TYPE ? kinGroupDescendantIds(group.id) : new Set();
-  const parentOptions = currentKinGroups.filter(entry => entry.id !== group.id && !disallowedParentIds.has(entry.id))
-    .map(entry => `<option value="${escapeAttribute(entry.id)}" ${entry.id === parentId ? 'selected' : ''}>${escapeHtml(displayReference(entry))}</option>`).join('');
-  const familyKinOptions = currentKinGroups
-    .map(entry => `<label><input type="checkbox" data-family-kin-group="${escapeAttribute(entry.id)}" ${(group.kin_group_ids || []).includes(entry.id) ? 'checked' : ''}><span>${escapeHtml(displayReference(entry))}</span></label>`).join('');
-  drawerContent.innerHTML = `<h2>${escapeHtml(group.name || groupTypeName(entityType))}</h2><p class="drawer-meta">${escapeHtml(group.reference_code || '')} · stabil referenskod</p>
-    <section class="belonging-card"><div><span>Full läsbar referens</span><strong>${escapeHtml(displayReference(group))}</strong></div><div><span>Status</span><strong>${isConfirmed(group.confirmed) ? 'Bekräftad' : 'Ej bekräftad'}</strong></div></section>
-    <h3>${escapeHtml(groupTypeName(entityType))}</h3>
-    <div class="editor-grid">
-      <label class="editor-field wide"><span>Namn</span><input data-group-field="name" value="${escapeAttribute(group.name || '')}"></label>
-      <label class="editor-field"><span>Bekräftelse</span><select data-group-field="confirmed" data-value-type="boolean">${selectOptions([['false', 'ej bekräftad'], ['true', 'bekräftad']], String(isConfirmed(group.confirmed)))}</select></label>
-      ${entityType === KIN_GROUP_TYPE ? `<label class="editor-field"><span>Art</span><select data-group-field="kind">${selectOptions(Object.entries(KIN_GROUP_KINDS), group.kind || 'family_circle')}</select></label>` : ''}
-      <label class="editor-field wide"><span>Omfattning</span><select data-group-field="membership_rule">${selectOptions(Object.entries(MEMBERSHIP_RULES), group.membership_rule || (entityType === FAMILY_UNIT_TYPE ? 'anchors_and_shared_children' : 'explicit'))}</select></label>
-      ${entityType === KIN_GROUP_TYPE ? `<label class="editor-field wide"><span>Överordnad släktgrupp</span><select data-group-parent><option value="">Ingen vald</option>${parentOptions}</select></label>` : ''}
-    </div>
-    ${entityType === FAMILY_UNIT_TYPE ? `<h3>Tillhör släktgrupper</h3><div class="group-membership-options">${familyKinOptions || '<p class="empty-note">Inga släktgrupper finns.</p>'}</div><p class="drawer-note">En familj kan tillhöra flera släktgrupper, exempelvis när två släktgrenar möts. Det kopplar familjen till båda grenarna men slår inte ihop hela släkterna.</p>` : ''}
-    <h3>Ankarpersoner</h3>
-    <ul class="property-link-list">${anchors.map(person => `<li class="property-link-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button><button type="button" class="icon-button" data-remove-group-anchor="${escapeAttribute(person.id)}">×</button></li>`).join('') || '<li class="empty-note">Inga ankarpersoner</li>'}</ul>
-    <div class="add-relation"><input list="drawer-person-options" data-new-group-anchor placeholder="Välj person …"><button type="button" data-action="add-group-anchor">Lägg till ankare</button></div>
-    <h3>Uttryckliga medlemmar</h3>
-    <ul class="property-link-list">${explicitMembers.map(person => `<li class="property-link-row"><button type="button" class="relation-person" data-open-person="${escapeAttribute(person.id)}">${escapeHtml(person.display_name)}</button><button type="button" class="icon-button" data-remove-group-member="${escapeAttribute(person.id)}">×</button></li>`).join('') || '<li class="empty-note">Inga uttryckliga medlemmar</li>'}</ul>
-    <div class="add-relation"><input list="drawer-person-options" data-new-group-member placeholder="Välj person …"><button type="button" data-action="add-group-member">Lägg till medlem</button></div>
-    <p class="drawer-note">Namnet och visningen får ändras. Referenskoden och det interna id:t förblir desamma. Släktled räknas från ankarpersonerna och är aldrig globala.</p>
-    <div class="danger-zone"><button type="button" class="danger-button" data-action="delete-group">Ta bort ${entityType === FAMILY_UNIT_TYPE ? 'familjen' : 'släktgruppen'}…</button></div>`;
-  drawer.classList.add('open');
-  drawer.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('drawer-open');
-}
-
-async function createGroup(entityType) {
-  const records = groupRecordsForType(entityType);
-  const id = `${entityType}:${crypto.randomUUID()}`;
-  const referenceCode = nextReferenceCode(entityType, records);
-  const name = entityType === FAMILY_UNIT_TYPE ? 'Ny familj' : 'Ny släktgrupp';
-  await syncEdit(async () => {
-    await repository.restoreEntity(entityType, id);
-    await repository.setFields([
-      { entityType, entityId: id, field: 'reference_code', value: referenceCode },
-      { entityType, entityId: id, field: 'name', value: name },
-      { entityType, entityId: id, field: 'confirmed', value: false },
-      { entityType, entityId: id, field: 'anchor_person_ids', value: [] },
-      { entityType, entityId: id, field: 'membership_rule', value: entityType === FAMILY_UNIT_TYPE ? 'anchors_and_shared_children' : 'explicit' },
-      ...(entityType === KIN_GROUP_TYPE ? [{ entityType, entityId: id, field: 'kind', value: 'family_circle' }] : []),
-    ]);
-  });
-  renderGroupDrawer(entityType, id);
-}
-
-async function updateGroupParent(value) {
-  const selected = ui.selectedGroup;
-  if (!selected || selected.entityType !== KIN_GROUP_TYPE) return;
-  if (value === selected.id || kinGroupDescendantIds(selected.id).has(value)) {
-    setEditStatus('En släktgrupp kan inte läggas under sig själv eller en undergrupp.', 'error');
-    return renderGroupDrawer(selected.entityType, selected.id);
-  }
-  const changes = [{ entityType: KIN_GROUP_TYPE, entityId: selected.id, field: 'parent_group_ids', value: value ? [value] : [] }];
-  for (const group of currentKinGroups) {
-    if (group.id === selected.id) continue;
-    const withoutSelected = (group.child_group_ids || []).filter(id => id !== selected.id);
-    const childIds = group.id === value ? [...new Set([...withoutSelected, selected.id])] : withoutSelected;
-    if (JSON.stringify(childIds) !== JSON.stringify(group.child_group_ids || [])) {
-      changes.push({ entityType: KIN_GROUP_TYPE, entityId: group.id, field: 'child_group_ids', value: childIds });
-    }
-  }
-  await syncEdit(() => repository.setFields(changes));
-}
-
-async function updateFamilyKinGroup(kinGroupId, checked) {
-  const selected = ui.selectedGroup;
-  const family = selected?.entityType === FAMILY_UNIT_TYPE
-    ? currentFamilyUnits.find(entry => entry.id === selected.id)
-    : null;
-  if (!family || !currentKinGroups.some(group => group.id === kinGroupId)) return;
-  const current = new Set(family.kin_group_ids || []);
-  if (checked) current.add(kinGroupId);
-  else current.delete(kinGroupId);
-  const value = [...current].sort((a, b) => a.localeCompare(b, 'sv'));
-  await syncEdit(() => repository.setField(FAMILY_UNIT_TYPE, family.id, 'kin_group_ids', value));
-}
-
-async function addGroupAnchor() {
-  const selected = ui.selectedGroup;
-  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
-  const input = drawerContent.querySelector('[data-new-group-anchor]');
-  const person = lookupPerson(input?.value);
-  if (!group || !person) return setEditStatus('Välj en entydig person ur listan.', 'error');
-  const anchors = [...new Set([...(group.anchor_person_ids || []), person.id])];
-  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'anchor_person_ids', anchors));
-}
-
-async function removeGroupAnchor(personId) {
-  const selected = ui.selectedGroup;
-  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
-  if (!group) return;
-  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'anchor_person_ids', (group.anchor_person_ids || []).filter(id => id !== personId)));
-}
-
-async function addGroupMember() {
-  const selected = ui.selectedGroup;
-  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
-  const input = drawerContent.querySelector('[data-new-group-member]');
-  const person = lookupPerson(input?.value);
-  if (!group || !person) return setEditStatus('Välj en entydig person ur listan.', 'error');
-  const members = [...new Set([...(group.explicit_person_ids || []), person.id])];
-  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'explicit_person_ids', members));
-}
-
-async function removeGroupMember(personId) {
-  const selected = ui.selectedGroup;
-  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
-  if (!group) return;
-  await syncEdit(() => repository.setField(selected.entityType, selected.id, 'explicit_person_ids', (group.explicit_person_ids || []).filter(id => id !== personId)));
-}
-
-async function deleteGroup() {
-  const selected = ui.selectedGroup;
-  const group = selected && groupRecordsForType(selected.entityType).find(entry => entry.id === selected.id);
-  if (!group || !window.confirm(`Ta bort ${displayReference(group)}? Personer och personrelationer påverkas inte.`)) return;
-  const restoreEntries = [{ entityType: selected.entityType, entityId: selected.id }];
-  if (!await syncEdit(() => repository.deleteEntity(selected.entityType, selected.id))) return;
-  ui.selectedGroup = null;
-  closeDrawer(false);
-  offerUndo(`${displayReference(group)} borttagen`, restoreEntries, `${displayReference(group)} återställd`);
-}
-
-async function applyFamilyModelLocal() {
-  if (!isSourceTree) throw new Error('Familjemodellen kan bara aktiveras från den privata arbetskopian.');
-  const response = await fetch(LOCAL_FAMILY_MODEL_URL, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Familjemodellen kunde inte läsas (${response.status}).`);
-  const plan = await response.json();
-  if (plan.schema_version !== 1 || !Array.isArray(plan.relations) || !Array.isArray(plan.family_units) || !Array.isArray(plan.kin_groups)) throw new Error('Familjemodellen har fel format.');
-  const personIds = new Set(currentPeople.map(person => person.id));
-  const groups = [
-    ...plan.family_units.map(group => ({ entityType: FAMILY_UNIT_TYPE, ...group })),
-    ...plan.kin_groups.map(group => ({ entityType: KIN_GROUP_TYPE, ...group })),
-  ];
-  for (const relation of plan.relations) if (!personIds.has(relation.from_person_id) || !personIds.has(relation.to_person_id)) throw new Error(`Okänd person i familjemodellen: ${relation.from_person_id} / ${relation.to_person_id}`);
-  for (const group of groups) for (const personId of [...(group.anchor_person_ids || []), ...(group.explicit_person_ids || [])]) if (!personIds.has(personId)) throw new Error(`Okänd ankarperson i ${group.reference_code}: ${personId}`);
-  const relationEntities = plan.relations.map(relation => ({
-    entityType: 'relation',
-    id: relationEntityId(relation.kind, relation.from_person_id, relation.to_person_id),
-    fields: {
-      kind: relation.kind,
-      from_person_id: relation.from_person_id,
-      to_person_id: relation.to_person_id,
-      user_confirmed: Boolean(relation.confirmed),
-      confidence: null,
-      form: null,
-      note: null,
-      ...(relation.parent_role ? { parent_role: relation.parent_role } : {}),
-    },
-  }));
-  await repository.restoreEntities([
-    ...relationEntities.map(entity => ({ entityType: entity.entityType, entityId: entity.id })),
-    ...groups.map(group => ({ entityType: group.entityType, entityId: group.id })),
-  ]);
-  await repository.setFields([
-    ...relationEntities.flatMap(entity => Object.entries(entity.fields).map(([field, value]) => ({ entityType: entity.entityType, entityId: entity.id, field, value }))),
-    ...groups.flatMap(group => Object.entries(group).filter(([field]) => !['entityType', 'id'].includes(field)).map(([field, value]) => ({ entityType: group.entityType, entityId: group.id, field, value }))),
-  ]);
-  await store.putMeta(FAMILY_MODEL_META, { applied: true, migration_id: plan.migration_id, applied_at: new Date().toISOString() });
-  familyModelButton.hidden = true;
-  render();
-  setEditStatus('Familjemodellen sparades lokalt · synkar med Dropbox…');
-  await syncNow();
-}
-
-async function syncEdit(action) {
-  setEditStatus('Sparar ändringen lokalt…');
-  try {
-    await action();
-    render();
-    setEditStatus('Sparad lokalt · synkar med Dropbox…');
-    try {
-      const result = await syncNow();
-      if (result) setEditStatus('Sparad lokalt och synkad med Dropbox.', 'ok');
-      else setEditStatus(navigator.onLine === false ? 'Sparad lokalt · offline · synkas automatiskt senare.' : 'Sparad lokalt · anslut Dropbox för synk.', 'warning');
-    } catch (syncError) {
-      console.error(syncError);
-      setEditStatus('Sparad lokalt · Dropbox-synken misslyckades och försöker igen senare.', 'warning');
-    }
-    return true;
-  } catch (error) {
-    console.error(error);
-    setEditStatus(`Kunde inte spara · ${error.message}`, 'error');
-    render();
-    return false;
-  }
-}
-
-async function addPropertyLink() {
-  const select = drawerContent.querySelector('[data-new-property-id]');
-  const propertyId = select?.value;
-  const personId = ui.selectedPersonId;
-  if (!propertyId || !propertyById.has(propertyId) || !graph.byId.has(personId)) {
-    setEditStatus('Välj en fastighet ur listan.', 'error');
-    return;
-  }
-  const id = propertyLinkEntityId(personId, propertyId);
-  if (currentPropertyLinks.some((link) => link.id === id)) {
-    setEditStatus('Fastighetskopplingen finns redan.', 'error');
-    return;
-  }
-  await syncEdit(async () => {
-    await repository.restoreEntity('property-link', id);
-    await repository.setFields([
-      { entityType: 'property-link', entityId: id, field: 'person_id', value: personId },
-      { entityType: 'property-link', entityId: id, field: 'property_id', value: propertyId },
-      { entityType: 'property-link', entityId: id, field: 'confirmed', value: true },
-    ]);
-  });
-}
-
-async function deletePropertyLink(id) {
-  const link = currentPropertyLinks.find((entry) => entry.id === id);
-  if (!link) return;
-  const person = graph.byId.get(link.person_id)?.display_name || link.person_id;
-  const propertyName = propertyById.get(link.property_id)?.display_name || link.property_id;
-  if (!window.confirm(`Ta bort fastighetskopplingen mellan ${person} och ${propertyName}?`)) return;
-  const restoreEntries = [{ entityType: 'property-link', entityId: id }];
-  if (await syncEdit(() => repository.deleteEntity('property-link', id))) offerUndo('Fastighetskopplingen borttagen', restoreEntries, 'Fastighetskopplingen återställd');
-}
-
-async function addRelation() {
-  const input = drawerContent.querySelector('[data-new-relation-person]');
-  const kindNode = drawerContent.querySelector('[data-new-relation-kind]');
-  const other = lookupPerson(input.value);
-  if (!other || other.id === ui.selectedPersonId) {
-    setEditStatus('Välj en annan, entydig person ur listan.', 'error');
-    return;
-  }
-  let kind = kindNode.value;
-  let from = ui.selectedPersonId;
-  let to = other.id;
-  if (kind === 'parent') {
-    from = other.id;
-    kind = 'foralder-barn';
-  } else if (kind === 'child') {
-    kind = 'foralder-barn';
-  } else if (kind === 'former') {
-    kind = 'tidigare';
-  } else if (kind === 'sibling') {
-    kind = 'syskon';
-  } else {
-    kind = 'partner';
-  }
-  if (kind === 'foralder-barn' && wouldCreateParentChildCycle(from, to, familyContext)) {
-    setEditStatus('Relationen skulle skapa en cirkel mellan förälder och barn.', 'error');
-    return;
-  }
-  const id = relationEntityId(kind, from, to);
-  if (currentRelations.some((relation) => relation.id === id)) {
-    setEditStatus('Den relationen finns redan.', 'error');
-    return;
-  }
-  await syncEdit(async () => {
-    await repository.restoreEntity('relation', id);
-    await repository.setFields([
-      { entityType: 'relation', entityId: id, field: 'kind', value: kind },
-      { entityType: 'relation', entityId: id, field: 'from_person_id', value: from },
-      { entityType: 'relation', entityId: id, field: 'to_person_id', value: to },
-      { entityType: 'relation', entityId: id, field: 'form', value: null },
-      { entityType: 'relation', entityId: id, field: 'confidence', value: null },
-      { entityType: 'relation', entityId: id, field: 'user_confirmed', value: true },
-      { entityType: 'relation', entityId: id, field: 'note', value: null },
-    ]);
-  });
-}
-
-async function deleteRelation(id) {
-  const relation = currentRelations.find((entry) => entry.id === id);
-  if (!relation) return;
-  const from = graph.byId.get(relation.from_person_id)?.display_name || relation.from_person_id;
-  const to = graph.byId.get(relation.to_person_id)?.display_name || relation.to_person_id;
-  if (!window.confirm(`Ta bort relationen mellan ${from} och ${to}? Ändringen sparas med återställningsbar historik.`)) return;
-  const restoreEntries = [{ entityType: 'relation', entityId: id }];
-  if (await syncEdit(() => repository.deleteEntity('relation', id))) offerUndo('Relationen borttagen', restoreEntries, 'Relationen återställd');
-}
-
-async function deletePerson() {
-  const person = graph.byId.get(ui.selectedPersonId);
-  if (!person) return;
-  const related = currentRelations.filter((relation) => relation.from_person_id === person.id || relation.to_person_id === person.id);
-  const propertyLinks = currentPropertyLinks.filter((link) => link.person_id === person.id);
-  if (!window.confirm(`Ta bort ${person.display_name}, personens ${related.length} relationer och ${propertyLinks.length} fastighetskopplingar? Borttagningen sparas som återställningsbar historik.`)) return;
-  const restoreEntries = [
-    ...related.map((relation) => ({ entityType: 'relation', entityId: relation.id })),
-    ...propertyLinks.map((link) => ({ entityType: 'property-link', entityId: link.id })),
-    { entityType: 'person', entityId: person.id },
-  ];
-  if (!await syncEdit(() => repository.deleteEntities(restoreEntries))) return;
-  ui.selectedPersonId = null;
-  closeDrawer(false);
-  offerUndo(`${person.display_name} borttagen`, restoreEntries, `${person.display_name} återställd`);
-}
-
-async function completeOAuthCallback() {
-  const url = new URL(location.href);
-  if (!url.searchParams.has('code') && !url.searchParams.has('error')) return;
-  const token = await completeDropboxOAuth();
-  accessToken = token.access_token;
-  accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000;
-  if (token.refresh_token) await store.putMeta(TOKEN_META, token.refresh_token);
-  for (const parameter of ['code', 'state', 'error', 'error_description']) url.searchParams.delete(parameter);
-  history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-}
-
-async function currentAccessToken() {
-  if (accessToken && Date.now() < accessTokenExpiresAt) return accessToken;
-  const refreshToken = await store.getMeta(TOKEN_META);
-  if (!refreshToken || !DROPBOX_CLIENT_ID) return null;
-  if (navigator.onLine === false) return null;
-  const token = await exchangeDropboxRefreshToken({ clientId: DROPBOX_CLIENT_ID, refreshToken });
-  accessToken = token.access_token;
-  accessTokenExpiresAt = Date.now() + Math.max(30, Number(token.expires_in || 0) - 60) * 1000;
-  if (token.refresh_token && token.refresh_token !== refreshToken) await store.putMeta(TOKEN_META, token.refresh_token);
-  return accessToken;
-}
-
-async function uploadBootstrapIfNeeded(transport) {
-  const pending = await store.getMeta(BOOTSTRAP_META);
-  if (!pending?.pending) return 0;
-  const operations = (await store.getAllOps()).filter((operation) => operation.device_id === pending.device_id).sort((a, b) => a.seq - b.seq);
-  let uploaded = 0;
-  for (let index = 0; index < operations.length; index += 250) {
-    const batch = createBatch(operations.slice(index, index + 250));
-    await transport.putBatch(batch);
-    uploaded += batch.ops.length;
-  }
-  await store.putMeta(BOOTSTRAP_META, { ...pending, pending: false, uploaded_at: new Date().toISOString() });
-  return uploaded;
-}
-
-async function migrateLateLegacyBatches(primaryTransport, token) {
-  if ((await store.getMeta(LEGACY_MIGRATION_META))?.completed_at) return 0;
-  const legacyTransport = new DropboxTransport({
-    accessToken: token,
-    id: 'dropbox-matrikel-legacy-read',
-    opsRoot: LEGACY_OPS_ROOT,
-  });
-  let cursor = null;
-  let migratedOps = 0;
-  try {
-    while (true) {
-      const page = await legacyTransport.listChanges(cursor, { createRoot: false });
-      for (const entry of page.entries) {
-        const batch = await legacyTransport.getJson(entry.path);
-        await primaryTransport.putBatch(batch);
-        migratedOps += batch.ops.length;
-      }
-      cursor = page.cursor;
-      if (!page.has_more) break;
-    }
-  } catch (error) {
-    const missingLegacyFolder = error?.status === 409 && String(error?.code || '').includes('not_found');
-    if (!missingLegacyFolder) throw error;
-  }
-  await store.putMeta(LEGACY_MIGRATION_META, {
-    completed_at: new Date().toISOString(),
-    migrated_operations: migratedOps,
-  });
-  return migratedOps;
-}
-
-async function syncNow() {
-  if (syncPromise) return syncPromise;
-  syncPromise = (async () => {
-    const hasCredential = Boolean(await store.getMeta(TOKEN_META));
-    if (navigator.onLine === false) {
-      setStatus(`Offline · ${hasCredential ? 'Dropbox ansluten · ' : ''}ändringar sparas lokalt`, 'warning');
-      connectButton.textContent = hasCredential ? 'Offline · Dropbox ansluten' : 'Anslut Dropbox när du är online';
-      return null;
-    }
-    const token = await currentAccessToken();
-    if (!token) {
-      setStatus(DROPBOX_CLIENT_ID ? 'Lokalt sparat · Dropbox ej ansluten' : 'Lokalt sparat · Dropbox-app återstår', 'warning');
-      connectButton.textContent = DROPBOX_CLIENT_ID ? 'Anslut Dropbox' : 'Dropbox-konfiguration återstår';
-      return null;
-    }
-    connectButton.textContent = 'Synka Dropbox';
-    setStatus('Synkar…');
-    // Ny transportidentitet gör att en gammal /ops-cursor aldrig återanvänds
-    // mot den nya namnrymden. Oföränderliga batcher tål säker återuppladdning.
-    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-matrikel-v2', opsRoot: MATRIKEL_OPS_ROOT });
-    const migratedLegacyOps = await migrateLateLegacyBatches(transport, token);
-    const bootstrapUploaded = await uploadBootstrapIfNeeded(transport);
-    const engine = new SyncEngine({ repository, transport });
-    const result = await engine.syncOnce();
-    await Promise.all([
-      fastigheterMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-fastigheter-read', opsRoot: '/fastigheter/ops', readOnly: true })),
-      kartdataMaster.sync(new DropboxTransport({ accessToken: token, id: 'dropbox-kartdata-read', opsRoot: '/kartdata/ops', readOnly: true })),
-    ]);
-    refreshedRepositoryRevision = -1;
-    render();
-    familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || !currentPeople.length;
-    if (!currentPeople.length) setStatus('Dropbox ansluten · ingen privat master hittades ännu', 'warning');
-    else setStatus(`Synkad · ${bootstrapUploaded + result.uploadedOps} upp, ${result.downloadedOps} ned${migratedLegacyOps ? ` · ${migratedLegacyOps} äldre operationer flyttade` : ''}`, 'ok');
-    return result;
-  })().catch((error) => {
-    console.error(error);
-    if (isOfflineError(error)) {
-      setStatus('Offline · lokalt sparat · synkas automatiskt när nätet återkommer', 'warning');
-      return null;
-    }
-    setStatus(`Åtgärd krävs · ${error.message}`, 'error');
-    throw error;
-  }).finally(() => { syncPromise = null; });
-  return syncPromise;
-}
-
-async function connectDropbox() {
-  if (!DROPBOX_CLIENT_ID) return;
-  sessionStorage.setItem('korpholmen:oauth-return', new URL('matrikel/', redirectUri()).pathname);
-  const attempt = await beginDropboxOAuth({ clientId: DROPBOX_CLIENT_ID, redirectUri: redirectUri(), scopes: DROPBOX_SCOPES });
-  location.assign(attempt.url);
-}
-
-async function connectOrSyncDropbox() {
-  const token = await currentAccessToken();
-  if (token) return syncNow();
-  return connectDropbox();
-}
-
-async function bootstrapLocal() {
-  if (!isSourceTree) throw new Error('Startkopian kan bara aktiveras från källappen');
-  setStatus('Läser den låsta startkopian…');
-  const response = await fetch(LOCAL_BOOTSTRAP_URL, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Startkopian kunde inte läsas (${response.status})`);
-  const document = await response.json();
-  if (document.operations_version !== 1 || !Array.isArray(document.operations)) throw new Error('Startkopian har fel format');
-  document.operations.forEach(validateOperation);
-  await repository.applyRemoteOps(document.operations);
-  try {
-    const metadataResponse = await fetch(LOCAL_UI_METADATA_URL, { cache: 'no-store' });
-    if (metadataResponse.ok) {
-      const metadata = await metadataResponse.json();
-      metadata.operations.forEach(validateOperation);
-      await repository.applyRemoteOps(metadata.operations);
-    }
-    const approvedResponse = await fetch(LOCAL_APPROVED_DATA_URL, { cache: 'no-store' });
-    if (approvedResponse.ok) {
-      const approved = await approvedResponse.json();
-      approved.operations.forEach(validateOperation);
-      await repository.applyRemoteOps(approved.operations);
-    }
-    const externalOwnersResponse = await fetch(LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, { cache: 'no-store' });
-    if (externalOwnersResponse.ok) {
-      const externalOwners = await externalOwnersResponse.json();
-      externalOwners.operations.forEach(validateOperation);
-      await repository.applyRemoteOps(externalOwners.operations);
-    }
-  } catch (error) {
-    console.warn('Kompletterande godkända data kunde inte läsas lokalt', error);
-  }
-  await store.putMeta(BOOTSTRAP_META, { pending: true, device_id: document.device_id, migration_id: document.migration_id, operations: document.operations.length });
-  bootstrapButton.hidden = true;
-  render();
-  familyModelButton.hidden = Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied);
-  setStatus('Godkänd startkopia aktiverad lokalt · väntar på Dropbox', 'ok');
-}
-
-function showRelationshipPath() {
-  const from = lookupPerson($('#rel-a').value);
-  const to = lookupPerson($('#rel-b').value);
-  if (!from || !to) {
-    relationPathNode.hidden = false;
-    relationPathNode.textContent = 'Välj två entydiga personer ur listorna.';
-    return;
-  }
-  const path = relationshipPath(from.id, to.id, graph);
-  ui.pathIds = new Set(path ? [from.id, ...path.map((step) => step.to)] : []);
-  relationPathNode.hidden = false;
-  relationPathNode.innerHTML = path == null
-    ? `Ingen registrerad väg hittades mellan <b>${escapeHtml(from.display_name)}</b> och <b>${escapeHtml(to.display_name)}</b>.`
-    : path.length === 0
-      ? 'Du har valt samma person två gånger.'
-      : `<b>${escapeHtml(from.display_name)} → ${escapeHtml(to.display_name)}</b><ol>${path.map((step) => `<li>${escapeHtml(relationDescription(step, graph))}</li>`).join('')}</ol>`;
-  render();
-}
-
-function findPerson() {
-  const person = lookupPerson(personSearch.value);
-  if (!person) {
-    setEditStatus('Hittade ingen entydig person med det namnet.', 'error');
-    return;
-  }
-  selectPerson(person.id, true);
-}
-
-contentNode.addEventListener('click', (event) => {
-  if (event.target.closest('[data-action="create-family-unit"]')) return createGroup(FAMILY_UNIT_TYPE);
-  if (event.target.closest('[data-action="create-kin-group"]')) return createGroup(KIN_GROUP_TYPE);
-  const groupButton = event.target.closest('[data-group-id]');
-  if (groupButton) return renderGroupDrawer(groupButton.dataset.groupType, groupButton.dataset.groupId);
-  const personButton = event.target.closest('[data-person-id]');
-  if (personButton) selectPerson(personButton.dataset.personId, false);
-});
-
-drawer.addEventListener('click', (event) => {
-  if (event.target.closest('[data-action="close-drawer"]')) closeDrawer();
-  const open = event.target.closest('[data-open-person]');
-  if (open) selectPerson(open.dataset.openPerson, true);
-  const remove = event.target.closest('[data-delete-relation]');
-  if (remove) deleteRelation(remove.dataset.deleteRelation);
-  const removeProperty = event.target.closest('[data-delete-property-link]');
-  if (removeProperty) deletePropertyLink(removeProperty.dataset.deletePropertyLink);
-  if (event.target.closest('[data-action="add-relation"]')) addRelation();
-  if (event.target.closest('[data-action="add-property"]')) addPropertyLink();
-  if (event.target.closest('[data-action="add-group-anchor"]')) addGroupAnchor();
-  if (event.target.closest('[data-action="add-group-member"]')) addGroupMember();
-  const removeAnchor = event.target.closest('[data-remove-group-anchor]');
-  if (removeAnchor) removeGroupAnchor(removeAnchor.dataset.removeGroupAnchor);
-  const removeMember = event.target.closest('[data-remove-group-member]');
-  if (removeMember) removeGroupMember(removeMember.dataset.removeGroupMember);
-  if (event.target.closest('[data-action="delete-group"]')) deleteGroup();
-  if (event.target.closest('[data-action="delete-person"]')) deletePerson();
-});
-
-drawer.addEventListener('change', (event) => {
-  const groupField = event.target.closest('[data-group-field]');
-  if (groupField && ui.selectedGroup) {
-    const value = parseFieldValue(groupField);
-    if (groupField.dataset.groupField === 'name' && !value) {
-      setEditStatus('Gruppnamnet får inte vara tomt.', 'error');
-      return renderGroupDrawer(ui.selectedGroup.entityType, ui.selectedGroup.id);
-    }
-    syncEdit(() => repository.setField(ui.selectedGroup.entityType, ui.selectedGroup.id, groupField.dataset.groupField, value));
-    return;
-  }
-  const groupParent = event.target.closest('[data-group-parent]');
-  if (groupParent && ui.selectedGroup) {
-    updateGroupParent(groupParent.value);
-    return;
-  }
-  const familyKinGroup = event.target.closest('[data-family-kin-group]');
-  if (familyKinGroup && ui.selectedGroup) {
-    updateFamilyKinGroup(familyKinGroup.dataset.familyKinGroup, familyKinGroup.checked);
-    return;
-  }
-  const personField = event.target.closest('[data-person-field]');
-  if (personField) {
-    const field = personField.dataset.personField;
-    const value = parseFieldValue(personField);
-    if (field === 'display_name' && !value) {
-      setEditStatus('Visningsnamnet får inte vara tomt.', 'error');
-      renderDrawer(ui.selectedPersonId);
-      return;
-    }
-    syncEdit(() => repository.setField('person', ui.selectedPersonId, field, value));
-    return;
-  }
-  const relationField = event.target.closest('[data-relation-field]');
-  if (relationField) syncEdit(() => repository.setField('relation', relationField.dataset.relationId, relationField.dataset.relationField, parseFieldValue(relationField)));
-});
-
-$('#find-person').addEventListener('click', findPerson);
-personSearch.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); findPerson(); } });
-$('#find-rel').addEventListener('click', showRelationshipPath);
-filterToggle.addEventListener('click', () => filterPanel.hidden ? openFilterPanel() : closeFilterPanel());
-filterBackdrop.addEventListener('click', () => closeFilterPanel());
-filterPanel.addEventListener('click', (event) => {
-  if (event.target.closest('[data-close-filter]')) closeFilterPanel();
-});
-activeFiltersNode.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-clear-filter]');
-  if (button) clearFilter(button.dataset.clearFilter);
-});
-relationToggle.addEventListener('click', toggleRelationTools);
-clanJump.addEventListener('change', () => {
-  if (!clanJump.value) return;
-  document.getElementById(`clan-${slug(clanJump.value)}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
-$('#toggle-names').addEventListener('click', (event) => {
-  ui.clubNamesFirst = !ui.clubNamesFirst;
-  event.currentTarget.setAttribute('aria-pressed', String(ui.clubNamesFirst));
-  event.currentTarget.textContent = ui.clubNamesFirst ? 'Visa personnamn först' : 'Visa klubbnamn först';
-  render();
-});
-$('#toggle-gaps').addEventListener('click', (event) => {
-  ui.showGaps = !ui.showGaps;
-  event.currentTarget.setAttribute('aria-pressed', String(ui.showGaps));
-  render();
-});
-islandFilter.addEventListener('change', () => { ui.island = islandFilter.value; render(); });
-livingFilter.addEventListener('change', () => { ui.living = livingFilter.value; render(); });
-propertyFilter.addEventListener('change', () => { ui.property = propertyFilter.value; render(); });
-generationButtons.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-generation]');
-  if (!button) return;
-  const generation = button.dataset.generation;
-  if (generation === 'all') ui.generations.clear();
-  else if (ui.generations.has(generation)) ui.generations.delete(generation);
-  else ui.generations.add(generation);
-  render();
-});
-$('#include-inlaws').addEventListener('change', (event) => { ui.includeInlaws = event.currentTarget.checked; render(); });
-$('#toggle-lonely').addEventListener('click', (event) => {
-  ui.onlyUnlinked = !ui.onlyUnlinked;
-  event.currentTarget.setAttribute('aria-pressed', String(ui.onlyUnlinked));
-  render();
-});
-$('#year-on').addEventListener('click', (event) => {
-  ui.yearOn = !ui.yearOn;
-  event.currentTarget.setAttribute('aria-pressed', String(ui.yearOn));
-  $('#year-slider').disabled = !ui.yearOn;
-  $('#year-out').textContent = ui.yearOn ? ui.year : 'alla år';
-  render();
-});
-const renderYear = debounce(render, 80);
-$('#year-slider').addEventListener('input', (event) => { ui.year = Number(event.currentTarget.value); $('#year-out').textContent = ui.year; renderYear(); });
-document.querySelectorAll('[data-view-mode]').forEach((button) => button.addEventListener('click', () => {
-  ui.view = button.dataset.viewMode;
-  ui.review = false;
-  render();
-}));
-$('#review-button').addEventListener('click', () => { ui.review = !ui.review; render(); });
-connectButton.addEventListener('click', () => connectOrSyncDropbox().catch(() => {}));
-bootstrapButton.addEventListener('click', () => bootstrapLocal().catch((error) => setStatus(error.message, 'error')));
-familyModelButton.addEventListener('click', () => applyFamilyModelLocal().catch(error => setEditStatus(error.message, 'error')));
-document.addEventListener('keydown', handleGlobalKeydown);
-window.addEventListener('online', () => syncNow().catch(() => {}));
-window.addEventListener('korpholmen:dropbox-ready', () => syncNow().catch(() => {}));
-window.addEventListener('offline', () => syncNow().catch(() => {}));
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow().catch(() => {}); });
-
-async function init() {
-  const serviceWorkerPromise = registerServiceWorker();
-  const db = await openSlaktlandskapDB();
-  store = new IndexedDBStore(db);
-  repository = await new Repository({ store, deviceId: await deviceId() }).init();
-  fastigheterMaster = await new ReadOnlyMaster({ store, cacheKey: 'fastigheter' }).init();
-  kartdataMaster = await new ReadOnlyMaster({ store, cacheKey: 'kartdata' }).init();
-  bootstrapButton.hidden = !isSourceTree || personRecords().length > 0;
-  familyModelButton.hidden = !isSourceTree || Boolean((await store.getMeta(FAMILY_MODEL_META))?.applied) || personRecords().length === 0;
-  connectButton.textContent = DROPBOX_CLIENT_ID ? 'Kontrollerar Dropbox…' : 'Dropbox-konfiguration återstår';
-  connectButton.disabled = !DROPBOX_CLIENT_ID;
-  $('#year-slider').max = new Date().getFullYear();
-  $('#year-slider').value = ui.year;
-  render();
-  await completeOAuthCallback();
-  await syncNow();
-  await serviceWorkerPromise;
-}
-
-init().catch((error) => {
-  console.error(error);
-  setStatus(`Kunde inte starta · ${error.message}`, 'error');
-});
+  return renderNormalizedPersonEdition(release);
+}
+function renderEdition(){const release=releaseMap().get(ui.releaseId)||releases()[0];if(!release)return emptyState();if(release.is_reconstruction)ui.layer='normalized';const personCount=personOccurrences().filter(item=>item.release_id===release.id).length,boatCount=boatOccurrences().filter(item=>item.release_id===release.id).length;if(!boatCount&&ui.kind==='boat')ui.kind='person';const form=release.is_reconstruction?'Rekonstruktion':'Publicerad';return `<header class="sidtitel utgavesidtitel"><div class="utgavetitel"><h2>${escapeHtml(releaseName(release))}</h2></div><dl class="utgavemeta"><div><dt>År</dt><dd>${escapeHtml(release.year||'—')}</dd></div><div><dt>Personer</dt><dd>${escapeHtml(release.person_row_count||personCount)}</dd></div><div><dt>Båtar</dt><dd>${escapeHtml(release.boat_occurrence_count||boatCount||'—')}</dd></div><div><dt>Form</dt><dd>${escapeHtml(form)}</dd></div></dl><div class="utgavevaxlar">${layerSwitch(release)}${ui.layer==='normalized'?kindSwitch(release):''}</div></header>${ui.layer==='source'?renderSourceEdition(release):renderNormalizedEdition(release)}`}
+
+function profileCatalog(){const pMap=personMap();const grouped=new Map();for(const item of personOccurrences().filter(entry=>entry.person_id&&entry.confirmed)){if(!grouped.has(item.person_id))grouped.set(item.person_id,[]);grouped.get(item.person_id).push(item)}return [...grouped].map(([id,items])=>({id,person:pMap.get(id),items:items.sort((a,b)=>releaseCompare(releaseMap().get(a.release_id),releaseMap().get(b.release_id)))})).filter(entry=>entry.person).sort((a,b)=>a.person.display_name.localeCompare(b.person.display_name,'sv'))}
+function renderPersonDetail(profile){const changes=recordList('name-change-candidate').filter(item=>item.person_id===profile.id),life=personLifeSummary(profile.id,profile.person);return `<header class="personhuvud"><div><p class="overrad">Stabil personidentitet</p><h2>${escapeHtml(profile.person.display_name)}</h2><p>${escapeHtml([life.birthYear?`född ${life.birthYear}`:'',life.deathYear?`död ${life.deathYear}`:'',profile.person.club_name].filter(Boolean).join(' · '))}</p></div><a href="${escapeAttribute(profile.person.url)}">Öppna i Personer & familjer ↗</a></header>${life.issues.length?`<div class="varning personlivsvarning"><strong>Synka Personer & familjer:</strong> ${life.issues.map(item=>`${lifeFieldLabel(item.field).toLowerCase()} ${item.source_year}${item.kind==='conflict'?` skiljer sig från ${item.master_year}`:' saknas'}`).join(' · ')}</div>`:''}${changes.length?`<div class="varning">${changes.map(item=>`<strong>${escapeHtml(item.from_name)} → ${escapeHtml(item.to_name)}</strong> · ${escapeHtml(item.basis)}`).join('<br>')}</div>`:''}<section class="tidslinje">${profile.items.map(item=>{const release=releaseMap().get(item.release_id);return `<article class="tidspost"><p class="overrad">${escapeHtml(releaseMoment(release))} · ${escapeHtml(statusLabel(item.membership_status))}</p><h3>${escapeHtml(item.person_name_raw)}</h3><p>${escapeHtml([item.club_name_core_raw||item.club_name_raw,item.island_raw,item.induction_year_raw?`inval ${item.induction_year_raw}`:''].filter(Boolean).join(' · ')||'Inga ytterligare fält i utgåvan')}</p><span class="statuschip ${escapeAttribute(item.match_status)}">${escapeHtml(matchLabel(item.match_status))}</span></article>`}).join('')}</section>`}
+function renderPeople(){const catalog=profileCatalog();if(ui.personId){const profile=catalog.find(item=>item.id===ui.personId);if(profile)return `<header class="sidtitel"><button class="sekundar" data-action="back-people">← Alla personer</button></header>${renderPersonDetail(profile)}`;ui.personId=null}const query=normalize(ui.search);const visible=catalog.filter(item=>!query||normalize([item.person.display_name,item.person.club_name,...item.items.map(row=>row.person_name_raw)].join(' ')).includes(query));return `<header class="sidtitel"><div><p class="overrad">Samma person genom flera namn</p><h2>Personhistorik</h2><p>${visible.length} personer med minst en godkänd matrikelkoppling.</p></div></header><div class="profilgrid">${visible.map(profile=>`<button class="profilkort" data-person-id="${escapeAttribute(profile.id)}"><h3>${escapeHtml(profile.person.display_name)}</h3><p>${escapeHtml(profile.person.club_name||'Inget nuvarande klubbnamn')}</p><div class="profilmeta"><span>${profile.items.map(item=>releaseMoment(releaseMap().get(item.release_id))).join(' · ')}</span><b>${profile.items.length} belägg</b></div></button>`).join('')}</div>`}
+
+function latestValue(items,reader){for(const item of [...items].reverse()){const value=reader(item);if(value!==''&&value!==null&&value!==undefined)return value}return null}
+function matrixCatalog(){return profileCatalog().map(profile=>{const byRelease=new Map();for(const item of profile.items){if(!byRelease.has(item.release_id))byRelease.set(item.release_id,[]);byRelease.get(item.release_id).push(item)}const inductionYears=profile.items.map(item=>item.induction_year).filter(value=>value!==null&&value!==undefined&&value!=='').map(Number).filter(Number.isFinite);const inductionYear=inductionYears.length?Math.min(...inductionYears):null;const inductionSortYear=inductionYear;const inductionLabel=inductionYear??'—';const clubName=membershipByPerson().get(profile.id)?.club_name||profile.person.club_name||latestValue(profile.items,item=>item.club_name_core_raw||item.club_name_raw)||'';const life=personLifeSummary(profile.id,profile.person);return {...profile,byRelease,inductionYear,inductionSortYear,inductionLabel,clubName,birthYear:life.birthYear,deathYear:life.deathYear,life}}).sort((a,b)=>(a.inductionSortYear??9999)-(b.inductionSortYear??9999)||a.person.display_name.localeCompare(b.person.display_name,'sv'))}
+function matrixReleaseHeading(release){return `<span>${escapeHtml(release?.year||'—')}</span>`}
+function matrixCell(profile,release){const items=profile.byRelease.get(release.id)||[];if(!items.length)return '<td class="matriscell matris-franvaro" aria-label="Inte observerad"></td>';const statuses=[...new Set(items.map(item=>item.membership_status||'listed'))];const statusClass=statuses.length===1?`status-${statuses[0]}`:'status-multiple';const detail=[release?.year,...statuses.map(statusLabel),...new Set(items.map(item=>item.person_name_raw))].filter(Boolean).join(' · ');const mark=statuses.length===1&&statuses[0]==='founder'?'◇':'×';return `<td class="matriscell ${escapeAttribute(statusClass)}"><span title="${escapeAttribute(detail)}" aria-label="${escapeAttribute(detail)}">${mark}</span></td>`}
+function renderMatrix(){const all=matrixCatalog();const query=normalize(ui.search);const visible=all.filter(profile=>!query||normalize([profile.person.display_name,profile.clubName,profile.birthYear,profile.deathYear,profile.inductionLabel,...profile.items.map(item=>item.person_name_raw)].join(' ')).includes(query));const editions=releases();return `<header class="sidtitel matrissidtitel"><div><p class="overrad">Personer genom alla källögonblick</p><h2>Medlemsmatris</h2><p>${visible.length} säkert identifierade personer · ${editions.length} källögonblick. Tom ruta betyder endast ”inte observerad”.</p></div></header><div class="matrisinfo"><p><strong>Exakt invalsår visas bara när det uttryckligen står i en källa.</strong> Grundarmatrikeln har året 1947. ${unresolvedPeople().length} ännu omatchade personrader placeras inte i matrisen förrän identiteten är godkänd.</p><div class="matrislegend" aria-label="Förklaring"><span class="status-founder">◇ Grundare</span><span class="status-active">× Aktiv</span><span class="status-junior">× Junior</span><span class="status-passive">× Passiv</span><span class="status-corresponding">× Korresponderande</span><span class="status-listed">× Listad, status saknas</span><span class="status-multiple">× Flera källrader/statusar</span></div></div><div class="matrisskal" tabindex="0" aria-label="Horisontellt rullbar medlemsmatris"><table class="medlemsmatris"><caption class="sr-only">Invalsår, person, klubbnamn, födelseår, dödsår och förekomst i varje källögonblick</caption><thead><tr><th class="matrismeta matris-inval">Inval</th><th class="matrismeta matris-person">Person</th><th class="matrismeta matris-klubbnamn">Klubbnamn</th><th class="matrismeta matris-fodd">Född</th><th class="matrismeta matris-dod">Död</th>${editions.map(release=>`<th class="matrisutgava" title="${escapeAttribute(releaseName(release))}">${matrixReleaseHeading(release)}</th>`).join('')}</tr></thead><tbody>${visible.map(profile=>`<tr><td class="matrismeta matris-inval">${escapeHtml(profile.inductionLabel)}</td><th scope="row" class="matrismeta matris-person"><button data-person-id="${escapeAttribute(profile.id)}">${escapeHtml(profile.person.display_name)}</button></th><td class="matrismeta matris-klubbnamn">${escapeHtml(profile.clubName||'—')}</td><td class="matrismeta matris-fodd">${summaryLifeCell(profile.life,'birth_year')}</td><td class="matrismeta matris-dod">${summaryLifeCell(profile.life,'death_year')}</td>${editions.map(release=>matrixCell(profile,release)).join('')}</tr>`).join('')}</tbody></table></div>`}
+
+function selectOptions(refs,candidates,labeler,selectedId=''){
+  const candidateSet=new Set(candidates||[]);const preferred=refs.filter(item=>candidateSet.has(item.external_id));const rest=refs.filter(item=>!candidateSet.has(item.external_id));
+  const options=items=>items.map(item=>`<option value="${escapeAttribute(item.external_id)}" ${item.external_id===selectedId?'selected':''}>${escapeHtml(labeler(item))}</option>`).join('');
+  return '<option value="">Välj identitet…</option>'+(preferred.length?`<optgroup label="Föreslagna">${options(preferred)}</optgroup>`:'')+`<optgroup label="Alla identiteter">${options(rest)}</optgroup>`;
+}
+function boatReviewCard(item,reviewed=false){
+  const bMap=boatMap();const rMap=releaseMap();const candidates=(item.candidate_ids||[]).map(id=>bMap.get(id)).filter(Boolean);const selected=reviewed?bMap.get(item.boat_id):null;
+  return `<article class="reviewkort"><div class="reviewrubrik"><div><p class="overrad">${escapeHtml(releaseMoment(rMap.get(item.release_id)))} · båtrad ${item.source_line_order}${item.source_page?` · sida ${item.source_page}`:''}</p><h3>${escapeHtml(item.boat_name_raw)}</h3></div><b>${escapeHtml(matchLabel(item.match_status))}</b></div><p>${escapeHtml(item.source_line_raw)}</p>${item.source_category?`<p class="beslutsnot">${escapeHtml(boatCategoryLabel(item.source_category))}</p>`:''}${item.decision_note?`<p class="beslutsnot">${escapeHtml(item.decision_note)}</p>`:''}${!reviewed&&candidates.length?`<div class="batkandidatlista">${candidates.map(boatReferenceHtml).join('')}</div>`:''}<div class="reviewaction"><select data-boat-select="${escapeAttribute(item.id)}">${selectOptions(boatRefs(),item.candidate_ids,boatOptionLabel,item.boat_id||'')}</select>${reviewed?'':`<button class="sekundar" data-action="keep-boat-unlinked" data-occurrence-id="${escapeAttribute(item.id)}">Bevara utan koppling</button>`}<button class="primar" data-action="confirm-boat" data-occurrence-id="${escapeAttribute(item.id)}">${reviewed?'Spara ändring':'Godkänn koppling'}</button></div><div class="batval-preview" data-boat-preview="${escapeAttribute(item.id)}">${selected?boatReferenceHtml(selected):''}</div></article>`;
+}
+function renderReview(){
+  const pRefs=personRefs(),rMap=releaseMap(),pMap=personMap();const people=filtered(unresolvedPeople(),['person_name_raw','club_name_raw','release_id']);const boats=filtered(unresolvedBoats(),['boat_name_raw','source_line_raw','release_id']);const duplicates=duplicateGroups();const dates=invalidDates();
+  const reviewed=boatOccurrences().filter(item=>item.boat_id&&item.confirmed&&['manuell','godkand'].includes(item.match_status));
+  return `<header class="sidtitel"><div><p class="overrad">Inget tyst avgörande</p><h2>Granskningskö</h2><p>Beslut här påverkar endast Matrikeln. Personer & familjer och Båtregister skrivs inte om.</p></div></header><section class="panel span12"><div class="reviewrubrik"><div><p class="overrad">Personidentiteter</p><h2>${people.length} öppna rader</h2></div></div><div class="reviewgrid">${people.map(item=>`<article class="reviewkort"><div class="reviewrubrik"><div><p class="overrad">${escapeHtml(releaseMoment(rMap.get(item.release_id)))} · rad ${item.order}</p><h3>${escapeHtml(item.person_name_raw)}</h3></div><b>${escapeHtml(matchLabel(item.match_status))}</b></div><p>${escapeHtml(item.decision_note||item.match_method)}${item.club_name_core_raw||item.club_name_raw?` · ${escapeHtml(item.club_name_core_raw||item.club_name_raw)}`:''}</p><div class="reviewaction"><select data-person-select="${escapeAttribute(item.id)}">${selectOptions(pRefs,item.candidate_ids,item=>item.display_name)}</select><button class="sekundar" data-action="keep-person-unlinked" data-occurrence-id="${escapeAttribute(item.id)}">Bevara utan koppling</button><button class="primar" data-action="confirm-person" data-occurrence-id="${escapeAttribute(item.id)}">Godkänn koppling</button></div></article>`).join('')||'<p>Alla personrader är avgjorda.</p>'}</div></section><section class="panel span12" style="margin-top:1rem"><p class="overrad">Båtidentiteter</p><h2>${boats.length} öppna förekomster</h2><p class="panelintro">Föreslagna båtar visas med all strukturerad metadata från Båtregistret utom bilder.</p><div class="reviewgrid">${boats.map(item=>boatReviewCard(item)).join('')||'<p>Alla båtförekomster är avgjorda.</p>'}</div></section><section class="panel span12" style="margin-top:1rem"><p class="overrad">Efterkontroll</p><h2>${reviewed.length} manuella eller källgranskade båtkopplingar</h2><p class="panelintro">Här kan en redan gjord koppling granskas och ändras. Den gamla operationen finns kvar i historiken.</p><div class="reviewgrid">${reviewed.map(item=>boatReviewCard(item,true)).join('')||'<p>Inga manuella båtkopplingar ännu.</p>'}</div></section><section class="forandringsgrid" style="margin-top:1rem"><article class="forandringskolumn"><p class="overrad">Samma ID flera gånger</p><h3>Dubblettgrupper</h3><div class="dupletter">${duplicates.map(group=>`<div class="duplettrad"><b>${escapeHtml(releaseMoment(rMap.get(group.release_id)))} · ${escapeHtml(pMap.get(group.person_id)?.display_name||group.person_id)}</b><span>${group.items.map(item=>escapeHtml(item.person_name_raw)).join(' · ')}</span></div>`).join('')||'<p>Inga dubbletter.</p>'}</div></article><article class="forandringskolumn"><p class="overrad">Källvärde utan rättning</p><h3>Ogiltiga datum</h3>${dates.map(item=>`<div class="duplettrad"><b>${escapeHtml(item.birth_date_raw)}</b><span>${escapeHtml(releaseMoment(rMap.get(item.release_id)))} · ${escapeHtml(item.person_name_raw)}</span></div>`).join('')||'<p>Inga ogiltiga datum.</p>'}</article></section>`;
+}
+
+function publishedMembershipReleases(){return viewCache('published-membership-releases',()=>releases().filter(item=>item.lifecycle_status!=='archived_variant'&&!item.is_reconstruction).sort(releaseCompare))}
+function membershipPublicationYears(){return viewCache('membership-publication-years',()=>[...new Set(publishedMembershipReleases().map(item=>Number(item.year)).filter(Number.isFinite))].sort((a,b)=>a-b))}
+function membershipPublicationYearsByPerson(){return viewCache('membership-publication-years-by-person',()=>{const releaseYears=new Map(publishedMembershipReleases().map(item=>[item.id,Number(item.year)]));const result=new Map();for(const item of personOccurrences()){if(!item.person_id||item.confirmed!==true||!releaseYears.has(item.release_id))continue;if(!result.has(item.person_id))result.set(item.person_id,new Set());result.get(item.person_id).add(releaseYears.get(item.release_id))}return result})}
+function membershipRows(){return viewCache('memberships',()=>{const yearsByPerson=membershipPublicationYearsByPerson();return recordList('membership').filter(item=>!item.deleted_at).map(item=>{const personId=matrikelMembershipPersonId(item),person=personMap().get(personId),life=personLifeSummary(personId,person);const years=[...(yearsByPerson.get(personId)||[])].sort((a,b)=>a-b);return {...item,person_id:personId,status:matrikelDerivedMembershipStatus(item,person||{}),display_name:person?.display_name||personId,person_url:person?.url||`../personer-familjer/?person=${encodeURIComponent(personId)}`,living:person?.living??null,birth_year:life.birthYear,death_year:life.deathYear,life,published_years:years,latest_published_year:years.at(-1)||null}}).sort((a,b)=>a.display_name.localeCompare(b.display_name,'sv'))})}
+function membershipStatusMatches(item){if(ui.membershipStatus==='all'||ui.membershipStatus==='included')return true;return item.status===ui.membershipStatus}
+function membershipLifeMatches(item){if(ui.membershipLife==='all')return true;if(ui.membershipLife==='living')return item.living===true;if(ui.membershipLife==='deceased')return item.living===false;return true}
+function membershipStatusOptions(selected){return [['current','Medlem'],['former','Tidigare medlem'],['not_member','Ej medlem'],['unclear','Oklart – behöver avgöras']].map(([value,label])=>`<option value="${value}" ${selected===value?'selected':''}>${label}</option>`).join('')}
+function matrikelV2Writable(){return Boolean(matrikelV2Writer&&matrikelV2Runtime?.matrikel?.pointer?.writer_enabled===true)}
+function membershipStatusCell(item){if(matrikelReviewMode&&!item.membership_level)return `<div class="medlemsstatusredigering"><select data-membership-status-select="${escapeAttribute(item.person_id)}" aria-label="Medlemsstatus för ${escapeAttribute(item.display_name)}">${membershipStatusOptions(item.status)}</select><input data-membership-comment="${escapeAttribute(item.person_id)}" type="text" maxlength="1000" value="${escapeAttribute(item.review_comment||'')}" placeholder="Kommentar (valfri)" aria-label="Granskningskommentar för ${escapeAttribute(item.display_name)}"><button class="primar" type="button" data-action="save-membership-status" data-person-id="${escapeAttribute(item.person_id)}" disabled>Spara</button></div>`;return `<div class="medlemsstatuscell"><span class="medlemsstatusmarke medlemsstatus-${escapeAttribute(item.status)}">${escapeHtml(membershipLabel(item.status))}</span>${matrikelV2Writable()?`<button class="medlemsandringsknapp" type="button" data-action="edit-membership" data-person-id="${escapeAttribute(item.person_id)}">Ändra</button>`:''}</div>`}
+function renderMembershipEditor(){return `<dialog id="membership-editor" class="medlemsdialog"><form id="membership-editor-form"><header><div><p class="overrad">Matrikel</p><h2 id="membership-editor-name">Ändra medlemsuppgifter</h2></div><button class="dialogstang" type="button" data-action="close-membership-editor" aria-label="Stäng">×</button></header><input id="membership-editor-person" type="hidden"><div class="medlemsdialogfalt"><label><span>Nivå</span><select id="membership-editor-level" required><option value="junior">Junior</option><option value="senior">Senior</option></select></label><label><span>Klubbnamn</span><input id="membership-editor-club-name" type="text" maxlength="160" placeholder="Tomt om klubbnamn saknas"></label><label><span>Invalsår</span><input id="membership-editor-induction-year" type="number" min="1900" max="2200" inputmode="numeric" placeholder="Okänt"></label><label><span>Form</span><select id="membership-editor-form"><option value="">Ingen särskild uppgift</option><option value="ordinary">Ordinarie</option><option value="corresponding">Korresponderande</option></select></label><label><span>Deltagande</span><select id="membership-editor-participation"><option value="">Inte uttryckligen passiv</option><option value="passive">Passiv</option></select></label><label class="medlemsdialogcheck"><input id="membership-editor-ended" type="checkbox"><span>Utträde eller avslutat medlemskap är uttryckligen dokumenterat</span></label></div><p class="medlemsdialognot">Aktiv/tidigare räknas automatiskt från dessa uppgifter och levande/avliden i Personer & familjer.</p><footer><button class="sekundar" type="button" data-action="close-membership-editor">Stäng</button><button class="primar" type="submit">Spara</button></footer></form></dialog>`}
+function renderMemberships(){
+  const query=normalize(ui.search);const all=membershipRows();const selectedYear=ui.membershipYear==='all'?null:Number(ui.membershipYear);
+  const presenceMatches=item=>!selectedYear||(ui.membershipPresence==='missing'?!item.published_years.includes(selectedYear):item.published_years.includes(selectedYear));
+  const levelMatches=item=>ui.membershipLevel==='all'||item.membership_level===ui.membershipLevel;
+  const formMatches=item=>ui.membershipForm==='all'||item.membership_form===ui.membershipForm;
+  const visible=all.filter(item=>membershipStatusMatches(item)&&levelMatches(item)&&formMatches(item)&&membershipLifeMatches(item)&&presenceMatches(item)&&(!query||normalize([item.display_name,item.club_name,item.membership_level,item.membership_form,item.induction_year,item.birth_year,item.death_year,membershipLabel(item.status),item.published_years.join(' ')].join(' ')).includes(query)));
+  const counts={active:all.filter(item=>item.status==='active').length,passive:all.filter(item=>item.status==='passive').length,previous:all.filter(item=>item.status==='previous').length,unclear:all.filter(item=>item.status==='unclear').length};
+  const statusOptions=[['included','Alla medlemsrelationer'],['active','Aktiva medlemmar'],['passive','Passiva medlemmar'],['previous','Tidigare medlemmar'],['unclear','Oklar livsstatus'],['all','Alla medlemsrelationer']];
+  const reviewRevision=repository?.membershipReview?.review_revision||0;
+  const incorporatedDecisions=repository?.bundle?.manifest?.incorporated_membership_decisions||0;
+  const reviewLabel=matrikelReviewMode?`Lokal medlemsgranskning · master ${repository?.bundle?.master?.master_revision||'—'} · ${incorporatedDecisions} införda beslut · ${reviewRevision} nya beslut`:`Ren medlemsmaster · revision ${repository?.bundle?.master?.master_revision||'—'}${matrikelV2Writable()?' · skrivbar':''}`;
+  const presenceNote=selectedYear?`${ui.membershipPresence==='missing'?'Ej nämnda':'Nämnda'} i Medlemsmatrikel - ${selectedYear}. Ej nämnd betyder inte utträde.`:'Välj ett år för att visa vilka som nämns eller inte nämns i just den matrikeln.';
+  const cleanMembershipModel=repository?.canaryInfo?.membershipModel==='clean_v2';
+  const modelNote=matrikelReviewMode?'<p class="beslutsinformation"><strong>Spara skapar ett separat mänskligt beslut.</strong> Kandidatmastern och de historiska matrikelraderna ändras inte. Om samma rad har ändrats i en annan flik avvisas sparningen tills sidan laddas om.</p>':cleanMembershipModel?`<p class="beslutsinformation">Medlemsnivå, medlemsform och uttrycklig passivitet sparas i Matrikel. Visningsstatus härleds tillsammans med levande/avliden från Personer & familjer.${matrikelV2Writable()?' Klicka Ändra på en rad för att uppdatera just den medlemmen.':''}</p>`:'<p class="beslutsinformation">Den här legacyvyn är skrivskyddad.</p>';
+  return `<header class="sidtitel"><div><p class="overrad">${escapeHtml(reviewLabel)}</p><h2>Totalmatrikel</h2><p>Årsneutral medlemslista. Medlemskap, klubbnamn och invalsår kommer från Matrikel; Född och Död från Personer & familjer.</p></div></header><section class="totalmatrikelfilter" aria-label="Filter för Totalmatrikel"><label><span>Medlemsstatus</span><select data-membership-filter-status>${statusOptions.map(([value,label])=>`<option value="${value}" ${ui.membershipStatus===value?'selected':''}>${label}</option>`).join('')}</select></label><label><span>Medlemsnivå</span><select data-membership-filter-level><option value="all" ${ui.membershipLevel==='all'?'selected':''}>Juniorer + seniorer</option><option value="junior" ${ui.membershipLevel==='junior'?'selected':''}>Juniorer</option><option value="senior" ${ui.membershipLevel==='senior'?'selected':''}>Seniorer</option></select></label><label><span>Medlemsform</span><select data-membership-filter-form><option value="all" ${ui.membershipForm==='all'?'selected':''}>Alla former</option><option value="ordinary" ${ui.membershipForm==='ordinary'?'selected':''}>Ordinarie</option><option value="corresponding" ${ui.membershipForm==='corresponding'?'selected':''}>Korresponderande</option></select></label><label><span>Livsstatus</span><select data-membership-filter-life><option value="all" ${ui.membershipLife==='all'?'selected':''}>Alla</option><option value="living" ${ui.membershipLife==='living'?'selected':''}>Levande</option><option value="deceased" ${ui.membershipLife==='deceased'?'selected':''}>Avlidna</option></select></label><label><span>Publicerad matrikel</span><select data-membership-filter-year><option value="all">Alla år</option>${membershipPublicationYears().map(year=>`<option value="${year}" ${String(year)===ui.membershipYear?'selected':''}>${year}</option>`).join('')}</select></label><label><span>Förekomst</span><select data-membership-filter-presence ${selectedYear?'':'disabled'}><option value="mentioned" ${ui.membershipPresence==='mentioned'?'selected':''}>Nämns i valt år</option><option value="missing" ${ui.membershipPresence==='missing'?'selected':''}>Nämns inte i valt år</option></select></label><p><strong>${visible.length}</strong> av ${all.length} personer visas</p><small class="totalmatrikelfilternot">${escapeHtml(presenceNote)}</small></section>${renderPersonLifeSyncNotice()}${modelNote}<div class="tabellskal totalmatrikelskal"><table class="medlemsstatustabell totalmatrikel"><caption class="sr-only">Årsneutral totalmatrikel</caption><thead><tr><th>Person</th><th>Klubbnamn</th><th>Nivå</th><th>Form</th><th>Invalsår</th><th>Född</th><th>Död</th><th>Status${matrikelReviewMode?' och beslut':''}</th><th>Senast nämnd</th></tr></thead><tbody>${visible.map(item=>`<tr data-membership-person="${escapeAttribute(item.person_id)}"><td><a href="${escapeAttribute(item.person_url)}">${escapeHtml(item.display_name)}</a></td><td>${escapeHtml(item.club_name||'—')}</td><td>${escapeHtml(item.membership_level==='senior'?'Senior':item.membership_level==='junior'?'Junior':'—')}</td><td>${escapeHtml(item.membership_form==='corresponding'?'Korresponderande':item.membership_form==='ordinary'?'Ordinarie':'—')}</td><td class="invalsar">${escapeHtml(item.induction_year||'—')}</td><td>${summaryLifeCell(item.life,'birth_year')}</td><td>${summaryLifeCell(item.life,'death_year')}</td><td>${membershipStatusCell(item)}</td><td class="senastnamnd" title="${escapeAttribute(item.published_years.length?`Publicerad ${item.published_years.join(', ')}`:'Ingen säker koppling till publicerad medlemsmatrikel')}">${escapeHtml(item.latest_published_year||'—')}</td></tr>`).join('')||'<tr><td colspan="9">Inga personer matchar filtren.</td></tr>'}</tbody></table></div>${renderMembershipEditor()}`
+}
+
+function render(){updateControls();app.innerHTML=({medlemmar:renderMemberships,utgava:renderEdition,matris:renderMatrix,personer:renderPeople,granskning:renderReview}[ui.view]||renderEdition)()}
+async function confirmPerson(id){const select=document.querySelector(`[data-person-select="${CSS.escape(id)}"]`);if(!select?.value)return;await repository.setFields([{entityType:'person-occurrence',entityId:id,field:'person_id',value:select.value},{entityType:'person-occurrence',entityId:id,field:'match_status',value:'manuell'},{entityType:'person-occurrence',entityId:id,field:'match_method',value:'manuellt beslut i Matrikeln'},{entityType:'person-occurrence',entityId:id,field:'candidate_ids',value:[select.value]},{entityType:'person-occurrence',entityId:id,field:'confirmed',value:true},{entityType:'person-occurrence',entityId:id,field:'review_decision',value:null}]);render();setStatus('Personkoppling sparad lokalt · Personer & familjer oförändrad','ok');syncNow().catch(()=>{})}
+async function confirmBoat(id){const select=document.querySelector(`[data-boat-select="${CSS.escape(id)}"]`);if(!select?.value)return;await repository.setFields([{entityType:'boat-occurrence',entityId:id,field:'boat_id',value:select.value},{entityType:'boat-occurrence',entityId:id,field:'match_status',value:'manuell'},{entityType:'boat-occurrence',entityId:id,field:'match_method',value:'manuellt beslut i Matrikeln'},{entityType:'boat-occurrence',entityId:id,field:'candidate_ids',value:[select.value]},{entityType:'boat-occurrence',entityId:id,field:'confirmed',value:true},{entityType:'boat-occurrence',entityId:id,field:'review_decision',value:null}]);render();setStatus('Båtkoppling sparad lokalt · Båtregister oförändrat','ok');syncNow().catch(()=>{})}
+async function keepOccurrenceUnlinked(entityType,id,raw){const reviewedAt=new Date().toISOString();await repository.setFields([{entityType,entityId:id,field:entityType==='person-occurrence'?'person_id':'boat_id',value:null},{entityType,entityId:id,field:'match_status',value:'bevarad okopplad'},{entityType,entityId:id,field:'match_method',value:'manuellt beslut: ingen säker registeridentitet'},{entityType,entityId:id,field:'confirmed',value:true},{entityType,entityId:id,field:'review_decision',value:'bevarad okopplad'},{entityType,entityId:id,field:'decision_note',value:'Källförekomsten är granskad och bevarad utan koppling till extern master.'},{entityType,entityId:id,field:'reviewed_by',value:'Simon'},{entityType,entityId:id,field:'reviewed_at',value:reviewedAt}]);render();setStatus(`${raw} bevarad utan extern masterkoppling`,'ok');syncNow().catch(()=>{})}
+function currentAudit(){const lifeSyncIssues=personLifeSyncCatalog();return {exported_at:new Date().toISOString(),releases:releases().map(release=>({...release,coverage:coverage(release)})),counts:{source_rows:sourceRows().length,source_layout_rows:sourceLayoutRows().length,person_occurrences:personOccurrences().length,boat_occurrences:boatOccurrences().length,unresolved_people:unresolvedPeople().length,unresolved_boats:unresolvedBoats().length,duplicates:duplicateGroups().length,invalid_dates:invalidDates().length,person_life_sync_missing:lifeSyncIssues.filter(item=>item.kind==='missing_in_person_master').length,person_life_sync_conflicts:lifeSyncIssues.filter(item=>item.kind==='conflict'&&!item.resolution).length,person_life_sync_resolved:lifeSyncIssues.filter(item=>item.resolution).length},unresolved_people:unresolvedPeople().map(item=>({id:item.id,release_id:item.release_id,raw:item.person_name_raw,candidates:item.candidate_ids})),unresolved_boats:unresolvedBoats().map(item=>({id:item.id,release_id:item.release_id,raw:item.boat_name_raw,candidates:item.candidate_ids})),duplicates:duplicateGroups().map(group=>({release_id:group.release_id,person_id:group.person_id,occurrence_ids:group.items.map(item=>item.id),raw_names:group.items.map(item=>item.person_name_raw)})),invalid_dates:invalidDates().map(item=>({id:item.id,raw:item.birth_date_raw})),person_life_sync_issues:lifeSyncIssues}}
+function exportAudit(){const blob=new Blob([JSON.stringify(currentAudit(),null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`matrikel-kontroll-${new Date().toISOString().slice(0,10)}.json`;link.click();URL.revokeObjectURL(url)}
+async function saveMembershipStatus(personId){
+  if(!matrikelReviewMode)throw new MatrikelCanaryReadOnlyError('Öppna granskningsläget för att spara medlemsstatus.');
+  const select=document.querySelector(`[data-membership-status-select="${CSS.escape(personId)}"]`);const comment=document.querySelector(`[data-membership-comment="${CSS.escape(personId)}"]`);const button=document.querySelector(`[data-action="save-membership-status"][data-person-id="${CSS.escape(personId)}"]`);const reviewInfo=repository.membershipReviewInfo(personId);
+  if(!select||!reviewInfo?.rowSha256)throw new Error('Medlemsraden kan inte sparas. Ladda om sidan.');
+  if(button)button.disabled=true;setStatus('Sparar mänskligt medlemsbeslut…');
+  const response=await fetch('/api/matrikel-membership-decisions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:personId,to_status:select.value,review_comment:comment?.value||'',expected_membership_sha256:reviewInfo.rowSha256,base_master_sha256:reviewInfo.baseMasterSha256})});
+  if(!response.ok)throw new Error((await response.text()).trim()||`Kunde inte spara (${response.status}).`);
+  repository.applyMembershipReview(await response.json());render();setStatus('Medlemsstatus sparad som separat mänskligt beslut · kandidat och källrader oförändrade','ok');
+}
+
+function openMembershipEditor(personId){
+  if(!matrikelV2Writable())throw new Error('Matrikelmastern är inte skrivbar i den här vyn.');
+  const item=membershipRows().find(row=>row.person_id===personId);const dialog=$('#membership-editor');
+  if(!item||!dialog)throw new Error('Medlemsraden kan inte öppnas. Ladda om sidan.');
+  $('#membership-editor-person').value=personId;$('#membership-editor-name').textContent=item.display_name;
+  $('#membership-editor-level').value=item.membership_level||'junior';$('#membership-editor-club-name').value=item.club_name||'';
+  $('#membership-editor-induction-year').value=item.induction_year||'';$('#membership-editor-form').value=item.membership_form||'';
+  $('#membership-editor-participation').value=item.participation||'';$('#membership-editor-ended').checked=item.membership_ended===true;
+  dialog.showModal();
+}
+function closeMembershipEditor(){const dialog=$('#membership-editor');if(dialog?.open&&!matrikelV2Saving)dialog.close()}
+async function saveMatrikelV2Membership(){
+  if(!matrikelV2Writable()||matrikelV2Saving)throw new Error('Matrikelmastern är inte redo för sparning.');
+  const personId=$('#membership-editor-person')?.value;const yearRaw=$('#membership-editor-induction-year')?.value.trim()||'';
+  const patch={membership_level:$('#membership-editor-level').value,club_name:$('#membership-editor-club-name').value.trim()||null,induction_year:yearRaw?Number(yearRaw):null,membership_form:$('#membership-editor-form').value||null,participation:$('#membership-editor-participation').value||null,membership_ended:$('#membership-editor-ended').checked?true:null};
+  matrikelV2Saving=true;const dialog=$('#membership-editor');const buttons=dialog?[...dialog.querySelectorAll('button,input,select')]:[];buttons.forEach(node=>node.disabled=true);setStatus('Sparar en ny Matrikelrevision…');
+  try{
+    const saved=await matrikelV2Writer.saveMembership(personId,patch);const token=await currentAccessToken();if(!token)throw new Error('Masterrevisionen sparades, men återläsningen väntar tills Dropbox är ansluten.');
+    await matrikelV2Runtime.sync(new DropboxTransport({accessToken:token,id:'dropbox-matrikel-generation2-after-save',opsRoot:'/matrikel-generation2/ops',readOnly:true}));applyMatrikelV2Runtime();setStatus(`Sparat · Matrikel revision ${saved.master.master_revision} · separat historikkvitto skapat`,'ok');
+  }finally{matrikelV2Saving=false;buttons.forEach(node=>node.disabled=false);if(dialog?.open)dialog.close()}
+}
+
+async function registerServiceWorker(){try{return await registerKorpholmenServiceWorker({sourceTree:isSourceTree})}catch(error){console.warn('Appskalet kunde inte uppdateras',error);return null}}
+async function completeOAuthCallbackIfNeeded(){const url=new URL(location.href);if(!url.searchParams.has('code')&&!url.searchParams.has('error'))return;const token=await completeDropboxOAuth();accessToken=token.access_token;accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000;if(token.refresh_token)await store.putMeta(TOKEN_META,token.refresh_token);for(const parameter of ['code','state','error','error_description'])url.searchParams.delete(parameter);history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`)}
+async function currentAccessToken(){if(accessToken&&Date.now()<accessTokenExpiresAt)return accessToken;const refreshToken=await store.getMeta(TOKEN_META);if(!refreshToken||!DROPBOX_CLIENT_ID||navigator.onLine===false)return null;const token=await exchangeDropboxRefreshToken({clientId:DROPBOX_CLIENT_ID,refreshToken});accessToken=token.access_token;accessTokenExpiresAt=Date.now()+Math.max(30,Number(token.expires_in||0)-60)*1000;if(token.refresh_token&&token.refresh_token!==refreshToken)await store.putMeta(TOKEN_META,token.refresh_token);return accessToken}
+function generationOneTransport(token){const markerTransport=new DropboxTransport({accessToken:token,id:'dropbox-klubbhistorik-cutover-read',opsRoot:'/klubbhistorik/ops',readOnly:true});const guard=new GenerationCutoverGuard({app:'klubbhistorik',transport:markerTransport,store});return new DropboxTransport({accessToken:token,id:'dropbox-klubbhistorik',opsRoot:'/klubbhistorik/ops',writeGuard:context=>guard.assertGeneration1Writable(context)})}
+async function uploadBootstrapOps(transport){const pending=await store.getMeta(BOOTSTRAP_META);if(!pending?.pending)return 0;const deviceIds=new Set(pending.device_ids||[pending.device_id]);const operations=(await store.getAllOps()).filter(operation=>deviceIds.has(operation.device_id));const byDevice=new Map();for(const operation of operations){if(!byDevice.has(operation.device_id))byDevice.set(operation.device_id,[]);byDevice.get(operation.device_id).push(operation)}let uploaded=0;for(const deviceOperations of byDevice.values()){deviceOperations.sort((a,b)=>a.seq-b.seq);for(let index=0;index<deviceOperations.length;index+=250){const batch=createBatch(deviceOperations.slice(index,index+250));await transport.putBatch(batch);uploaded+=batch.ops.length}}await store.putMeta(BOOTSTRAP_META,{...pending,pending:false,uploaded_at:new Date().toISOString()});return uploaded}
+async function syncNow(){if(matrikelCanaryMode)throw new MatrikelCanaryReadOnlyError('Den skrivskyddade Matrikelkandidaten synkas inte och kan inte skriva.');if(syncPromise)return syncPromise;syncPromise=(async()=>{const hasCredential=Boolean(await store.getMeta(TOKEN_META));if(navigator.onLine===false){setStatus(`Offline · ${hasCredential?'Dropbox ansluten · ':''}historiken finns lokalt`,'warning');return null}const token=await currentAccessToken();if(!token){setStatus('Dropbox ej ansluten · ingen privat historik hämtas','warning');connectButton.textContent='Anslut Dropbox';return null}connectButton.textContent='Synka Dropbox';setStatus('Synkar Matrikeln och läser Personer & familjer…');const transport=generationOneTransport(token);const bootstrap=await uploadBootstrapOps(transport);const result=await new SyncEngine({repository,transport,requireCheckpointOnEmpty:true}).syncOnce();await matrikelMaster.sync(new DropboxTransport({accessToken:token,id:'dropbox-matrikel-read',opsRoot:'/matrikel/ops',readOnly:true}));render();setStatus(`Synkad · ${personOccurrences().length} medlemsrader · ${bootstrap+result.uploadedOps} upp, ${result.downloadedOps} ned · namn från Personer & familjer`,'ok');return result})().catch(error=>{console.error(error);if(isOfflineError(error)){setStatus('Offline · lokal Matrikel tillgänglig','warning');return null}setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});return syncPromise}
+async function connectDropbox(){sessionStorage.setItem('korpholmen:oauth-return',new URL('matrikel/',redirectUri()).pathname);const attempt=await beginDropboxOAuth({clientId:DROPBOX_CLIENT_ID,redirectUri:redirectUri(),scopes:DROPBOX_SCOPES});location.assign(attempt.url)}
+document.addEventListener('click',event=>{const view=event.target.closest('[data-view]')?.dataset.view;if(view){ui.view=view;ui.personId=null;render();app.focus()}const release=event.target.closest('[data-open-release]')?.dataset.openRelease;if(release){ui.releaseId=release;ui.view='utgava';$('#release-filter').value=release;render()}const layer=event.target.closest('[data-layer]')?.dataset.layer;if(layer){ui.layer=layer;render()}const kind=event.target.closest('[data-kind]')?.dataset.kind;if(kind){ui.kind=kind;render()}const personId=event.target.closest('[data-person-id]')?.dataset.personId;const actionNode=event.target.closest('[data-action]');const action=actionNode?.dataset.action;if(personId&&!action){ui.personId=personId;ui.view='personer';render()}const occurrenceId=event.target.closest('[data-occurrence-id]')?.dataset.occurrenceId;if(action==='back-people'){ui.personId=null;render()}if(action==='edit-membership')try{openMembershipEditor(actionNode.dataset.personId)}catch(error){setStatus(error.message,'error')}if(action==='close-membership-editor')closeMembershipEditor();if(action==='save-membership-status')saveMembershipStatus(actionNode.dataset.personId).catch(error=>{setStatus(error.message,'error');actionNode.disabled=false});if(action==='confirm-person')confirmPerson(occurrenceId).catch(error=>setStatus(error.message,'error'));if(action==='confirm-boat')confirmBoat(occurrenceId).catch(error=>setStatus(error.message,'error'));if(action==='keep-person-unlinked'){const item=personOccurrences().find(entry=>entry.id===occurrenceId);keepOccurrenceUnlinked('person-occurrence',occurrenceId,item?.person_name_raw||'Personraden').catch(error=>setStatus(error.message,'error'))}if(action==='keep-boat-unlinked'){const item=boatOccurrences().find(entry=>entry.id===occurrenceId);keepOccurrenceUnlinked('boat-occurrence',occurrenceId,item?.boat_name_raw||'Båtraden').catch(error=>setStatus(error.message,'error'))}});
+const renderSearch=debounce(render,120);
+$('#global-search').addEventListener('input',event=>{ui.search=event.target.value;renderSearch()});
+$('#clear-search').addEventListener('click',()=>{renderSearch.cancel();ui.search='';$('#global-search').value='';render()});
+$('#release-filter').addEventListener('change',event=>{ui.releaseId=event.target.value;ui.view='utgava';render()});
+$('#export-audit').addEventListener('click',exportAudit);
+connectButton.addEventListener('click',()=>{if(matrikelV2PreviewMode){currentAccessToken().then(token=>token?syncMatrikelV2():connectDropbox()).catch(error=>setStatus(error.message,'error'));return}if(matrikelCanaryMode)return;currentAccessToken().then(token=>token?syncNow():connectDropbox()).catch(error=>setStatus(error.message,'error'))});
+app.addEventListener('change',event=>{if(event.target.matches('[data-membership-filter-status]')){ui.membershipStatus=event.target.value;render()}if(event.target.matches('[data-membership-filter-level]')){ui.membershipLevel=event.target.value;render()}if(event.target.matches('[data-membership-filter-form]')){ui.membershipForm=event.target.value;render()}if(event.target.matches('[data-membership-filter-life]')){ui.membershipLife=event.target.value;render()}if(event.target.matches('[data-membership-filter-year]')){ui.membershipYear=event.target.value;render()}if(event.target.matches('[data-membership-filter-presence]')){ui.membershipPresence=event.target.value;render()}if(event.target.matches('[data-membership-status-select]')){const personId=event.target.dataset.membershipStatusSelect;const row=membershipRows().find(item=>item.person_id===personId);const button=document.querySelector(`[data-action="save-membership-status"][data-person-id="${CSS.escape(personId)}"]`);if(button)button.disabled=event.target.value===row?.status}if(event.target.matches('[data-boat-select]')){const preview=document.querySelector(`[data-boat-preview="${CSS.escape(event.target.dataset.boatSelect)}"]`);if(preview)preview.innerHTML=boatReferenceHtml(boatMap().get(event.target.value))}});
+app.addEventListener('submit',event=>{if(event.target.id!=='membership-editor-form')return;event.preventDefault();saveMatrikelV2Membership().catch(async error=>{console.error(error);setStatus(error?.name==='MasterConflictError'?'Mastern ändrades i en annan flik. Ladda om och försök igen.':error.message,'error');if(error?.name==='MasterConflictError')await syncMatrikelV2().catch(()=>{})})});
+window.addEventListener('online',()=>{if(matrikelV2PreviewMode)syncMatrikelV2().catch(()=>{});else if(!matrikelCanaryMode)syncNow().catch(()=>{})});window.addEventListener('offline',()=>{if(matrikelV2PreviewMode)syncMatrikelV2().catch(()=>{});else if(!matrikelCanaryMode)syncNow().catch(()=>{})});window.addEventListener('korpholmen:dropbox-ready',()=>{if(matrikelV2PreviewMode)syncMatrikelV2().catch(()=>{});else if(!matrikelCanaryMode)syncNow().catch(()=>{})});
+
+function configureMatrikelCanaryShell(bundle){document.documentElement.dataset.matrikelCanary='true';document.documentElement.dataset.matrikelReview=matrikelReviewMode?'true':'false';document.documentElement.dataset.matrikelActive=matrikelActiveMode?'true':'false';document.title='KBK Matrikel';const peopleSwitch=document.querySelector('.app-switch[href="../personer-familjer/"]');if(peopleSwitch)peopleSwitch.textContent='01 Personer & familjer';const currentSwitch=document.querySelector('.app-switch[aria-current="page"]');if(currentSwitch)currentSwitch.textContent='06 Matrikel';const title=$('.titel h1');if(title)title.textContent='Matrikel';const subtitle=$('.titel span');if(subtitle)subtitle.textContent='Medlemmar · klubbnamn · historiska matriklar';const membershipButton=$('#membership-view-button');if(membershipButton){membershipButton.hidden=false;membershipButton.textContent='Totalmatrikel'}const reviewButton=document.querySelector('[data-view="granskning"]');if(reviewButton)reviewButton.hidden=true;connectButton.hidden=true;ui.view='medlemmar';ui.releaseId='matrikel-grundare-1940-tal';setStatus(matrikelReviewMode?`Lokal medlemsgranskning · kandidat revision ${bundle.master.master_revision}`:matrikelActiveMode?`Aktiv skrivskyddad Matrikel · revision ${bundle.master.master_revision}`:`Skrivskyddad Matrikelkandidat · revision ${bundle.master.master_revision}`,'ok')}
+async function initMatrikelCanary(canaryState){matrikelCanaryMode=true;matrikelActiveMode=canaryState.mode==='active';const bundle=await loadMatrikelCanaryBundle();const cleanMembershipModel=bundle.master.data.memberships.filter(item=>!item.deleted_at).every(item=>item.membership_level);matrikelReviewMode=canaryState.reviewEnabled&&!cleanMembershipModel;const membershipReview=matrikelReviewMode?await loadMatrikelMembershipReview({bundle}):null;matrikelLifeSyncReport=bundle.lifeSyncReport;repository=createMatrikelCanaryRepository(bundle,{membershipReview});matrikelMaster=createMatrikelPersonReadOnlyMaster(bundle);configureMatrikelCanaryShell(bundle);render()}
+function applyMatrikelV2Runtime(){repository=matrikelV2Runtime.repository;matrikelMaster=matrikelV2Runtime.personMaster;matrikelLifeSyncReport=matrikelV2Runtime.bundle.lifeSyncReport;matrikelActiveMode=true;configureMatrikelCanaryShell(matrikelV2Runtime.bundle);connectButton.hidden=isSourceTree;render()}
+async function localMatrikelV2Transport(){if(!isSourceTree)return null;try{const response=await fetch('/matrikel-generation2/active.json',{method:'HEAD',cache:'no-store'});return response.ok?new HttpReadTransport():null}catch{return null}}
+function matrikelV2WriteTransport(token){const root='/matrikel-generation2';return new DropboxTransport({accessToken:token,id:'dropbox-matrikel-generation2-write',opsRoot:`${root}/ops`,writeGuard:({path})=>{if(path!==root&&!path.startsWith(`${root}/`))throw new Error('Matrikel-writern försökte skriva utanför sin egen namnrymd')}})}
+async function syncMatrikelV2(){
+  if(syncPromise)return syncPromise;
+  syncPromise=(async()=>{
+    const local=await localMatrikelV2Transport();const token=local?null:await currentAccessToken();const transport=local||(token?new DropboxTransport({accessToken:token,id:'dropbox-matrikel-generation2-read',opsRoot:'/matrikel-generation2/ops',readOnly:true}):null);
+    if(!transport){matrikelV2Writer=null;if(matrikelV2Runtime.hasData()){applyMatrikelV2Runtime();setStatus('Offline · senast verifierade Matrikel V2 visas','warning');return null}setStatus('Anslut Dropbox för att läsa Matrikel V2','warning');connectButton.hidden=false;return null}
+    setStatus('Läser Matrikel V2 och dess ägarmastrar…');const result=await matrikelV2Runtime.sync(transport);
+    matrikelV2Writer=result.writable&&token?createMatrikelMembershipWriter({transport:matrikelV2WriteTransport(token),pendingStore:store}):null;if(matrikelV2Writer)await matrikelV2Writer.load();
+    applyMatrikelV2Runtime();setStatus(`Matrikel V2 · revision ${result.matrikelRevision} · ${matrikelV2Writer?'skrivmaster':result.writable?'anslut Dropbox för att skriva':'förhandsläge'}`,'ok');return result;
+  })().catch(error=>{console.error(error);setStatus(`Åtgärd krävs · ${error.message}`,'error');throw error}).finally(()=>{syncPromise=null});return syncPromise;
+}
+async function initMatrikelV2Mode({sourcePreview=false}={}){if(sourcePreview&&!isSourceTree)throw new Error('V2-förhandsläget får bara öppnas från det lokala källträdet.');matrikelV2PreviewMode=true;matrikelCanaryMode=true;if(!store){const db=await openSlaktlandskapDB({name:sourcePreview?'kbk-klubbhistorik-v2-preview':'kbk-klubbhistorik'});store=new IndexedDBStore(db)}matrikelV2Runtime=await createMatrikelActiveRuntime({store}).init();if(matrikelV2Runtime.hasData())applyMatrikelV2Runtime();await syncMatrikelV2()}
+async function activeMatrikelCutover(token){const missing={getJson:async()=>{const error=new Error('saknas');error.status=409;error.code='path/not_found';throw error}};const transport=token?new DropboxTransport({accessToken:token,id:'dropbox-klubbhistorik-cutover-detect',opsRoot:'/klubbhistorik/ops',readOnly:true}):missing;const guard=new GenerationCutoverGuard({app:'klubbhistorik',transport,store});return token?guard.refresh({force:true}):guard.cachedMarker()}
+async function init(){
+  const params=new URLSearchParams(location.search);if(params.get('matrikelmaster')==='next')return initMatrikelV2Mode({sourcePreview:true});const canaryState=matrikelCanaryRequestState(location.href,{sourceTree:isSourceTree});if(canaryState.refused)throw new Error('Matrikelkandidaten får bara öppnas från det lokala källträdet.');if(canaryState.enabled)return initMatrikelCanary(canaryState);
+  const serviceWorkerPromise=registerServiceWorker();const db=await openSlaktlandskapDB({name:'kbk-klubbhistorik'});store=new IndexedDBStore(db);await completeOAuthCallbackIfNeeded();const token=await currentAccessToken();const cutover=await activeMatrikelCutover(token);if(cutover?.state==='active'){await initMatrikelV2Mode();await serviceWorkerPromise;return}
+  repository=await new Repository({store,deviceId:await deviceId()}).init();matrikelMaster=await new ReadOnlyMaster({store,cacheKey:'matrikel'}).init();if(params.has('person')){ui.view='personer';ui.personId=params.get('person')}if(params.has('release')){ui.view='utgava';ui.releaseId=params.get('release')}render();await syncNow();await serviceWorkerPromise;
+}
+init().catch(error=>{console.error(error);setStatus(`Kunde inte starta · ${error.message}`,'error')});

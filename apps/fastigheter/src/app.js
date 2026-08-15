@@ -152,7 +152,7 @@ function resolvedParty(partyId, fallback = null) {
 
 function personLink(name, personId, className = '') {
   if (!personId) return `<span class="${className}">${escapeHtml(name)}</span>`;
-  return `<a class="${className}" href="../matrikel/?person=${encodeURIComponent(personId)}">${escapeHtml(name)}</a>`;
+  return `<a class="${className}" href="../personer-familjer/?person=${encodeURIComponent(personId)}">${escapeHtml(name)}</a>`;
 }
 
 function currentOwners(propertyId) {

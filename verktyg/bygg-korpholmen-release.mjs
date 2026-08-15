@@ -7,11 +7,12 @@ const TOOLS = resolve(ROOT, 'verktyg');
 const releaseConfig = JSON.parse(await readFile(resolve(TOOLS, 'release.json'), 'utf8'));
 const RELEASE = String(releaseConfig.release || '');
 if (!/^\d{4}-\d{2}-\d{2}-korpholmen-pwa-\d+$/.test(RELEASE)) throw new Error('Ogiltig release i verktyg/release.json');
-const APP_DIRECTORIES = ['matrikel', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'klubbhistorik', 'kartdata'];
+const APP_DIRECTORIES = ['personer-familjer', 'batregister', 'fastigheter', 'dokumentarkiv', 'korpholmenrunt', 'matrikel', 'kartdata'];
 const PROJECTION_DIRECTORIES = ['explorer'];
 const SURFACE_DIRECTORIES = [...APP_DIRECTORIES, ...PROJECTION_DIRECTORIES];
+const REDIRECT_DIRECTORIES = ['klubbhistorik'];
 const ROOT_SHELL = ['index.html', 'styles.css', 'app-switcher.css', 'manifest.webmanifest', 'icons/korpholmen.svg', 'icons/korpholmen-180.png', 'icons/korpholmen-192.png', 'icons/korpholmen-512.png', 'src/app.js', 'src/app-family-bootstrap.js', 'src/config.js', 'sw.js'];
-const ENTRY_HTML = [resolve(ROOT, 'index.html'), ...SURFACE_DIRECTORIES.flatMap(directory => [resolve(ROOT, 'apps', directory, 'index.html'), resolve(ROOT, directory, 'index.html')])];
+const ENTRY_HTML = [resolve(ROOT, 'index.html'), ...SURFACE_DIRECTORIES.flatMap(directory => [resolve(ROOT, 'apps', directory, 'index.html'), resolve(ROOT, directory, 'index.html')]), ...REDIRECT_DIRECTORIES.map(directory => resolve(ROOT, directory, 'index.html'))];
 const PRECACHE_EXCLUSIONS = [/\/(?:og\.png)$/i];
 
 const workerTemplate = await readFile(resolve(TOOLS, 'sw.template.js'), 'utf8');
@@ -36,7 +37,7 @@ async function listFiles(directory) {
 
 for (const file of ROOT_SHELL) if (!(await stat(resolve(ROOT, file))).isFile()) throw new Error(`Korpholmens appskal saknar ${file}`);
 
-const appFiles = (await Promise.all(SURFACE_DIRECTORIES.map(directory => listFiles(resolve(ROOT, directory))))).flat()
+const appFiles = (await Promise.all([...SURFACE_DIRECTORIES, ...REDIRECT_DIRECTORIES].map(directory => listFiles(resolve(ROOT, directory))))).flat()
   .map(path => relative(ROOT, path))
   .filter(path => /\.(?:html|css|js|webmanifest|svg|png)$/.test(path))
   .filter(path => !PRECACHE_EXCLUSIONS.some(expression => expression.test(`/${path}`)));

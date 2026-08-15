@@ -64,7 +64,7 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
       id: externalId,
       external_id: externalId,
       display_name: person?.display_name || reference.display_name || externalId,
-      url: reference.url || `../matrikel/?person=${encodeURIComponent(externalId)}`,
+      url: reference.url || `../personer-familjer/?person=${encodeURIComponent(externalId)}`,
       source_master: 'matrikel',
       resolution: person ? 'canonical-master' : 'cached-reference',
     });
@@ -73,7 +73,7 @@ export function mergePersonReferences(references, personMaster, { includeUnrefer
     ...person,
     id,
     external_id: id,
-    url: `../matrikel/?person=${encodeURIComponent(id)}`,
+    url: `../personer-familjer/?person=${encodeURIComponent(id)}`,
     source_master: 'matrikel',
     resolution: 'canonical-master',
   });
@@ -146,7 +146,7 @@ export function resolveArchiveEntity(reference, { personMaster, boatMaster, fast
     return {
       ...reference,
       name: person?.display_name || reference.name,
-      url: `../matrikel/?person=${encodeURIComponent(reference.external_id)}`,
+      url: `../personer-familjer/?person=${encodeURIComponent(reference.external_id)}`,
       resolution: person ? 'canonical-master' : 'cached-reference',
     };
   }
@@ -221,7 +221,7 @@ export function resolveCurrentOwners(propertyId, fastigheterMaster, personMaster
       display_name: person?.display_name || party.name || party.id,
       display_surname: party.display_surname || person?.surname || person?.last_name || person?.family_name || null,
       party_type: party.party_type || null,
-      url: person ? `../matrikel/?person=${encodeURIComponent(person.id)}` : '#',
+      url: person ? `../personer-familjer/?person=${encodeURIComponent(person.id)}` : '#',
       source_master: person ? 'matrikel' : 'fastigheter',
       basis: assessment.basis || null,
       reviewed_on: assessment.reviewed_on || null,

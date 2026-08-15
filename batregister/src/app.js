@@ -709,7 +709,7 @@ function ownerReviewCandidateMarkup(row) {
   const people = (row.person_links || []).map(link => {
     const label = escapeHtml(link.stored_name || link.person_id);
     return link.person_id
-      ? `<a href="../matrikel/?person=${encodeURIComponent(link.person_id)}">${label}</a>`
+      ? `<a href="../personer-familjer/?person=${encodeURIComponent(link.person_id)}">${label}</a>`
       : `<span>${label}</span>`;
   });
   const families = (row.family_links || []).map(link => `<span>${escapeHtml(link.legacy_family_name || link.legacy_family_id)}</span>`);
@@ -898,8 +898,8 @@ const SOURCE_KIND_LABELS = Object.freeze({
 });
 
 function ownerPartyHref(part) {
-  if (part.type === 'person' && part.id) return `../matrikel/?person=${encodeURIComponent(part.id)}`;
-  if ([FAMILY_UNIT_TYPE, KIN_GROUP_TYPE].includes(part.type) && part.id) return `../matrikel/?group=${encodeURIComponent(part.id)}`;
+  if (part.type === 'person' && part.id) return `../personer-familjer/?person=${encodeURIComponent(part.id)}`;
+  if ([FAMILY_UNIT_TYPE, KIN_GROUP_TYPE].includes(part.type) && part.id) return `../personer-familjer/?group=${encodeURIComponent(part.id)}`;
   return '';
 }
 
@@ -1143,8 +1143,8 @@ function renderConnectionsEditor(boat) {
   const relationChoices = relationLinkChoices(context);
   return `<section class="drawer-section"><h3>Övriga kopplingar</h3><p class="section-help">Kopplingar används för sökning och gruppering. Ägande registreras i avsnittet ovan.</p>
     <div class="link-list">
-      ${links.map(link=>`<div class="link-row"><span><a href="../matrikel/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(personNameForLink(link))}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
-      ${groupLinks.map(link=>{const target=canonicalGroupTarget(link,context);const targetId=target?.id||link.target_id;const targetType=target?.entity_type||link.target_type;const members=targetMemberDetails({type:targetType,id:targetId},context);const inherited=members.filter(member=>member.generation>1).length;const memberText=members.length?` · ${members.length} personer${inherited?` · ${inherited} via gruppen`:''}`:'';return `<div class="link-row family-row"><span><a href="../matrikel/?group=${encodeURIComponent(targetId)}"><b>${escapeHtml(groupLinkLabel(link,context))}</b></a><br><small>${escapeHtml(targetTypeLabel(targetType))} · ${escapeHtml(link.role || '')}${escapeHtml(memberText)}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-group-link">Ta bort</button></div>`}).join('')}
+      ${links.map(link=>`<div class="link-row"><span><a href="../personer-familjer/?person=${encodeURIComponent(link.person_id)}"><b>${escapeHtml(personNameForLink(link))}</b></a><br><small>Person · ${escapeHtml(link.role || '')}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-person-link">Ta bort</button></div>`).join('')}
+      ${groupLinks.map(link=>{const target=canonicalGroupTarget(link,context);const targetId=target?.id||link.target_id;const targetType=target?.entity_type||link.target_type;const members=targetMemberDetails({type:targetType,id:targetId},context);const inherited=members.filter(member=>member.generation>1).length;const memberText=members.length?` · ${members.length} personer${inherited?` · ${inherited} via gruppen`:''}`:'';return `<div class="link-row family-row"><span><a href="../personer-familjer/?group=${encodeURIComponent(targetId)}"><b>${escapeHtml(groupLinkLabel(link,context))}</b></a><br><small>${escapeHtml(targetTypeLabel(targetType))} · ${escapeHtml(link.role || '')}${escapeHtml(memberText)}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-group-link">Ta bort</button></div>`}).join('')}
       ${familyLinks.map(link=>{const family=families.find(item=>item.id===link.family_id);const members=family?familyMembers(family):[];return `<div class="link-row family-row"><span><b>${escapeHtml(link.family_name || link.family_id)}</b><br><small>Familjegren · ${escapeHtml(link.role || '')}${members.length?` · ${escapeHtml(members.map(person=>person.display_name).join(', '))}`:''}</small></span><button type="button" data-delete-link="${escapeHtml(link.id)}" data-link-type="boat-family-link">Ta bort</button></div>`}).join('')}
       ${links.length || familyLinks.length || groupLinks.length ? '' : '<p>Inga övriga kopplingar.</p>'}
     </div>
