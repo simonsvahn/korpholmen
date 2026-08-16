@@ -21,7 +21,7 @@ import { HttpReadTransport } from '../core/sync/http-read-transport.js';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_BOOTSTRAP_URL } from './config.js';
 import { KLASSER, KLASSSTANDARD_METHOD, klassnamn, standardklass, standardklassFranNamn } from './klassstandard.js';
 import { parseRaceTime } from './time.js';
-import { RaceActiveV2 } from './race-active-v2.js?v=2026-08-15-active-v2';
+import { RaceActiveV2 } from './race-active-v2.js?v=2026-08-16-records-v2';
 
 const $=selector=>document.querySelector(selector);
 const app=$('#app');

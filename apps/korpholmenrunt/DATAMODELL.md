@@ -20,12 +20,31 @@ Access-radens ursprungliga kolumner finns dessutom oförändrade i `raw_row`.
 En bekräftad felskrivning av båtnamn lagras separat som
 `boat_name_corrected`, med status och beslutsnotering. Appens vanliga vyer och
 sökning använder då det rättade namnet; rånamnet syns bara som uttrycklig
-källproveniens. Normaliseringar är separata fält. `duration_seconds` sätts bara när tiden kan
-tolkas som minuter och sekunder med sekunddelen 00–59. Värden som `35,67`,
-`60+` och `80,95` bevaras men flaggas för granskning.
+källproveniens. Normaliseringar är separata fält. `duration_seconds` sätts bara
+när tiden kan tolkas som minuter och sekunder med sekunddelen 00–59 eller när
+en människa uttryckligen har beslutat tolkningen. `time_status` skiljer på
+`tolkad`, `osäker`, `minimivärde`, `fusk`, `ogiltig sekunddel`, `ogiltigt
+format` och `saknas`. Råvärdet i `time_raw` bevaras även när en beslutad
+normalisering läggs till.
+
+Tidsstatus filtrerar inte bort ett resultat ur topptidsvyn. Ett resultat med
+numerisk men osäker tid sorteras tillsammans med övriga tider och märks
+**Osäker tid**. `minimivärde`, `fusk` och andra värden utan exakt numerisk tid
+visas i samma bana och klass utan placeringssiffra. Endast poster som saknar
+strukturerad bana eller klass behöver visas i en separat ogrupperad lista.
 Appinmatning använder formatet minuter och sekunder, exempelvis `21:05`.
-Tvetydiga tretalstider som `21:05:30` bevaras som råvärde men godtas inte som
-normaliserad tid utan ett uttryckligt mänskligt beslut.
+För de källbelagda resultatlistorna 2010 och 2011 finns ett uttryckligt
+mänskligt beslut från 2026-08-16: tretalstiden `21:05:30` betyder 21 minuter,
+5 sekunder och 30 hundradelar. Råvärdet bevaras exakt i `time_raw`, medan
+hundradelarna stryks utan avrundning och `duration_seconds` blir 1265. Regeln
+gäller bara dessa två historiska resultatår; vanlig appinmatning accepterar
+fortsatt inte tretalstid.
+
+Beslutet 2026-08-16 innebär dessutom att `62,30?` och `65,50?` normaliseras
+till 62:30 respektive 65:50 med status `osäker`, medan `35,67` och `80,95`
+tolkas som 35:07 respektive 80:05 med samma status. `60+` och `28:50+`
+bevaras som `minimivärde`. Resultatet vars källuppgift är Fusk visas som
+`Fusk` i stället för som en tid.
 
 Klassen lagras i fyra separata fält: oförändrat `class_raw`, stabilt
 `class_id`, visningsnamnet `class_name` samt beslutets

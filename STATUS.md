@@ -85,6 +85,37 @@ Backupen före revision 5 finns i:
 
 `/Users/simon/Dropbox/AI/Projekt/9 Arkiv/Korpholmen säkerhetskopior/2026-08-16 före bildreparation Båtregister`
 
+## Publicerat: Korpholmen runt topptider och tidsnormalisering
+
+Webbskalet publicerades 2026-08-16 som
+`2026-08-16-korpholmen-pwa-44`. Samma klass redovisas under separata
+huvudavsnitt för Stora respektive Lilla banan. Varje
+klass visar först tio rader med möjlighet att visa hela klassen. Tidsstatus
+filtrerar inte bort något resultat: osäkra numeriska tider rangordnas med en
+tydlig märkning, medan minimitider och Fusk visas utan placeringssiffra.
+Endast de 17 av 474 poster som saknar strukturerad bana eller klass visas i en
+separat ogrupperad lista. Person- och båtkoppling påverkar inte om ett resultat
+får visas.
+
+Resultatmaster revision 5 aktiverades 2026-08-16 med SHA-256
+`ec19298acfbe59de2a160a5014aeff917643eaa4cc832f0a8b90edc9c0810f63`.
+Den bevarade kandidaten finns i
+`arbetsmaterial/korpholmenrunt-tidsnormalisering-2026-08-16/kandidat-revision-5-v4/`.
+Den bygger på revision 4 och ändrar 39 av 474 resultatposter utan att
+ändra något råvärde: 32 automatiska normaliseringar samt sju uttryckliga
+mänskliga tidsbeslut. Hundradelarna i 2010 och 2011 års råtider stryks utan
+avrundning. Två frågeteckentider behålls som osäkra, 35,67 och 80,95 har
+beslutats som 35:07 respektive 80:05 med status osäker, två plustider markeras
+som minimitider och Fusk visas som utfall i stället för tid. Revision 5 har 471
+numeriskt rangordningsbara resultat och tre synliga resultat utan exakt
+numerisk tid. Generation 1-skrivaren är oförändrad och revision 5 är fortsatt
+en skrivskyddad läsmaster.
+
+Backupen med den tidigare aktiva pekaren, hela revision 4 och en kort
+återställningsnot finns i:
+
+`/Users/simon/Dropbox/AI/Projekt/9 Arkiv/Korpholmen säkerhetskopior/2026-08-16 före Korpholmen runt revision 5`
+
 ## Båtregistrets äldre läskomplement
 
 Den aktiva V2-mastern är ensam skrivmaster. För att inte dölja redan utfört

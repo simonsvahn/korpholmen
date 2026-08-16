@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { materialize, validateOperation } from '../../../packages/core/data-layer.js';
 import { KLASSER, KLASSSTANDARD_METHOD, klassnamn, standardklass } from '../src/klassstandard.js';
 import { parseRaceTime } from '../src/time.js';
+import { assessRecordResult, buildRecordViewModel, historicalTimeNormalization, normalizationForResult, recordTimeLabel } from '../src/record-ranking.js';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const REPO=resolve(ROOT,'../..');
@@ -49,6 +50,44 @@ await test('appinmatning accepterar minuter och sekunder men inte tvetydiga tret
   assert.deepEqual(parseRaceTime('21,05?'),{seconds:1265,status:'osäker'});
   assert.deepEqual(parseRaceTime('21:05:30'),{seconds:null,status:'ogiltigt format'});
   assert.deepEqual(parseRaceTime('21:67'),{seconds:null,status:'ogiltig sekunddel'});
+});
+
+await test('V2-topptider skiljer banor och visar alla resultat oavsett tidsstatus',()=>{
+  const base={class_id:'kajak-1',class_name:'Kajak 1',course_code:'S',time_status:'tolkad'};
+  const stora=Array.from({length:12},(_,index)=>({...base,id:`s-${index}`,year:2000+index,time_raw:`20:${String(index).padStart(2,'0')}`,duration_seconds:1200+index}));
+  const lilla={...base,id:'l-1',year:2010,course_code:'L',time_raw:'10:10',duration_seconds:610};
+  const derived={...base,id:'derived',year:2014,time_raw:'19:38'};
+  const uncertain={...base,id:'uncertain',year:1976,time_raw:'62,30?'};
+  const noCourse={...base,id:'no-course',year:2020,course_code:'',time_raw:'20:25',duration_seconds:1225};
+  const noClass={...base,id:'no-class',year:2023,class_id:null,class_name:'Paddla',time_raw:'05:50',duration_seconds:350};
+  const hundredths={...base,id:'hundredths',year:2011,time_raw:'24:30:96'};
+  const decidedUncertain={...base,id:'decided-uncertain',year:1980,time_raw:'35,67',duration_seconds:2107,time_status:'osäker'};
+  const minimum={...base,id:'minimum',year:2003,time_raw:'60+',duration_seconds:null,time_status:'minimivärde'};
+  const fusk={...base,id:'fusk',year:1972,time_raw:'',duration_seconds:null,time_status:'fusk'};
+  const model=buildRecordViewModel([...stora,lilla,derived,hundredths,uncertain,decidedUncertain,minimum,fusk,noCourse,noClass]);
+  assert.deepEqual(model.sections.map(section=>section.courseName),['Stora banan','Lilla banan']);
+  assert.equal(model.sections[0].groups.length,1);
+  assert.equal(model.sections[0].groups[0].className,'Kajak 1');
+  assert.equal(model.sections[0].groups[0].items.length,10);
+  assert.equal(model.sections[0].groups[0].total,18);
+  assert.equal(model.sections[1].groups[0].total,1);
+  assert.equal(model.derivedTimes,2);
+  assert.equal(model.ungrouped.length,2);
+  assert.deepEqual(new Set(model.ungrouped.map(item=>item.reason)),new Set(['missing-course','missing-class']));
+  assert.equal(model.rankable,19);
+  assert.equal(model.withoutNumericTime,2);
+  const expanded=buildRecordViewModel([...stora,derived],{expandedGroups:new Set(['S|kajak-1'])});
+  assert.equal(expanded.sections[0].groups[0].items.length,13);
+  assert.deepEqual(normalizationForResult(derived),{duration_seconds:1178,time_status:'tolkad'});
+  assert.deepEqual(normalizationForResult(hundredths),{duration_seconds:1470,time_status:'tolkad'});
+  assert.deepEqual(historicalTimeNormalization(hundredths),{seconds:1470,status:'tolkad',method:'hundradelar-strukna'});
+  assert.equal(historicalTimeNormalization({...hundredths,year:2012}),null);
+  assert.equal(normalizationForResult(uncertain),null);
+  assert.equal(assessRecordResult(noCourse).groupable,false);
+  assert.equal(assessRecordResult(decidedUncertain).rankable,true);
+  assert.equal(recordTimeLabel(assessRecordResult(decidedUncertain)),'35:07');
+  assert.equal(recordTimeLabel(assessRecordResult(minimum)),'60+');
+  assert.equal(recordTimeLabel(assessRecordResult(fusk)),'Fusk');
 });
 
 await test('samtliga 363 källrader är bevarade som resultat eller källnotering',async()=>{
@@ -306,10 +345,13 @@ await test('Homsan-rättelsen är avgränsad till Mymlan och bevarar råkällan'
 });
 
 await test('alla synliga V2-menyer i Korpholmen runt styr riktiga V2-vyer',async()=>{
-  const [app,reader,html]=await Promise.all([
+  const [app,reader,ranking,html,recordStyles,candidateBuilder]=await Promise.all([
     readFile(resolve(ROOT,'src/app.js'),'utf8'),
     readFile(resolve(ROOT,'src/race-active-v2.js'),'utf8'),
+    readFile(resolve(ROOT,'src/record-ranking.js'),'utf8'),
     readFile(resolve(ROOT,'index.html'),'utf8'),
+    readFile(resolve(ROOT,'records-v2.css'),'utf8'),
+    readFile(resolve(ROOT,'verktyg/bygg-tidsnormaliseringskandidat.mjs'),'utf8'),
   ]);
   for(const view of ['oversikt','resultat','arsvis','rekord','profiler','duell','matchning']){
     assert.ok(html.includes(`data-view="${view}"`),view);
@@ -319,6 +361,19 @@ await test('alla synliga V2-menyer i Korpholmen runt styr riktiga V2-vyer',async
   assert.doesNotMatch(reader,/huvudnav'\)\?\.setAttribute\('hidden'/);
   assert.match(reader,/renderOverview/);
   assert.match(reader,/renderMatching/);
+  assert.match(reader,/buildRecordViewModel/);
+  assert.match(reader,/Visa alla/);
+  assert.match(reader,/Alla resultat visas inom sin bana och klass/);
+  assert.match(ranking,/missing-course/);
+  assert.match(ranking,/missing-class/);
+  assert.doesNotMatch(ranking,/uncertain-time/);
+  assert.match(ranking,/recordTimeLabel/);
+  assert.match(recordStyles,/\.v2-record-course/);
+  assert.match(html,/records-v2\.css/);
+  assert.match(candidateBuilder,/candidate_not_active/);
+  assert.match(candidateBuilder,/active_pointer_changed: false/);
+  assert.match(candidateBuilder,/time-decisions\.json/);
+  assert.match(candidateBuilder,/expected_time_raw/);
 });
 
 console.log(`\n${passed} Korpholmen runt-kontrakt godkända.`);
