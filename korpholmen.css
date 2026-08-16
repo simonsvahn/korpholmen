@@ -1,0 +1,627 @@
+/*
+ * Korpholmen – gemensamt visuellt system.
+ *
+ * Laddas efter apparnas egna styles.css. Det här lagret äger bara det
+ * gemensamma uttrycket: palett, typografi, appnav, sidhuvud, flik-/verktygsrad,
+ * formulärkontroller och grundkort. Apparnas datalager och specialvyer ligger
+ * kvar i respektive app.
+ */
+
+:root {
+  color-scheme: light;
+  --kh-hav: #123c46;
+  --kh-hav-djup: #092b34;
+  --kh-guld: #bd9451;
+  --kh-guld-ljus: #dfc28e;
+  --kh-rod: #a24430;
+  --kh-papper: #fbf7eb;
+  --kh-krita: #fff;
+  --kh-kort-tonad: rgba(255, 255, 255, .66);
+  --kh-blek: #fbf9f1;
+  --kh-ink: #202824;
+  --kh-dov: #5b655e;
+  --kh-linje: rgba(18, 60, 70, .16);
+  --kh-linje-stark: rgba(18, 60, 70, .3);
+  --kh-ok-bg: #dcece4;
+  --kh-ok-fg: #23664f;
+  --kh-obs-bg: #f1ddd4;
+  --kh-obs-fg: #a24430;
+  --kh-vante-bg: #f6edcf;
+  --kh-vante-fg: #7c5c13;
+  --kh-neutral-bg: #eee;
+  --kh-neutral-fg: #5b655e;
+  --kh-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --kh-sans: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --kh-mono: ui-monospace, Menlo, Consolas, monospace;
+  --kh-skugga: 0 14px 36px rgba(18, 60, 70, .07);
+  --kh-max: 1240px;
+  --kh-sidluft: clamp(1rem, 4vw, 3rem);
+  --kh-tabbar-height: 3.5rem;
+}
+
+/* Adapter mellan designsystemet och apparnas befintliga variabelnamn. */
+body.app-matrikel {
+  --navy: var(--kh-hav);
+  --navy-2: #245661;
+  --paper: var(--kh-papper);
+  --surface: var(--kh-krita);
+  --surface-2: var(--kh-blek);
+  --line: var(--kh-linje);
+  --line-strong: var(--kh-linje-stark);
+  --text: var(--kh-ink);
+  --muted: var(--kh-dov);
+  --green: var(--kh-ok-fg);
+  --amber: var(--kh-rod);
+  --danger: var(--kh-obs-fg);
+  --shadow: var(--kh-skugga);
+}
+
+body.app-batregister {
+  --ink: var(--kh-ink);
+  --muted: var(--kh-dov);
+  --paper: var(--kh-papper);
+  --card: var(--kh-krita);
+  --green: var(--kh-hav);
+  --gold: var(--kh-guld-ljus);
+  --line: var(--kh-linje);
+  --danger: var(--kh-obs-fg);
+  --shadow: var(--kh-skugga);
+}
+
+body.app-fastigheter {
+  --ink: var(--kh-ink);
+  --muted: var(--kh-dov);
+  --paper: var(--kh-papper);
+  --panel: var(--kh-krita);
+  --line: var(--kh-linje);
+  --soft-line: rgba(18, 60, 70, .1);
+  --accent: var(--kh-hav);
+  --accent-soft: #dbe9e7;
+  --green: var(--kh-ok-fg);
+  --green-soft: var(--kh-ok-bg);
+  --warn: var(--kh-obs-fg);
+  --warn-soft: var(--kh-obs-bg);
+  --shadow: var(--kh-skugga);
+}
+
+body.app-dokumentarkiv {
+  --hav: var(--kh-hav);
+  --hav-djupt: var(--kh-hav-djup);
+  --hav-ljust: #dbe9e7;
+  --papper: var(--kh-papper);
+  --papper-morkt: #eee4d0;
+  --svart: var(--kh-ink);
+  --svart-mjuk: var(--kh-dov);
+  --rod: var(--kh-rod);
+  --rod-ljust: var(--kh-obs-bg);
+  --guld: var(--kh-guld);
+  --linje: var(--kh-linje);
+  --skugga: var(--kh-skugga);
+  --sans: var(--kh-sans);
+  --serif: var(--kh-serif);
+}
+
+body.app-korpholmenrunt {
+  --hav: var(--kh-hav);
+  --hav2: var(--kh-hav-djup);
+  --vatten: #dbe9e7;
+  --papper: var(--kh-papper);
+  --krita: var(--kh-krita);
+  --rod: var(--kh-rod);
+  --guld: var(--kh-guld);
+  --text: var(--kh-ink);
+  --mjuk: var(--kh-dov);
+  --linje: var(--kh-linje);
+  --skugga: var(--kh-skugga);
+  --sans: var(--kh-sans);
+  --serif: var(--kh-serif);
+}
+
+body.app-klubbhistorik {
+  --ink: var(--kh-ink);
+  --muted: var(--kh-dov);
+  --paper: var(--kh-krita);
+  --line: var(--kh-linje);
+  --sea: var(--kh-hav);
+  --sea2: #245661;
+  --coral: var(--kh-rod);
+  --gold: var(--kh-guld);
+  --mint: #dbe9e7;
+  --shadow: var(--kh-skugga);
+}
+
+body.app-kartdata {
+  --ink: var(--kh-ink);
+  --muted: var(--kh-dov);
+  --paper: var(--kh-papper);
+  --panel: var(--kh-krita);
+  --line: var(--kh-linje);
+  --accent: var(--kh-hav);
+  --accent-dark: var(--kh-hav);
+  --sand: #eee4d0;
+  --danger: var(--kh-obs-fg);
+  --shadow: var(--kh-skugga);
+}
+
+body:is(
+  .app-hub,
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) {
+  background: var(--kh-papper);
+  color: var(--kh-ink);
+  font-family: var(--kh-serif);
+  accent-color: var(--kh-hav);
+}
+
+body:is(
+  .app-hub,
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(button, input, select, textarea, output, label) {
+  font-family: var(--kh-sans);
+}
+
+body:is(
+  .app-hub,
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(input, select, textarea) {
+  border-color: var(--kh-linje-stark);
+  border-radius: .45rem;
+  background: var(--kh-krita);
+  color: var(--kh-ink);
+}
+
+body:is(
+  .app-hub,
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--kh-guld) 72%, transparent);
+  outline-offset: 2px;
+}
+
+/* Gemensam appnavigation. */
+.app-switcher,
+.kh-appnav {
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+  overflow-x: auto;
+  padding: 0 max(.65rem, calc((100vw - var(--kh-max)) / 2));
+  background: var(--kh-hav-djup);
+  box-shadow: none;
+  font-family: var(--kh-sans);
+  scrollbar-width: none;
+  scroll-padding-inline: 2.5rem;
+  scroll-snap-type: x proximity;
+}
+
+.app-switcher::-webkit-scrollbar,
+.kh-appnav::-webkit-scrollbar { display: none; }
+
+.app-switch,
+.kh-appnav a {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 2.7rem;
+  padding: .78rem .72rem .64rem;
+  border-bottom: 3px solid transparent;
+  color: rgba(255, 255, 255, .68);
+  font: 760 .68rem/1.2 var(--kh-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  scroll-snap-align: center;
+}
+
+.app-switch:first-of-type,
+.kh-appnav .brand {
+  color: #fff;
+  font-family: var(--kh-serif);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.app-switch:hover,
+.kh-appnav a:hover { color: #fff; }
+
+.app-switch[aria-current="page"],
+.kh-appnav [aria-current="page"] {
+  border-bottom-color: var(--kh-guld);
+  color: #fff;
+}
+
+/* Sidhuvud: samma rytm och färg, befintlig appmarkup behålls. */
+body.app-matrikel > .site-header,
+body.app-batregister > .site-header,
+body.app-fastigheter > .site-header,
+body.app-kartdata > .site-header,
+body.app-dokumentarkiv > .sidhuvud,
+body.app-korpholmenrunt > .masthead,
+body.app-klubbhistorik > .masthead,
+body.app-explorer > .explorer-header,
+.kh-header {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  min-height: 0;
+  padding: 1.7rem max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  border: 0;
+  border-radius: 0;
+  background: var(--kh-hav);
+  color: #f9f6ea;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.app-matrikel > .site-header h1,
+body.app-batregister > .site-header h1,
+body.app-fastigheter > .site-header h1,
+body.app-kartdata > .site-header h1,
+body.app-dokumentarkiv > .sidhuvud h1,
+body.app-korpholmenrunt > .masthead h1,
+body.app-klubbhistorik > .masthead h1,
+body.app-explorer > .explorer-header h1,
+.kh-header h1 {
+  margin-block: 0;
+  color: #f9f6ea;
+  font: 500 clamp(2.35rem, 5vw, 3.4rem)/.98 var(--kh-serif);
+  letter-spacing: -.03em;
+}
+
+body.app-matrikel > .site-header :is(.eyebrow, .intro),
+body.app-batregister > .site-header :is(.eyebrow, .intro),
+body.app-fastigheter > .site-header :is(.eyebrow, .intro),
+body.app-kartdata > .site-header :is(.eyebrow, .intro, .subtitle),
+body.app-dokumentarkiv > .sidhuvud :is(.overrad, .ingress, .arkivfakta),
+body.app-korpholmenrunt > .masthead :is(.titel p, .titel span, .live span),
+body.app-klubbhistorik > .masthead :is(.titel p, .titel span, .live span),
+body.app-explorer > .explorer-header :is(.eyebrow, p, span) {
+  color: rgba(249, 246, 234, .76);
+}
+
+body.app-matrikel > .site-header .eyebrow,
+body.app-batregister > .site-header .eyebrow,
+body.app-fastigheter > .site-header .eyebrow,
+body.app-kartdata > .site-header .eyebrow,
+body.app-dokumentarkiv > .sidhuvud .overrad,
+body.app-korpholmenrunt > .masthead .titel p,
+body.app-klubbhistorik > .masthead .titel p,
+body.app-explorer > .explorer-header .eyebrow,
+.kh-eyebrow {
+  color: var(--kh-guld);
+  font: 800 .62rem/1 var(--kh-sans);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+body:is(.app-dokumentarkiv, .app-korpholmenrunt, .app-klubbhistorik) > :is(.sidhuvud, .masthead) .marke {
+  border-color: rgba(249, 246, 234, .42);
+  color: #f9f6ea;
+}
+
+body:is(
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) > :is(.site-header, .sidhuvud, .masthead, .explorer-header) :is(.sync-panel, .live, .explorer-sync) button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--kh-guld-ljus);
+  color: var(--kh-hav-djup);
+  font: 800 .7rem/1.2 var(--kh-sans);
+}
+
+/* Undertabbar och verktygsrader. */
+body.app-matrikel > .toolbar,
+body.app-batregister > .toolbar,
+body.app-fastigheter > .toolbar,
+body.app-kartdata > .toolbar,
+body.app-kartdata > .view-tabs,
+body.app-dokumentarkiv > .vynavigering,
+body.app-korpholmenrunt > .huvudnav,
+body.app-korpholmenrunt > .verktygsrad,
+body.app-klubbhistorik > .huvudnav,
+body.app-klubbhistorik > .verktygsrad,
+.kh-tabbar {
+  border-top: 0;
+  border-bottom: 1px solid var(--kh-linje);
+  background: rgba(255, 255, 255, .9);
+  box-shadow: none;
+  color: var(--kh-ink);
+  font-family: var(--kh-sans);
+  backdrop-filter: blur(10px);
+}
+
+body.app-dokumentarkiv > .vynavigering,
+body.app-korpholmenrunt > .huvudnav,
+body.app-klubbhistorik > .huvudnav,
+body.app-kartdata > .view-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  justify-content: flex-start;
+  gap: .15rem;
+  padding: .58rem max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  overflow-x: auto;
+}
+
+body.app-dokumentarkiv > .vynavigering button,
+body.app-korpholmenrunt > .huvudnav button,
+body.app-klubbhistorik > .huvudnav button,
+body.app-kartdata > .view-tabs button,
+.kh-tabs > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: .55rem .65rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--kh-dov);
+  font: 760 .72rem/1.2 var(--kh-sans);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+body.app-dokumentarkiv > .vynavigering button :is(span, small) { color: inherit; }
+body.app-dokumentarkiv > .vynavigering button span { font: inherit; }
+body.app-dokumentarkiv > .vynavigering button small { display: none; }
+
+body.app-dokumentarkiv > .vynavigering button.aktiv,
+body.app-korpholmenrunt > .huvudnav button.aktiv,
+body.app-klubbhistorik > .huvudnav button.aktiv,
+body.app-kartdata > .view-tabs button.active,
+.kh-tabs [aria-current="page"] {
+  border-bottom-color: var(--kh-rod);
+  background: transparent;
+  color: var(--kh-hav);
+}
+
+body:is(
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata
+) > :is(.toolbar, .verktygsrad) {
+  padding-inline: max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  top: var(--kh-tabbar-height);
+  z-index: 17;
+}
+
+body:is(
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata
+) > :is(.toolbar, .verktygsrad) :is(button, .panel-toggle, .primar, .sekundar, .primary, .secondary),
+.kh-knapp {
+  border: 1px solid var(--kh-linje-stark);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--kh-hav);
+  font: 760 .7rem/1.2 var(--kh-sans);
+}
+
+/* Grundkort och statusmarkörer. Specialvyer behåller sin egen layout. */
+body.app-hub :is(.family-sync, .app-card),
+body.app-batregister :is(.boat-card, .drawer-section),
+body.app-fastigheter :is(.property-card, .timeline-card, .summary-card),
+body.app-dokumentarkiv :is(.panel, .dokumentkort, .traffkort),
+body.app-korpholmenrunt :is(.panel, .rekordkort, .topplista, .profilkort, .matchkort),
+body.app-klubbhistorik :is(.panel, .releasekort, .profilkort, .reviewkort, .forandringskolumn, .tabellskal),
+body.app-kartdata :is(.summary, .metric-card, .island-board, .property-board, .table-view),
+body.app-explorer :is(.explorer-search, .result-card, .master-card),
+.kh-kort,
+.kh-tabell {
+  border-color: var(--kh-linje);
+  border-radius: .25rem;
+  background-color: var(--kh-kort-tonad);
+  box-shadow: var(--kh-skugga);
+}
+
+body:is(
+  .app-hub,
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(.chip, .badge, .statuschip, .app-card-status) {
+  border-radius: 999px;
+  font-family: var(--kh-sans);
+}
+
+body:is(
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(.status-ok, .is-ok) { color: var(--kh-ok-fg); }
+
+body:is(
+  .app-matrikel,
+  .app-batregister,
+  .app-fastigheter,
+  .app-dokumentarkiv,
+  .app-korpholmenrunt,
+  .app-klubbhistorik,
+  .app-kartdata,
+  .app-explorer
+) :is(.status-error, .is-error) { color: var(--kh-obs-fg); }
+
+/* Klasser från handoffen, redo för apparnas successiva innehållsmigrering. */
+.kh-main {
+  width: min(var(--kh-max), calc(100% - 2 * var(--kh-sidluft)));
+  margin-inline: auto;
+  padding-block: 2rem 3.5rem;
+}
+
+.kh-header .inner,
+.kh-tabbar .inner {
+  width: min(var(--kh-max), calc(100% - 2 * var(--kh-sidluft)));
+  margin-inline: auto;
+}
+
+.kh-tabbar { position: sticky; top: 0; z-index: 18; }
+.kh-tabbar .inner { display: flex; align-items: center; gap: 1rem; padding-block: .65rem; }
+.kh-tabs { display: flex; gap: .15rem; overflow-x: auto; }
+.app-subnav {
+  height: var(--kh-tabbar-height);
+  min-height: var(--kh-tabbar-height);
+  align-items: center;
+}
+.kh-knapp { padding: .45rem .85rem; cursor: pointer; }
+.kh-knapp.primar { border-color: var(--kh-hav); background: var(--kh-hav); color: #fff; }
+.kh-kort { padding: 1rem 1.1rem; }
+.kh-tabell { overflow: hidden; background: var(--kh-krita); }
+
+@media (max-width: 720px) {
+  :root { --kh-sidluft: .85rem; }
+
+  .app-switcher,
+  .kh-appnav { padding-inline: .2rem; }
+
+  .app-switch,
+  .kh-appnav a { padding-inline: .65rem; }
+
+  body.app-matrikel > .site-header,
+  body.app-batregister > .site-header,
+  body.app-fastigheter > .site-header,
+  body.app-kartdata > .site-header,
+  body.app-dokumentarkiv > .sidhuvud,
+  body.app-korpholmenrunt > .masthead,
+  body.app-klubbhistorik > .masthead,
+  body.app-explorer > .explorer-header {
+    grid-template-columns: 1fr;
+    gap: .85rem;
+    padding: 1.2rem var(--kh-sidluft);
+  }
+
+  body:is(
+    .app-matrikel,
+    .app-batregister,
+    .app-fastigheter,
+    .app-dokumentarkiv,
+    .app-korpholmenrunt,
+    .app-klubbhistorik,
+    .app-kartdata,
+    .app-explorer
+  ) > :is(.site-header, .sidhuvud, .masthead, .explorer-header) :is(.sync-panel, .live, .explorer-sync) {
+    align-items: flex-start;
+    justify-items: start;
+    max-width: none;
+    text-align: left;
+  }
+
+  body.app-matrikel > .site-header .header-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  body.app-matrikel > .site-header .sync-panel {
+    align-items: flex-start;
+    max-width: none;
+    text-align: left;
+  }
+
+  body.app-klubbhistorik :is(.utgavesidtitel, .utgavetitel, .utgavevaxlar, .lagervaxel, .typvaxel, .utgavemeta) {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  body.app-klubbhistorik .utgavesidtitel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "meta" "switches";
+  }
+
+  body.app-klubbhistorik .utgavemeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.app-klubbhistorik .utgavevaxlar {
+    display: grid;
+    gap: .55rem;
+  }
+
+  body.app-klubbhistorik :is(.lagervaxel, .typvaxel) {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  body.app-klubbhistorik :is(.lagervaxel, .typvaxel) button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  body.app-dokumentarkiv > .vynavigering,
+  body.app-korpholmenrunt > .huvudnav,
+  body.app-klubbhistorik > .huvudnav,
+  body.app-kartdata > .view-tabs {
+    padding-inline: .45rem;
+  }
+
+  body.app-kartdata > .view-tabs {
+    display: flex;
+    grid-template-columns: none;
+    gap: .15rem;
+    overflow-x: auto;
+  }
+
+  body.app-kartdata > .view-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .kh-tabbar .inner { align-items: stretch; flex-direction: column; }
+}
+
+@media print {
+  .app-switcher,
+  .kh-appnav,
+  .kh-tabbar { display: none !important; }
+}

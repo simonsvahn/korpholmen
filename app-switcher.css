@@ -17,6 +17,7 @@ body.app-dokumentarkiv{--svart-mjuk:#434d46;background:#e5e8e1}
 body.app-korpholmenrunt{--mjuk:#4d5a55;background:#e7ebe5}
 body.app-klubbhistorik{--muted:#4b5e61;background:#f4f0e7}
 body.app-kartdata{--muted:#4a5a54;background:#f6f3ea}
+body.app-explorer{--muted:#52675f;background:#f3f0e8}
 
 .app-matrikel .toolbar-compact{display:grid;grid-template-columns:minmax(17rem,1.25fr) minmax(26rem,1.8fr) auto auto auto auto;gap:.5rem;align-items:center;max-width:1500px;margin:auto;padding:.6rem 1rem}
 .app-matrikel .toolbar-compact .search-field{min-width:0}

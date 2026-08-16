@@ -2,7 +2,7 @@ const RELEASE = '__KORPHOLMEN_RELEASE__';
 const CACHE_PREFIX = 'korpholmen-family-shell-';
 const CACHE = `${CACHE_PREFIX}${RELEASE}`;
 const LEGACY_PREFIXES = ['slaktlandskap-shell-', 'korpholmen-matrikel-', 'korpholmen-batregister-', 'korpholmen-fastigheter-', 'korpholmen-dokumentarkiv-', 'korpholmen-runt-', 'kbk-klubbhistorik-', 'korpholmen-kartdata-'];
-const FALLBACK_SHELL = ['./', './index.html', `./styles.css?v=${RELEASE}`, `./app-switcher.css?v=${RELEASE}`, './manifest.webmanifest', './icons/korpholmen.svg', './icons/korpholmen-180.png', './icons/korpholmen-192.png', './icons/korpholmen-512.png', `./src/app.js?v=${RELEASE}`, './src/config.js', './release-manifest.json'];
+const FALLBACK_SHELL = ['./', './index.html', `./styles.css?v=${RELEASE}`, `./app-switcher.css?v=${RELEASE}`, `./korpholmen.css?v=${RELEASE}`, './manifest.webmanifest', './icons/korpholmen.svg', './icons/korpholmen-180.png', './icons/korpholmen-192.png', './icons/korpholmen-512.png', `./src/app.js?v=${RELEASE}`, './src/config.js', './release-manifest.json'];
 
 async function shellRequests() {
   try {
