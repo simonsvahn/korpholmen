@@ -43,6 +43,12 @@ Dokumentarkivets lokala V2-läge kan visa de bevarade källbilderna och Explorer
 djuplänkar går till en bestämd Kartdatapost. Kontraktstester spärrar en ny
 publicering med ofullständig appväxlare eller synliga V2-flikar utan V2-rutt.
 
+Tidigare appfunktionalitet har en namngiven kodreferens i Git:
+`v1-ui-before-v2-cutover-2026-08-16` (`c8fabc7`). V2 ska nu granskas app för
+app mot denna referens. Funktioner behålls, byggs om eller gallras först efter
+ett tydligt beslut; den äldre koden kopplas aldrig direkt till dagens writer.
+Se `FUNKTIONSMIGRERING-V1-V2.md`.
+
 Personer & familjers publicerade V2-läsare använder den gemensamma
 byte-transporten för Person- och Matrikelmaster. Den äldre personappens
 JSON-transport används endast av generation 1-flödet och kan därför inte längre

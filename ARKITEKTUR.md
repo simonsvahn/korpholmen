@@ -38,6 +38,11 @@ användas som dold reservväg. Om en funktion ännu inte är byggd för V2 ska d
 inte exponeras i den vanliga appen. Detta är en presentationsregel; den ändrar
 inte sakmastern eller vilken generation som får skriva.
 
+V1 är samtidigt funktionsreferens under ombyggnaden. Synliga äldre funktioner
+ska inventeras som **behåll**, **bygg om** eller **gallra** innan de tas bort.
+Återtagning och den frysta kodreferensen beskrivs i
+`FUNKTIONSMIGRERING-V1-V2.md`.
+
 Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
 granskningsappar, en gemensam datafri motor och en framtida sammanhållen
 läsvy. Original, tolkning och presentation är skilda lager.
