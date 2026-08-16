@@ -1355,9 +1355,15 @@ async function syncPeopleV2() {
     const result = await peopleV2Runtime.sync(transport);
     peopleV2Controller.render();
     connectButton.textContent = token ? 'Synka Dropbox' : 'Lokal V2-master';
-    setStatus(`Personmaster · revision ${result.peopleRevision} · Matrikel revision ${result.matrikelRevision}`, 'ok');
-    const requested = new URL(location.href).searchParams.get('person');
-    if (requested) peopleV2Controller.open(requested, { updateUrl: false });
+    setStatus(result.contextError
+      ? `Personmaster · revision ${result.peopleRevision} · övriga register visas från verifierad cache`
+      : `Personmaster · revision ${result.peopleRevision} · Matrikel revision ${result.matrikelRevision} · fyra sammanhangsregister`,
+    result.contextError ? 'warning' : 'ok');
+    const route = new URL(location.href).searchParams;
+    const requestedPerson = route.get('person');
+    const requestedFamily = route.get('family');
+    if (requestedPerson) peopleV2Controller.open(requestedPerson, { updateUrl: false });
+    else if (requestedFamily) peopleV2Controller.openFamily(requestedFamily, { updateUrl: false });
     return result;
   })().catch(error => {
     console.error(error);
@@ -1591,8 +1597,11 @@ async function init() {
     peopleV2Controller.configureShell();
     peopleV2Controller.render();
     await syncPeopleV2();
-    const requested = new URL(location.href).searchParams.get('person');
-    if (requested) peopleV2Controller.open(requested, { updateUrl: false });
+    const route = new URL(location.href).searchParams;
+    const requestedPerson = route.get('person');
+    const requestedFamily = route.get('family');
+    if (requestedPerson) peopleV2Controller.open(requestedPerson, { updateUrl: false });
+    else if (requestedFamily) peopleV2Controller.openFamily(requestedFamily, { updateUrl: false });
     await serviceWorkerPromise;
     return;
   }

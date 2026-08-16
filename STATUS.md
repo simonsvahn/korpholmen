@@ -4,7 +4,7 @@ Senast kontrollerad: 2026-08-16.
 
 | Master | Aktiv generation 2 | Skrivläge | Nästa steg |
 |---|---:|---|---|
-| Personer och familjer | revision 21 | Skrivskyddad | Den vanliga appen läser nu V2 direkt; separat writer-byte planeras först när ett enkelt personformulär finns |
+| Personer och familjer | revision 21 | Skrivskyddad | V2-läsaren har personregister, familjer, relationsträd och tvärlänkar; säker writer byggs som en separat fas |
 | Matrikel | revision 10 | Aktiv writer | Fortsatt normal användning och logikkontroll |
 | Båtregister | revision 5 | Aktiv writer | Arbeta vidare och granska direkt i den vanliga V2-appen; generation 1 och revision 4 är bevarade som återställningspunkter |
 | Fastigheter | revision 22 | Aktiv writer | Fortsatt normal användning och kontroll av ändringskvitton |
@@ -58,6 +58,15 @@ Personer & familjers publicerade V2-läsare använder den gemensamma
 byte-transporten för Person- och Matrikelmaster. Den äldre personappens
 JSON-transport används endast av generation 1-flödet och kan därför inte längre
 orsaka startfelet `Den nya masterläsaren kräver en byte-lästransport`.
+
+En utökad läsversion är lokalt verifierad i arbetsgrenen
+`codex/personer-familjer-funktionsatertag`. Personer är fortsatt standardvy;
+Familjer är en sekundär vy över 62 stabila familjeenheter. Träden räknas från
+faktiska partner- och förälder–barn-relationer, även för äldre familjeenheter
+som saknar den senare tekniska medlemsregeln. Personakten länkar med stabila
+ID:n till Matrikel, Båtregister, Fastigheter, Dokumentarkiv och Korpholmen runt.
+Ingen gammal släktkrets, kopierad sakdata eller generation 1-writer har
+återaktiverats. Versionen är ännu inte publicerad.
 
 De historiska Dropbox-namnrymderna `/matrikel/ops` för personmasterns
 generation 1 och `/klubbhistorik/ops` för medlemsmasterns generation 1 är

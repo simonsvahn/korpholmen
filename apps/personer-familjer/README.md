@@ -1,4 +1,14 @@
-# Personer & familjer — säker lokal-först-app
+# Personer & familjer — V2
+
+Appen är en skrivskyddad V2-läsare för den aktiva Personmastern. Personer är
+standardvyn. Familjer är en sekundär vy över stabila familje-ID:n och träden
+räknas från faktiska partner- och förälder–barn-relationer.
+
+Personakten visar livsuppgifter, medlemsnivå, namnformer, direkta relationer
+och länkar via stabila ID:n till Matrikel, Båtregister, Fastigheter,
+Dokumentarkiv och Korpholmen runt. Sakuppgifter redigeras i respektive ägarapp.
+Gamla släktkretsar och kopierade fastighets- eller medlemsuppgifter används
+inte som masterdata.
 
 Personmasterns roll som identitetsmaster och dess gränser mot övriga appar finns i
 den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md). Familje- och
@@ -15,6 +25,13 @@ Ny lokal-först-app enligt samma arkitektur som Packa:
 - Service Worker cachar enbart appskalet.
 
 ## Datastatus
+
+Aktiv V2 är revision 21 med 313 personer, 304 relationer och 62 stabila
+familjeenheter. Appen kan läsa lokalt cachad data, men den aktiva Personmastern
+är fortsatt skrivskyddad. Person- och relationsredigering kräver ett separat
+writer-byte med backup, sent-delta-kontroll och återställningsprov.
+
+## Bevarad generation 1
 
 Den godkända startmastern ligger i `privat/migrering-2026-08-01/` som ett
 privat arkiv, ett operationsdokument och 21 oföränderliga batcher. Den gamla
