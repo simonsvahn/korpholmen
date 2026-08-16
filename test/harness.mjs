@@ -111,6 +111,15 @@ await test('alla apphuvuden är kompakta, likformiga och saknar överrubrik', as
   assert.match(design, /\.kh-page-sync[\s\S]*grid-template-rows:\s*\.95rem 2\.25rem/);
 });
 
+await test('appmeny, sidhuvud, undermeny och huvudinnehåll delar samma vänsterlinje', async () => {
+  const design = await readFile(resolve(ROOT, 'apps/korpholmen.css'), 'utf8');
+  assert.match(design, /--kh-rail-x:\s*max\(var\(--kh-sidluft\),\s*calc\(\(100vw - var\(--kh-max\)\) \/ 2\)\)/);
+  assert.match(design, /\.app-switcher,[\s\S]*padding:\s*0 max\(0px, calc\(var\(--kh-rail-x\) - var\(--kh-appnav-pad-x\)\)\)/);
+  assert.match(design, /padding:\s*1\.7rem var\(--kh-rail-x\)/);
+  assert.match(design, /\.kh-tabs > :first-child[\s\S]*padding-left:\s*0/);
+  assert.match(design, /body\.app-matrikel > main,[\s\S]*body\.app-explorer > #explorer-content \{[\s\S]*padding-left:\s*var\(--kh-rail-x\);[\s\S]*padding-right:\s*var\(--kh-rail-x\)/);
+});
+
 await test('alla appar registrerar rotens service worker och inte en egen', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');

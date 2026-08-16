@@ -36,6 +36,8 @@
   --kh-skugga: 0 14px 36px rgba(18, 60, 70, .07);
   --kh-max: 1240px;
   --kh-sidluft: clamp(1rem, 4vw, 3rem);
+  --kh-rail-x: max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  --kh-appnav-pad-x: .72rem;
   --kh-header-height: 7.75rem;
   --kh-tabbar-height: 3.5rem;
 }
@@ -214,7 +216,7 @@ body:is(
   align-items: center;
   gap: .1rem;
   overflow-x: auto;
-  padding: 0 max(.65rem, calc((100vw - var(--kh-max)) / 2));
+  padding: 0 max(0px, calc(var(--kh-rail-x) - var(--kh-appnav-pad-x)));
   background: var(--kh-hav-djup);
   box-shadow: none;
   font-family: var(--kh-sans);
@@ -232,7 +234,7 @@ body:is(
   flex: 0 0 auto;
   align-items: center;
   min-height: 2.7rem;
-  padding: .78rem .72rem .64rem;
+  padding: .78rem var(--kh-appnav-pad-x) .64rem;
   border-bottom: 3px solid transparent;
   color: rgba(255, 255, 255, .68);
   font: 760 .68rem/1.2 var(--kh-sans);
@@ -278,7 +280,7 @@ body.app-explorer > .explorer-header,
   z-index: auto;
   height: var(--kh-header-height);
   min-height: var(--kh-header-height);
-  padding: 1.7rem max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  padding: 1.7rem var(--kh-rail-x);
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -335,7 +337,7 @@ body.app-explorer > .explorer-header .kh-page-sync {
   display: grid;
   position: absolute;
   top: 50%;
-  right: max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  right: var(--kh-rail-x);
   grid-column: auto;
   grid-template-rows: .95rem 2.25rem;
   align-content: center;
@@ -402,7 +404,7 @@ body:is(
 body.app-dokumentarkiv > .kh-page-header .arkivfakta {
   position: absolute;
   top: 50%;
-  right: calc(max(var(--kh-sidluft), (100vw - var(--kh-max)) / 2) + 18rem);
+  right: calc(var(--kh-rail-x) + 18rem);
   transform: translateY(-50%);
 }
 
@@ -484,7 +486,7 @@ body.app-kartdata > .view-tabs {
   z-index: 18;
   justify-content: flex-start;
   gap: .15rem;
-  padding: .58rem max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  padding: .58rem var(--kh-rail-x);
   overflow-x: auto;
 }
 
@@ -504,6 +506,16 @@ body.app-kartdata > .view-tabs button,
   font: 760 .72rem/1.2 var(--kh-sans);
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* Flikarnas text, inte bara deras bakgrund, börjar på samma lodräta linje. */
+.kh-tabs > :first-child,
+body.app-dokumentarkiv > .vynavigering > button:first-child,
+body.app-korpholmenrunt > .huvudnav > button:first-child,
+body.app-kartdata > .view-tabs > button:first-child,
+body.app-klubbhistorik > .huvudnav > button:first-child,
+body.app-klubbhistorik > .huvudnav > button[hidden] + button {
+  padding-left: 0;
 }
 
 body.app-dokumentarkiv > .vynavigering button :is(span, small) { color: inherit; }
@@ -528,9 +540,18 @@ body:is(
   .app-klubbhistorik,
   .app-kartdata
 ) > :is(.toolbar, .verktygsrad) {
-  padding-inline: max(var(--kh-sidluft), calc((100vw - var(--kh-max)) / 2));
+  padding-inline: var(--kh-rail-x);
   top: var(--kh-tabbar-height);
   z-index: 17;
+}
+
+/* Personvyn har äldre inre verktygscontainrar. Nollställ deras extra sidluft
+   så att kontrollerna följer samma linje som övriga appskal. */
+body.app-matrikel > .toolbar > :is(.toolbar-compact, .toolbar-inner, .active-filters, .relation-tools) {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
 }
 
 body:is(
@@ -605,14 +626,14 @@ body:is(
 
 /* Klasser från handoffen, redo för apparnas successiva innehållsmigrering. */
 .kh-main {
-  width: min(var(--kh-max), calc(100% - 2 * var(--kh-sidluft)));
+  width: min(var(--kh-max), calc(100% - 2 * var(--kh-rail-x)));
   margin-inline: auto;
   padding-block: 2rem 3.5rem;
 }
 
 .kh-header .inner,
 .kh-tabbar .inner {
-  width: min(var(--kh-max), calc(100% - 2 * var(--kh-sidluft)));
+  width: min(var(--kh-max), calc(100% - 2 * var(--kh-rail-x)));
   margin-inline: auto;
 }
 
@@ -629,14 +650,47 @@ body:is(
 .kh-kort { padding: 1rem 1.1rem; }
 .kh-tabell { overflow: hidden; background: var(--kh-krita); }
 
+/* En gemensam innehållsrail. Breda tabeller och kartor kan fortfarande
+   scrolla eller fylla den tillgängliga bredden, men deras yttre kant ligger
+   i linje med sidrubriken. */
+body.app-matrikel > main,
+body.app-batregister > #content,
+body.app-fastigheter > #content,
+body.app-dokumentarkiv > #app-view,
+body.app-korpholmenrunt > #app,
+body.app-klubbhistorik > #app,
+body.app-kartdata > #content,
+body.app-explorer > #explorer-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-left: var(--kh-rail-x);
+  padding-right: var(--kh-rail-x);
+}
+
+body.app-fastigheter > #content > .empty {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+body.app-dokumentarkiv > .sokband,
+body.app-kartdata > .summary {
+  padding-left: var(--kh-rail-x);
+  padding-right: var(--kh-rail-x);
+}
+
 @media (max-width: 720px) {
-  :root { --kh-sidluft: .85rem; }
+  :root {
+    --kh-sidluft: .85rem;
+    --kh-appnav-pad-x: .65rem;
+  }
 
   .app-switcher,
-  .kh-appnav { padding-inline: .2rem; }
+  .kh-appnav { padding-inline: max(0px, calc(var(--kh-rail-x) - var(--kh-appnav-pad-x))); }
 
   .app-switch,
-  .kh-appnav a { padding-inline: .65rem; }
+  .kh-appnav a { padding-inline: var(--kh-appnav-pad-x); }
 
   body.app-matrikel > .site-header,
   body.app-batregister > .site-header,
@@ -648,7 +702,7 @@ body:is(
   body.app-explorer > .explorer-header {
     grid-template-columns: 1fr;
     gap: .85rem;
-    padding: 1.2rem var(--kh-sidluft);
+    padding: 1.2rem var(--kh-rail-x);
   }
 
   body:is(
@@ -713,7 +767,7 @@ body:is(
   body.app-korpholmenrunt > .huvudnav,
   body.app-klubbhistorik > .huvudnav,
   body.app-kartdata > .view-tabs {
-    padding-inline: .45rem;
+    padding-inline: var(--kh-rail-x);
   }
 
   body.app-kartdata > .view-tabs {
@@ -748,7 +802,7 @@ body:is(
     gap: .55rem;
     height: var(--kh-header-height);
     min-height: var(--kh-header-height);
-    padding: .9rem var(--kh-sidluft);
+    padding: .9rem var(--kh-rail-x);
   }
 
   body:is(
@@ -774,10 +828,11 @@ body:is(
     .app-kartdata,
     .app-explorer
   ) > .kh-page-header .kh-page-heading {
+    grid-column: auto;
     position: absolute;
     top: .9rem;
-    right: var(--kh-sidluft);
-    left: var(--kh-sidluft);
+    right: var(--kh-rail-x);
+    left: var(--kh-rail-x);
   }
 
   .kh-page-intro,
@@ -804,9 +859,9 @@ body:is(
   body.app-explorer > .explorer-header .kh-page-sync {
     position: absolute;
     top: auto;
-    right: var(--kh-sidluft);
+    right: var(--kh-rail-x);
     bottom: .9rem;
-    left: var(--kh-sidluft);
+    left: var(--kh-rail-x);
     grid-template-columns: minmax(0, 1fr) 8rem;
     grid-template-rows: 2.25rem;
     width: auto;
