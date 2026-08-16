@@ -59,14 +59,17 @@ byte-transporten för Person- och Matrikelmaster. Den äldre personappens
 JSON-transport används endast av generation 1-flödet och kan därför inte längre
 orsaka startfelet `Den nya masterläsaren kräver en byte-lästransport`.
 
-En utökad läsversion är lokalt verifierad i arbetsgrenen
-`codex/personer-familjer-funktionsatertag`. Personer är fortsatt standardvy;
-Familjer är en sekundär vy över 62 stabila familjeenheter. Träden räknas från
-faktiska partner- och förälder–barn-relationer, även för äldre familjeenheter
-som saknar den senare tekniska medlemsregeln. Personakten länkar med stabila
+Den utökade läsversionen publicerades genom PR 63–64. Personer är standardvy
+och Familjer visar 62 stabila familjeenheter. Personakten länkar med stabila
 ID:n till Matrikel, Båtregister, Fastigheter, Dokumentarkiv och Korpholmen runt.
-Ingen gammal släktkrets, kopierad sakdata eller generation 1-writer har
-återaktiverats. Versionen är ännu inte publicerad.
+
+Arbetsgrenen `codex/slaktvav-v2` innehåller nästa lokalt verifierade steg:
+undermenyn **Släkter · Familjer · Personer**, V1-liknande flergenerationsträd
+från V2:s faktiska relationer samt en bredare personpanel med kompakt närmaste
+familj. Den aktiva mastern ger 17 sammanhängande träd med 220 personer och 93
+personer utan registrerad personrelation. Gamla släktkretsar, kopierad sakdata
+och generation 1-writer används inte. Denna senaste arbetsgren är ännu inte
+publicerad.
 
 De historiska Dropbox-namnrymderna `/matrikel/ops` för personmasterns
 generation 1 och `/klubbhistorik/ops` för medlemsmasterns generation 1 är

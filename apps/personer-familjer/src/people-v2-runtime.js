@@ -1,5 +1,6 @@
 import { PeopleMembershipMaster } from '../../../packages/core/people-membership-master.js';
 import { createActiveAppBundle } from '../../../packages/core/active-app-bundle.js';
+import { buildGraph, componentSets } from './landscape-model.js';
 
 const entityRows = (master, type) => master.listEntities(type).map(entity => ({ id: entity.entity_id, ...entity.fields }));
 const unique = values => [...new Set(values.filter(Boolean))];
@@ -40,6 +41,21 @@ export function familyUnitView(family, people = [], relations = []) {
     member_ids: [...anchorIds, ...childIds],
     party_member_ids: partyMemberIds,
     member_count: anchorIds.length + childIds.length,
+  };
+}
+
+export function kinshipView(people = [], relations = []) {
+  const normalizedRelations = relations.map(relation => ({
+    ...relation,
+    kind: relationType(relation),
+  }));
+  const graph = buildGraph(people, normalizedRelations);
+  const components = componentSets(people, normalizedRelations);
+  return {
+    graph,
+    relations: normalizedRelations,
+    connected: components.filter(component => component.size > 1),
+    isolated: components.filter(component => component.size === 1),
   };
 }
 
@@ -88,6 +104,8 @@ export class PeopleV2Runtime {
   getFamily(id) { return this.listFamilies().find(family => family.id === id) || null; }
 
   familiesFor(personId) { return this.listFamilies().filter(family => family.member_ids.includes(personId)); }
+
+  kinship() { return kinshipView(this.listPeople(), this.listRelations()); }
 
   contextList(source, collection) { return this.context?.list(source, collection) || []; }
 

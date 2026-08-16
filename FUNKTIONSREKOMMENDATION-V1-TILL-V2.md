@@ -52,9 +52,10 @@ Följande ska inte återinföras som normal V2-funktion:
 
 V2 har en snabb personlista med sökning på namn, klubbnamn och kontext, filter
 för livsstatus och medlemsnivå samt ett personkort med namnformer, livsuppgifter
-och direkta relationer. Den lokalt verifierade utökningen visar en sekundär
-familjevy, begripliga träd från faktiska relationer och stabila länkar till
-övriga sakmastrar. Den är ännu skrivskyddad.
+och direkta relationer. Den lokalt verifierade utökningen har den gemensamma
+undermenyn **Släkter · Familjer · Personer**, V1-liknande flergenerationsträd
+från faktiska relationer och stabila länkar till övriga sakmastrar. Den är
+fortsatt skrivskyddad.
 
 ### Återta eller bygg nu
 
@@ -92,8 +93,9 @@ familjevy, begripliga träd från faktiska relationer och stabila länkar till
 - medlemsstatus som en andra master i personappen — den ägs av Matrikel;
 - äldre UI-fält som `ui_clan`, generell generation eller kopierade fastighetsnamn.
 
-**Målbild:** personlistan är den enkla ingången; personkortet öppnar ett
-begripligt släktträd och länkar vidare till allt som berör personen.
+**Målbild:** personlistan är den enkla ingången; personkortet visar närmaste
+familj och länkar vidare till allt som berör personen, medan Släkter visar den
+sammanhängande flergenerationsbilden.
 
 ## 2. Båtregister
 

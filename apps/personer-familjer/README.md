@@ -1,14 +1,17 @@
 # Personer & familjer — V2
 
 Appen är en skrivskyddad V2-läsare för den aktiva Personmastern. Personer är
-standardvyn. Familjer är en sekundär vy över stabila familje-ID:n och träden
-räknas från faktiska partner- och förälder–barn-relationer.
+standardvyn. Den gemensamma undermenyn innehåller **Släkter · Familjer ·
+Personer**. Släkter ritar sammanhängande flergenerationsträd och Familjer visar
+stabila familje-ID:n. Båda räknas från faktiska partner- och
+förälder–barn-relationer.
 
 Personakten visar livsuppgifter, medlemsnivå, namnformer, direkta relationer
 och länkar via stabila ID:n till Matrikel, Båtregister, Fastigheter,
 Dokumentarkiv och Korpholmen runt. Sakuppgifter redigeras i respektive ägarapp.
 Gamla släktkretsar och kopierade fastighets- eller medlemsuppgifter används
-inte som masterdata.
+inte som masterdata. Personpanelen visar bara den närmaste familjen i ett
+kompakt format; det fulla sammanhanget visas i Släkter.
 
 Personmasterns roll som identitetsmaster och dess gränser mot övriga appar finns i
 den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md). Familje- och

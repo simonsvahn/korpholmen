@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { PeopleV2Runtime, familyUnitView } from '../src/people-v2-runtime.js';
+import { PeopleV2Runtime, familyUnitView, kinshipView } from '../src/people-v2-runtime.js';
 
 const people = [
   { id: 'anna', display_name: 'Anna' },
@@ -38,6 +38,13 @@ const ownerTarget = familyUnitView({
 assert.deepEqual(ownerTarget.children.map(person => person.id), ['elsa']);
 assert.deepEqual(ownerTarget.member_ids, ['anna', 'peter', 'elsa']);
 assert.deepEqual(ownerTarget.party_member_ids, ['anna', 'peter']);
+
+const kinship = kinshipView(people, relations);
+assert.equal(kinship.connected.length, 1);
+assert.equal(kinship.connected[0].size, 5);
+assert.equal(kinship.isolated.length, 0);
+assert.deepEqual((kinship.graph.children.get('anna') || []).map(row => row.id), ['elsa', 'hugo']);
+assert.deepEqual((kinship.graph.partners.get('anna') || []).map(row => row.id).sort(), ['annan', 'peter']);
 
 const runtime = Object.create(PeopleV2Runtime.prototype);
 runtime.listFamilies = () => [{ id: 'familj-1', party_member_ids: ['anna', 'peter'] }];
