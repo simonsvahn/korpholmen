@@ -54,6 +54,7 @@ import {
 import { resolvePropertyIslandNames, resolvePropertyReferences } from '../../../packages/core/master-data.js?v=2026-08-07-master-integrations';
 import { ReadOnlyMaster } from '../../../packages/core/read-only-master.js?v=2026-08-06-property-owner-display';
 import { HttpReadTransport } from '../../../packages/core/sync/http-read-transport.js?v=2026-08-15-active-v2';
+import { DropboxTransport as ActiveDropboxTransport } from '../../../packages/core/sync/dropbox-transport.js?v=2026-08-16-person-v2-transport-1';
 import { DROPBOX_CLIENT_ID, DROPBOX_SCOPES, LOCAL_APPROVED_DATA_URL, LOCAL_BOOTSTRAP_URL, LOCAL_EXTERNAL_PROPERTY_OWNERS_URL, LOCAL_FAMILY_MODEL_URL, LOCAL_UI_METADATA_URL } from './config.js?v=2026-08-04-personmaster';
 import { exchangeDropboxRefreshToken } from './sync/oauth-pkce.js?v=2026-08-01-10';
 import { createPeopleV2Runtime } from './people-v2-runtime.js?v=2026-08-15-active-v2';
@@ -1350,7 +1351,7 @@ async function syncPeopleV2() {
       return null;
     }
     setStatus('Läser aktiv Person- och Matrikelmaster…');
-    const transport = localTransport || new DropboxTransport({ accessToken: token, id: 'dropbox-people-active-v2', opsRoot: '/personer-familjer/ops', readOnly: true });
+    const transport = localTransport || new ActiveDropboxTransport({ accessToken: token, id: 'dropbox-people-active-v2', opsRoot: '/personer-familjer/ops', readOnly: true });
     const result = await peopleV2Runtime.sync(transport);
     peopleV2Controller.render();
     connectButton.textContent = token ? 'Synka Dropbox' : 'Lokal V2-master';
@@ -1590,6 +1591,8 @@ async function init() {
     peopleV2Controller.configureShell();
     peopleV2Controller.render();
     await syncPeopleV2();
+    const requested = new URL(location.href).searchParams.get('person');
+    if (requested) peopleV2Controller.open(requested, { updateUrl: false });
     await serviceWorkerPromise;
     return;
   }

@@ -25,6 +25,10 @@ await test('Kartdata läser enbart de aktiva V2-mastrarna', async () => {
   assert.match(reader, /\/fastigheter-generation2\/active\.json/);
   assert.match(reader, /requiredCollections: \['places', 'place_names', 'entries', 'entry_names'\]/);
   assert.match(reader, /requiredCollections: \['properties'\]/);
+  assert.match(reader, /parameters\.get\('place'\)/);
+  assert.match(reader, /parameters\.get\('entry'\)/);
+  assert.match(reader, /row\.id !== this\.exactEntry/);
+  assert.match(reader, /row\.id, row\.name/);
 });
 
 await test('fastighet, plats och namnform visas utan att skapa nya fakta', async () => {
@@ -40,6 +44,20 @@ await test('tabellen kan sorteras på varje synlig sakdatakolumn', async () => {
   const reader = await readFile(resolve(ROOT, 'src/kart-active-v2.js'), 'utf8');
   for (const key of ['id', 'name', 'type', 'subtype', 'place', 'property', 'aliases']) assert.ok(reader.includes(`sortButton('${key}'`), key);
   assert.match(reader, /this\.sortDirection \*= -1/);
+});
+
+await test('alla synliga Kartdata-menyer styr V2-läsaren', async () => {
+  const [app,reader,html]=await Promise.all([
+    readFile(resolve(ROOT,'src/app.js'),'utf8'),
+    readFile(resolve(ROOT,'src/kart-active-v2.js'),'utf8'),
+    readFile(resolve(ROOT,'index.html'),'utf8'),
+  ]);
+  for(const view of ['atlas','structure','queue','table']){
+    assert.ok(html.includes(`data-view="${view}"`),view);
+    assert.ok(reader.includes(`'${view}'`),view);
+  }
+  assert.match(app,/kartV2\?\.setView\(button\.dataset\.view\)/);
+  assert.doesNotMatch(reader,/view-tabs'\)\?\.setAttribute\('hidden'/);
 });
 
 await test('modellens typetiketter och stabila ID-hjälpare finns kvar', () => {

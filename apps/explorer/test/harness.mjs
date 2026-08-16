@@ -18,6 +18,8 @@ await test('Explorer läser samtliga sju aktiva V2-mastrar', async () => {
 await test('Explorer är en ren läsvy med direkta ägarappslänkar', async () => {
   const app = await readFile(resolve(ROOT, 'src/app.js'), 'utf8');
   for (const owner of ['../personer-familjer/', '../batregister/', '../fastigheter/', '../dokumentarkiv/', '../korpholmenrunt/', '../kartdata/']) assert.ok(app.includes(owner), owner);
+  assert.match(app, /\?place=\$\{encodeURIComponent\(item\.id\)\}/);
+  assert.match(app, /\?entry=\$\{encodeURIComponent\(item\.id\)\}/);
   assert.doesNotMatch(app, /putBatch|putBytes|replaceEntities|upsertFields|setField/);
 });
 await test('publiceringsbygget är datafritt och innehåller bara V2-Explorer', async () => {

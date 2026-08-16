@@ -463,7 +463,10 @@ $('#subtype-filter').addEventListener('change', event => { ui.subtype = event.ta
 $('#property-filter').addEventListener('change', event => { ui.property = event.target.value; render(); });
 $('#status-filter').addEventListener('change', event => { ui.status = event.target.value; render(); });
 $('#sort-order').addEventListener('change', event => { ui.sort = event.target.value; render(); });
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { ui.view = button.dataset.view; render(); }));
+document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+  if (kartV2Mode) { kartV2?.setView(button.dataset.view); return; }
+  ui.view = button.dataset.view; render();
+}));
 connectButton.addEventListener('click', () => currentAccessToken().then(token => token ? syncNow() : connectDropbox()).catch(error => setStatus(error.message, 'error')));
 bootstrapButton.addEventListener('click', () => bootstrapCleanV2({ force: true }).then(() => setStatus(`${entryRecords().length} rena dataposter inlästa lokalt · ägare läses från Fastigheter`, 'ok')).catch(error => setStatus(error.message, 'error')));
 $('#export-json').addEventListener('click', exportData);

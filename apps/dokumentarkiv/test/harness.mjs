@@ -238,4 +238,21 @@ await test('OAuth-returen och appnavigeringen omfattar Dokumentarkivet',async()=
   assert.ok(app.includes('registerKorpholmenServiceWorker({ sourceTree: isSourceTree })'));
 });
 
+await test('alla synliga V2-menyer i Dokumentarkivet styr riktiga V2-vyer',async()=>{
+  const [app,reader,html]=await Promise.all([
+    readFile(resolve(ROOT,'src/app.js'),'utf8'),
+    readFile(resolve(ROOT,'src/document-active-v2.js'),'utf8'),
+    readFile(resolve(ROOT,'index.html'),'utf8'),
+  ]);
+  for(const view of ['overview','reader','tracks','connections','places','work','question']){
+    assert.ok(html.includes(`data-view="${view}"`),view);
+    assert.ok(reader.includes(`'${view}'`),view);
+  }
+  assert.match(app,/documentV2\?\.setView\(button\.dataset\.view\)/);
+  assert.match(app,/fetch\(file\.blob_path, \{ cache: 'no-store' \}\)/);
+  assert.doesNotMatch(reader,/view-tabs'\)\?\.setAttribute\('hidden'/);
+  assert.match(reader,/renderOverview/);
+  assert.match(reader,/renderQuestion/);
+});
+
 console.log(`\n${passed} Dokumentarkiv-kontrakt godkända.`);

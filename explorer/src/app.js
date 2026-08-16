@@ -51,7 +51,8 @@ function href(item) {
   if (item.type === 'property') return `../fastigheter/?property=${encodeURIComponent(item.id)}`;
   if (item.type === 'document') return `../dokumentarkiv/?document=${encodeURIComponent(item.id)}`;
   if (item.type === 'race') return `../korpholmenrunt/?year=${encodeURIComponent(item.id)}`;
-  return '../kartdata/';
+  if (item.type === 'place') return `../kartdata/?place=${encodeURIComponent(item.id)}`;
+  return `../kartdata/?entry=${encodeURIComponent(item.id)}`;
 }
 function resultHtml(entry) { return `<a class="search-result" href="${href(entry)}"><span class="result-type">${escapeHtml(TYPE_LABELS[entry.type])}</span><span class="result-copy"><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.detail)}</span></span><span class="result-arrow" aria-hidden="true">→</span></a>`; }
 function search(value) {

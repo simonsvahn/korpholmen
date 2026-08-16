@@ -50,6 +50,27 @@ await test('alla publicerade ingångssidor avråder sökmotorer från indexering
   }
 });
 
+await test('alla appväxlare visar samma åtta V2-appar i samma ordning', async () => {
+  const expected = [
+    '01 Personer & familjer',
+    '02 Båtregister',
+    '03 Fastigheter',
+    '04 Dokumentarkiv',
+    '05 Korpholmen runt',
+    '06 Matrikel',
+    '07 Kartdata',
+    '08 Explorer',
+  ];
+  for (const app of SURFACES) {
+    const html = await readFile(resolve(ROOT, 'apps', app, 'index.html'), 'utf8');
+    const navigation = html.match(/<nav class="app-switcher"[\s\S]*?<\/nav>/)?.[0] || '';
+    const labels = [...navigation.matchAll(/<a class="app-switch"[^>]*>([^<]+(?:&amp;[^<]+)?)<\/a>/g)]
+      .map(match => match[1].replaceAll('&amp;', '&'))
+      .filter(label => /^\d{2} /.test(label));
+    assert.deepEqual(labels, expected, `${app} har en ofullständig eller felordnad appväxlare`);
+  }
+});
+
 await test('alla appar registrerar rotens service worker och inte en egen', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');

@@ -73,6 +73,7 @@ const app = (await readFile(resolve(ROOT, 'src/app.js'), 'utf8'))
   .replace("../../../packages/core/family-context.js", "../core/family-context.js")
   .replace("../../../packages/core/master-data.js", "../core/master-data.js")
   .replace("../../../packages/core/read-only-master.js", "../core/read-only-master.js")
+  .replace("../../../packages/core/sync/dropbox-transport.js", "../core/sync/dropbox-transport.js")
   .replace("../../../packages/core/sync/http-read-transport.js", "../core/sync/http-read-transport.js");
 await mkdir(resolve(OUT, 'src'), { recursive: true });
 await writeFile(resolve(OUT, 'src/app.js'), app);

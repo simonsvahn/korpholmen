@@ -305,4 +305,20 @@ await test('Homsan-rättelsen är avgränsad till Mymlan och bevarar råkällan'
   assert.equal(script.includes("field:'boat_name_raw'"),false);
 });
 
+await test('alla synliga V2-menyer i Korpholmen runt styr riktiga V2-vyer',async()=>{
+  const [app,reader,html]=await Promise.all([
+    readFile(resolve(ROOT,'src/app.js'),'utf8'),
+    readFile(resolve(ROOT,'src/race-active-v2.js'),'utf8'),
+    readFile(resolve(ROOT,'index.html'),'utf8'),
+  ]);
+  for(const view of ['oversikt','resultat','arsvis','rekord','profiler','duell','matchning']){
+    assert.ok(html.includes(`data-view="${view}"`),view);
+    assert.ok(reader.includes(`'${view}'`),view);
+  }
+  assert.match(app,/if\(raceV2Mode\)\{raceV2\?\.setView\(view\)/);
+  assert.doesNotMatch(reader,/huvudnav'\)\?\.setAttribute\('hidden'/);
+  assert.match(reader,/renderOverview/);
+  assert.match(reader,/renderMatching/);
+});
+
 console.log(`\n${passed} Korpholmen runt-kontrakt godkända.`);

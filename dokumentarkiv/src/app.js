@@ -646,10 +646,16 @@ async function loadDocumentV2Image(file) {
   const cacheKey = `document-v2-image:${file.sha256}`;
   let blob = await store.getBlob(cacheKey);
   if (!blob) {
-    const token = await currentAccessToken();
-    if (!token) throw new Error('anslut Dropbox');
-    const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-document-v2-images', opsRoot: '/dokumentarkiv/ops', readOnly: true });
-    blob = await transport.getBlob(file.blob_path);
+    if (isSourceTree) {
+      const response = await fetch(file.blob_path, { cache: 'no-store' });
+      if (response.ok) blob = await response.blob();
+    }
+    if (!blob) {
+      const token = await currentAccessToken();
+      if (!token) throw new Error('anslut Dropbox');
+      const transport = new DropboxTransport({ accessToken: token, id: 'dropbox-document-v2-images', opsRoot: '/dokumentarkiv/ops', readOnly: true });
+      blob = await transport.getBlob(file.blob_path);
+    }
     const bytes = new Uint8Array(await blob.arrayBuffer());
     if (await sha256Hex(bytes) !== file.sha256) throw new Error('kontrollsumman stämmer inte');
     blob = new Blob([bytes], { type: file.mime_type || 'image/jpeg' });
@@ -731,6 +737,11 @@ $('#category-filters').addEventListener('click', event => {
 $('#view-tabs').addEventListener('click', event => {
   const button = event.target.closest('[data-view]');
   if (!button) return;
+  if (documentV2Mode) {
+    documentV2?.setView(button.dataset.view);
+    window.scrollTo({ top: $('#search-band').offsetTop, behavior: 'smooth' });
+    return;
+  }
   ui.view = button.dataset.view;
   updateDocumentUrl('');
   render();

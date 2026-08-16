@@ -439,12 +439,18 @@ await test('publiceringsbygget innehåller bara det datafria appskalet', async (
     }
     return files;
   };
-  const files = await walk(resolve(ROOT, '../../matrikel'));
-  const relativeFiles = files.map(file => file.slice(resolve(ROOT, '../../matrikel').length + 1));
+  const publishedRoot = resolve(ROOT, '../../personer-familjer');
+  const files = await walk(publishedRoot);
+  const relativeFiles = files.map(file => file.slice(publishedRoot.length + 1));
   assert.equal(relativeFiles.some(file => /(?:initial-|privat|slaktled_tillagg|\.csv$|\.json$)/.test(file)), false);
   const bundle = (await Promise.all(files.map(file => readFile(file, 'utf8').catch(() => '')))).join('\n');
   const leakedNames = archive.persons.map(person => person.fields.display_name).filter(name => bundle.includes(name));
   assert.deepEqual(leakedNames, []);
+  const publishedApp = await readFile(resolve(publishedRoot, 'src/app.js'), 'utf8');
+  const publishedTransport = await readFile(resolve(publishedRoot, 'core/sync/dropbox-transport.js'), 'utf8');
+  assert.ok(publishedApp.includes("import { DropboxTransport as ActiveDropboxTransport } from '../core/sync/dropbox-transport.js"));
+  assert.ok(publishedApp.includes("new ActiveDropboxTransport({ accessToken: token, id: 'dropbox-people-active-v2'"));
+  assert.ok(publishedTransport.includes('async getBytes(pathValue)'));
 });
 
 await test('Dropbox-namnrymden placerar Matrikeln i matrikel/ops', async () => {

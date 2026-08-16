@@ -32,6 +32,12 @@ läser samtliga sju V2-mastrar och är en ren, skrivskyddad sökprojektion.
 Generation 1 får bara läsas i uttryckligen märkta övergångskomplement. Ett
 sådant komplement får aldrig föras in i V2 utan ett separat granskningsbeslut.
 
+En synlig meny i en V2-app måste ägas av V2-läsaren och leda till en fungerande
+V2-vy. Ett gammalt V1-klickflöde får varken ligga bakom en synlig knapp eller
+användas som dold reservväg. Om en funktion ännu inte är byggd för V2 ska den
+inte exponeras i den vanliga appen. Detta är en presentationsregel; den ändrar
+inte sakmastern eller vilken generation som får skriva.
+
 Appfamiljen består av en installerbar PWA, sju avgränsade ägar- och
 granskningsappar, en gemensam datafri motor och en framtida sammanhållen
 läsvy. Original, tolkning och presentation är skilda lager.

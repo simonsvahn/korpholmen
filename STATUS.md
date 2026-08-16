@@ -33,7 +33,20 @@ arbetsgren.
 Explorer är en skrivskyddad sökvy över samtliga sju aktiva V2-mastrar. Den
 innehåller ingen egen sakmaster och läser inte längre generation 1:s
 operationsloggar. I den lokalt verifierade arbetsgrenen indexeras 988
-sökbara objekt från revisionerna `21/10/4/22/4/4/1`.
+sökbara objekt från revisionerna `21/10/5/22/4/4/1`.
+
+V2-appskalet är ombyggt efter en navigeringsregression i den första
+publiceringen. Korpholmen runt, Dokumentarkiv och Kartdata har nu egna
+fungerande V2-vyer bakom varje synlig intern menyknapp; Personer & familjer
+använder rätt byte-transport; alla åtta appar finns i samma appväxlare.
+Dokumentarkivets lokala V2-läge kan visa de bevarade källbilderna och Explorers
+djuplänkar går till en bestämd Kartdatapost. Kontraktstester spärrar en ny
+publicering med ofullständig appväxlare eller synliga V2-flikar utan V2-rutt.
+
+Personer & familjers publicerade V2-läsare använder den gemensamma
+byte-transporten för Person- och Matrikelmaster. Den äldre personappens
+JSON-transport används endast av generation 1-flödet och kan därför inte längre
+orsaka startfelet `Den nya masterläsaren kräver en byte-lästransport`.
 
 De historiska Dropbox-namnrymderna `/matrikel/ops` för personmasterns
 generation 1 och `/klubbhistorik/ops` för medlemsmasterns generation 1 är
