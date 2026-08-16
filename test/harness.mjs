@@ -71,6 +71,28 @@ await test('alla appväxlare visar samma åtta V2-appar i samma ordning', async 
   }
 });
 
+await test('alla sidor använder det gemensamma designsystemet efter appens egen stil', async () => {
+  const sourcePages = [
+    resolve(ROOT, 'index.html'),
+    ...SURFACES.map(app => resolve(ROOT, 'apps', app, 'index.html')),
+  ];
+  for (const path of sourcePages) {
+    const html = await readFile(path, 'utf8');
+    const appStyle = html.indexOf('styles.css');
+    const sharedStyle = html.indexOf('korpholmen.css');
+    assert.ok(appStyle >= 0, `${path} saknar appens egen stil`);
+    assert.ok(sharedStyle > appStyle, `${path} måste ladda korpholmen.css efter appens egen stil`);
+    assert.match(html, /<meta name="theme-color" content="#123c46">/);
+    assert.match(html, /<nav[^>]+class="[^"]*\bapp-subnav\b[^"]*"/, `${path} saknar utbyggbar undermeny`);
+  }
+  const design = await readFile(resolve(ROOT, 'apps/korpholmen.css'), 'utf8');
+  assert.match(design, /--kh-hav:\s*#123c46/);
+  assert.match(design, /\.kh-appnav/);
+  assert.match(design, /\.kh-header/);
+  assert.match(design, /\.kh-tabbar/);
+  assert.match(design, /\.kh-main/);
+});
+
 await test('alla appar registrerar rotens service worker och inte en egen', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');

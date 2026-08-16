@@ -1,5 +1,5 @@
 {
-  "release": "2026-08-16-korpholmen-pwa-42",
+  "release": "2026-08-16-korpholmen-pwa-43",
   "generated_at": "2026-08-16",
   "pwa": {
     "id": "./",
@@ -229,6 +229,7 @@
     "./kartdata/styles.css",
     "./kartdata/sw.js",
     "./klubbhistorik/index.html",
+    "./korpholmen.css",
     "./korpholmenrunt/core/active-app-bundle.js",
     "./korpholmenrunt/core/active-json-master.js",
     "./korpholmenrunt/core/data-layer.js",

@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,9 +11,13 @@ const APP_DIRECTORIES = ['personer-familjer', 'batregister', 'fastigheter', 'dok
 const PROJECTION_DIRECTORIES = ['explorer'];
 const SURFACE_DIRECTORIES = [...APP_DIRECTORIES, ...PROJECTION_DIRECTORIES];
 const REDIRECT_DIRECTORIES = ['klubbhistorik'];
-const ROOT_SHELL = ['index.html', 'styles.css', 'app-switcher.css', 'manifest.webmanifest', 'icons/korpholmen.svg', 'icons/korpholmen-180.png', 'icons/korpholmen-192.png', 'icons/korpholmen-512.png', 'src/app.js', 'src/app-family-bootstrap.js', 'src/config.js', 'sw.js'];
+const ROOT_SHELL = ['index.html', 'styles.css', 'app-switcher.css', 'korpholmen.css', 'manifest.webmanifest', 'icons/korpholmen.svg', 'icons/korpholmen-180.png', 'icons/korpholmen-192.png', 'icons/korpholmen-512.png', 'src/app.js', 'src/app-family-bootstrap.js', 'src/config.js', 'sw.js'];
 const ENTRY_HTML = [resolve(ROOT, 'index.html'), ...SURFACE_DIRECTORIES.flatMap(directory => [resolve(ROOT, 'apps', directory, 'index.html'), resolve(ROOT, directory, 'index.html')]), ...REDIRECT_DIRECTORIES.map(directory => resolve(ROOT, directory, 'index.html'))];
 const PRECACHE_EXCLUSIONS = [/\/(?:og\.png)$/i];
+
+for (const sharedStyle of ['app-switcher.css', 'korpholmen.css']) {
+  await copyFile(resolve(ROOT, 'apps', sharedStyle), resolve(ROOT, sharedStyle));
+}
 
 const workerTemplate = await readFile(resolve(TOOLS, 'sw.template.js'), 'utf8');
 if (!workerTemplate.includes('__KORPHOLMEN_RELEASE__')) throw new Error('Service worker-mallen saknar releaseplatshållare');
