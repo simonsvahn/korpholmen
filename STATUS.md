@@ -88,7 +88,7 @@ Backupen före revision 5 finns i:
 ## Publicerat: Korpholmen runt topptider och tidsnormalisering
 
 Webbskalet publicerades 2026-08-16 som
-`2026-08-16-korpholmen-pwa-44`. Samma klass redovisas under separata
+`2026-08-16-korpholmen-pwa-45`. Samma klass redovisas under separata
 huvudavsnitt för Stora respektive Lilla banan. Varje
 klass visar först tio rader med möjlighet att visa hela klassen. Tidsstatus
 filtrerar inte bort något resultat: osäkra numeriska tider rangordnas med en
