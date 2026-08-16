@@ -55,3 +55,5 @@ Det ger två oberoende skydd:
 - Git-taggen bevarar den tidigare funktionaliteten.
 - Fullbackuper och frysta generationsspår bevarar datan.
 
+Den appvisa rekommendationen och föreslagen byggordning finns i
+`FUNKTIONSREKOMMENDATION-V1-TILL-V2.md`.

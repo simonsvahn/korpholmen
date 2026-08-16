@@ -49,6 +49,11 @@ app mot denna referens. Funktioner behålls, byggs om eller gallras först efter
 ett tydligt beslut; den äldre koden kopplas aldrig direkt till dagens writer.
 Se `FUNKTIONSMIGRERING-V1-V2.md`.
 
+En appvis funktionsrekommendation finns i
+`FUNKTIONSREKOMMENDATION-V1-TILL-V2.md`. Den skiljer mellan funktioner som bör
+återtas nu, byggas om senare och lämnas i V1-arkivet samt föreslår byggordning
+för alla sju ägarappar och Explorer.
+
 Personer & familjers publicerade V2-läsare använder den gemensamma
 byte-transporten för Person- och Matrikelmaster. Den äldre personappens
 JSON-transport används endast av generation 1-flödet och kan därför inte längre
