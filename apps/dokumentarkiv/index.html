@@ -15,9 +15,9 @@
   <title>Korpholmens Båtklubbs arkiv – Protokoll & handlingar</title>
   <link rel="manifest" href="../../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../../icons/korpholmen-180.png">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-43">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-44">
 </head>
 <body class="app-dokumentarkiv">
   <a class="skip-to-content" href="#app-view">Hoppa till innehåll</a>
@@ -33,14 +33,13 @@
     <a class="app-switch" href="../explorer/">08 Explorer</a>
   </nav>
   <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
-  <header class="sidhuvud">
-    <div class="identitet">
-      <p class="overrad">Korpholmens Båtklubbs arkiv</p>
+  <header class="sidhuvud kh-page-header">
+    <div class="identitet kh-page-heading">
       <h1>Protokoll & handlingar</h1>
-      <p>En källspårbar arkivatlas över år, berättelser, platser och människor.</p>
+      <p class="kh-page-intro">En källspårbar arkivatlas över år, berättelser, platser och människor.</p>
     </div>
     <div class="arkivfakta"><strong id="document-total">0</strong><span>digitaliserade handlingar</span><small id="year-range">—</small></div>
-    <div class="sync-panel"><span id="sync-status" role="status">Startar lokalt arkiv…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
+    <div class="sync-panel kh-page-sync"><span id="sync-status" role="status">Startar lokalt arkiv…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>
 
   <nav id="view-tabs" class="vynavigering kh-tabbar app-subnav" aria-label="Arkivets vyer">
@@ -68,7 +67,7 @@
 
   <main id="app-view" class="appvy" aria-live="polite"></main>
   <div id="live-region" class="endast-skarmreader" aria-live="polite"></div>
-  <script type="module" src="../../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-43"></script>
-  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-43"></script>
+  <script type="module" src="../../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-44"></script>
+  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-44"></script>
 </body>
 </html>

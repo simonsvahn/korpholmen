@@ -93,6 +93,24 @@ await test('alla sidor använder det gemensamma designsystemet efter appens egen
   assert.match(design, /\.kh-main/);
 });
 
+await test('alla apphuvuden är kompakta, likformiga och saknar överrubrik', async () => {
+  for (const app of SURFACES) {
+    const path = resolve(ROOT, 'apps', app, 'index.html');
+    const html = await readFile(path, 'utf8');
+    const pageHeader = html.match(/<header[^>]+class="[^"]*\bkh-page-header\b[^"]*"[\s\S]*?<\/header>/)?.[0] || '';
+    assert.ok(pageHeader, `${app} saknar gemensamt sidhuvud`);
+    assert.match(pageHeader, /class="[^"]*\bkh-page-heading\b[^"]*"/, `${app} saknar gemensam rubrikyta`);
+    assert.match(pageHeader, /class="[^"]*\bkh-page-intro\b[^"]*"/, `${app} saknar likformig ingress`);
+    assert.match(pageHeader, /class="[^"]*\bkh-page-sync\b[^"]*"/, `${app} saknar likformig synkyta`);
+    assert.doesNotMatch(pageHeader, /<p[^>]+class="[^"]*\b(?:eyebrow|overrad)\b/, `${app} visar fortfarande en överrubrik`);
+    assert.doesNotMatch(pageHeader, /<div class="titel[^>]*>\s*<p>/, `${app} visar fortfarande klubbnamn ovanför sidnamnet`);
+  }
+  const design = await readFile(resolve(ROOT, 'apps/korpholmen.css'), 'utf8');
+  assert.match(design, /--kh-header-height:\s*7\.75rem/);
+  assert.match(design, /@media \(max-width: 820px\)[\s\S]*--kh-header-height:\s*10\.25rem/);
+  assert.match(design, /\.kh-page-sync[\s\S]*grid-template-rows:\s*\.95rem 2\.25rem/);
+});
+
 await test('alla appar registrerar rotens service worker och inte en egen', async () => {
   for (const app of APPS) {
     const source = await readFile(resolve(ROOT, 'apps', app, 'src/app.js'), 'utf8');

@@ -10,9 +10,9 @@
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../icons/korpholmen-180.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-43">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-44">
 </head>
 <body class="app-fastigheter">
   <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
@@ -28,13 +28,12 @@
     <a class="app-switch" href="../explorer/">08 Explorer</a>
   </nav>
   <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
-  <header class="site-header">
-    <div>
-      <p class="eyebrow">Korpholmen</p>
+  <header class="site-header kh-page-header">
+    <div class="kh-page-heading">
       <h1>Fastighetshistorik</h1>
-      <p class="intro">Nuvarande ägare och en tidslinje för varje fastighet.</p>
+      <p class="intro kh-page-intro">Nuvarande ägare och en tidslinje för varje fastighet.</p>
     </div>
-    <div class="sync-panel"><span id="sync-status" role="status">Startar lokalt lager…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
+    <div class="sync-panel kh-page-sync"><span id="sync-status" role="status">Startar lokalt lager…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>
   <nav class="kh-tabbar app-subnav" aria-label="Appens delar">
     <div class="inner"><div class="kh-tabs"><span aria-current="page">Fastigheter</span></div></div>
@@ -54,7 +53,7 @@
     <div id="drawer-content"></div>
   </aside>
   <div id="backdrop" hidden></div>
-  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-43"></script>
-  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-43"></script>
+  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-44"></script>
+  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-44"></script>
 </body>
 </html>

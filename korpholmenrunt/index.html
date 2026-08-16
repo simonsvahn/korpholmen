@@ -14,10 +14,10 @@
   <meta property="og:image:height" content="630">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../icons/korpholmen-180.png">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="./matchning.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-43">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="./matchning.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-44">
   <title>Korpholmen runt – resultat & rekord</title>
 </head>
 <body class="app-korpholmenrunt">
@@ -34,9 +34,9 @@
     <a class="app-switch" href="../explorer/">08 Explorer</a>
   </nav>
   <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
-  <header class="masthead">
-    <div class="titel"><p>Korpholmens Båtklubb</p><h1>Korpholmen runt</h1><span>Resultat · rekord · människor · båtar</span></div>
-    <div class="live"><span id="sync-status">Startar den lokala mastern…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
+  <header class="masthead kh-page-header">
+    <div class="titel kh-page-heading"><h1>Korpholmen runt</h1><span class="kh-page-intro">Resultat · rekord · människor · båtar</span></div>
+    <div class="live kh-page-sync"><span id="sync-status">Startar den lokala mastern…</span><button id="connect-dropbox" type="button">Anslut Dropbox</button></div>
   </header>
 
   <nav class="huvudnav kh-tabbar app-subnav" aria-label="Appens delar">
@@ -79,7 +79,7 @@
     </form>
   </dialog>
 
-  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-43"></script>
-  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-43"></script>
+  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-44"></script>
+  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-44"></script>
 </body>
 </html>

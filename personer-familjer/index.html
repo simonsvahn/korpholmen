@@ -10,9 +10,9 @@
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="../icons/korpholmen-180.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-43">
-  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-43">
+  <link rel="stylesheet" href="./styles.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../app-switcher.css?v=2026-08-16-korpholmen-pwa-44">
+  <link rel="stylesheet" href="../korpholmen.css?v=2026-08-16-korpholmen-pwa-44">
 </head>
 <body class="app-matrikel">
   <a class="skip-to-content" href="#content">Hoppa till innehåll</a>
@@ -28,18 +28,15 @@
     <a class="app-switch" href="../explorer/">08 Explorer</a>
   </nav>
   <script>requestAnimationFrame(() => document.querySelector('.app-switch[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' }));</script>
-  <header class="site-header">
-    <div class="header-line">
-      <div>
-        <p class="eyebrow">Korpholmen</p>
-        <h1>Personer &amp; familjer</h1>
-      </div>
-      <div class="sync-panel">
-        <div class="status-stack"><span id="sync-status" role="status">Startar lokalt lager…</span><span id="undo-status" role="status" hidden></span></div>
-        <button id="connect-dropbox" type="button">Anslut Dropbox</button>
-      </div>
+  <header class="site-header kh-page-header">
+    <div class="kh-page-heading">
+      <h1>Personer &amp; familjer</h1>
+      <p class="intro kh-page-intro">Personerna står i centrum. Familjer och släkter har stabila, läsbara identiteter; släktväven visar de faktiska relationerna och fastigheterna är en separat gemenskap.</p>
     </div>
-    <p class="intro">Personerna står i centrum. Familjer och släkter har stabila, läsbara identiteter; släktväven visar de faktiska relationerna och fastigheterna är en separat gemenskap.</p>
+    <div class="sync-panel kh-page-sync">
+      <div class="status-stack"><span id="sync-status" role="status">Startar lokalt lager…</span><span id="undo-status" role="status" hidden></span></div>
+      <button id="connect-dropbox" type="button">Anslut Dropbox</button>
+    </div>
     <div class="family-model" aria-label="Personmasterns familjenivåer">
       <span><b>FAMILJ</b><small>konkret familjebildning</small></span>
       <span><b>SLÄKT</b><small>gren, stamlinje eller krets</small></span>
@@ -154,7 +151,7 @@
     <div id="drawer-content"></div>
   </aside>
 
-  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-43"></script>
-  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-43"></script>
+  <script type="module" src="../src/app-family-bootstrap.js?v=2026-08-16-korpholmen-pwa-44"></script>
+  <script type="module" src="./src/app.js?v=2026-08-16-korpholmen-pwa-44"></script>
 </body>
 </html>
