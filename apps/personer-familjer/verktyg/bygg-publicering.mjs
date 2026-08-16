@@ -33,7 +33,7 @@ const FILES = [
   'src/sync/sync-engine.js'
 ];
 const APP_FILES = ['src/people-v2-runtime.js'];
-const CORE_FILES = ['active-json-master.js', 'people-membership-master.js', 'membership-model.js', 'dependency-compatibility.js', 'data-layer.js', 'runtime-safety.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/http-read-transport.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
+const CORE_FILES = ['active-app-bundle.js', 'active-json-master.js', 'people-membership-master.js', 'membership-model.js', 'dependency-compatibility.js', 'data-layer.js', 'runtime-safety.js', 'family-context.js', 'master-data.js', 'read-only-master.js', 'domain/canonical.js', 'domain/hlc.js', 'domain/materializer.js', 'domain/operations.js', 'domain/repository.js', 'pwa/korpholmen-service-worker.js', 'storage/indexeddb.js', 'storage/memory.js', 'sync/app-family-sync.js', 'sync/batch.js', 'sync/batch-progress.js', 'sync/checkpoint-format.js', 'sync/dropbox-transport.js', 'sync/errors.js', 'sync/http-read-transport.js', 'sync/memory-transport.js', 'sync/oauth-flow.js', 'sync/oauth-pkce.js', 'sync/shared-dropbox-session.js', 'sync/sync-engine.js'];
 
 for (const relative of FILES) {
   const source = resolve(ROOT, relative);

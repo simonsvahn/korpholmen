@@ -350,6 +350,7 @@
     "./packages/core/sync/oauth-pkce.js",
     "./packages/core/sync/shared-dropbox-session.js",
     "./packages/core/sync/sync-engine.js",
+    "./personer-familjer/core/active-app-bundle.js",
     "./personer-familjer/core/active-json-master.js",
     "./personer-familjer/core/data-layer.js",
     "./personer-familjer/core/dependency-compatibility.js",

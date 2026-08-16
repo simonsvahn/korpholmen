@@ -13,16 +13,16 @@ operationsloggar, Dropbox-sökvägar eller dubbla mastrar kopplas inte tillbaka.
 
 ## Samlad rekommendation
 
-| App | Dagens V2 | Viktigast att återta eller bygga | Omfattning |
-|---|---|---|---|
-| Personer & familjer | Enkel personlista och personkort | Släktträd, fastighets-/båtnavigation och enkel redigering | Stor |
-| Båtregister | Nära full vardagsapp och aktiv writer | Begripliga källor, personfilter och kompakt listläge | Liten–medel |
-| Fastigheter | Bra tabell, tidslinje och aktiv writer | Fastighetsbildning, samägande och källfördjupning | Medel |
-| Dokumentarkiv | Fungerande V2-läsare med sju vyer | Full typfiltrering, dokumentpaket, kompakta registerkopplingar och versionsspår | Medel–stor |
-| Korpholmen runt | Fungerande resultat- och analysläsare | Källbilder, resultatredigering och enkel V2-writer | Medel |
-| Matrikel | Mest komplett V2-app | Klubbliv med roller/utmärkelser och ett säkert flöde för nya utgåvor | Liten–medel |
-| Kartdata | Fungerande atlas, struktur, kö och tabell | Enkel redigering av objekt, namnformer och länkar | Stor |
-| Explorer | Enkel totalsökning | Samlad personakt och tvärgående, tidsfiltrerad navigation | Stor |
+| App | Dagens V2 | Funktioner att ta tillbaka eller bygga | Funktioner att inte ta tillbaka | Omfattning |
+|---|---|---|---|---|
+| Personer & familjer | Personlista, sekundär familjevy, relationsträd och stabila tvärlänkar | Enkel person- och relationsredigering med separat writer-byte | Släktkretsar som huvudmodell, överlappande manuella SLÄKT-grupper, medlemsstatus och kopierade fastighetsuppgifter | Medel återstår |
+| Båtregister | Nära full vardagsapp och aktiv writer | Begripliga källor, person-/familjefilter, kompakt listläge och ren avslutning av granskningsfrågor | Gamla batchpaneler och publika förslagsköer, redigering av generation 1 samt ägandeslutledning från matrikelplacering | Liten–medel |
+| Fastigheter | Bra tabell, tidslinje och aktiv writer | Fastighetsbildning, grupperat samägande, källfördjupning och redigering av struktur | Forskningsdatabasens fulla evidensmodell, bred personkoppling som ser ut som ägande och flera lager av nuvarande ägare | Medel |
+| Dokumentarkiv | Fungerande V2-läsare med sju vyer | Full typfiltrering, dokumentpaket, kompakta registerkopplingar, roller och versionsspår | Hyperlänk i varje namnform, stort sambandsnät, gamla blandade länkar och krav på detaljroller för varje person | Medel–stor |
+| Korpholmen runt | Fungerande resultat- och analysläsare | Källbilder, resultatredigering, CSV-export och enkel V2-writer | AI-matchning i vardagsvyn, flera godkännanden per förekomst, påhittade besättningsroller och råimport som publik knapp | Medel |
+| Matrikel | Mest komplett V2-app | Klubbliv med roller/utmärkelser och ett säkert flöde för nya utgåvor | Översikt/Förändringar, sidhänvisningsbrus, familje-/släktvyer och härlett båtägande | Liten–medel |
+| Kartdata | Fungerande atlas, struktur, kö och tabell | Enkel redigering av objekt, namnformer och länkar samt säker borttagning/återställning | AI-arbetsfält, kopierade ägarnamn, onödiga dubbla platslänkar och oklara objekttyper | Stor |
+| Explorer | Enkel totalsökning | Samlad personakt och tvärgående, tidsfiltrerad navigation | Egen writer/master, kopierade profiler, länkar från enbart namnlikhet och ett blandat relationsnät | Stor |
 
 ## Gemensam regel för alla appar
 
@@ -52,12 +52,13 @@ Följande ska inte återinföras som normal V2-funktion:
 
 V2 har en snabb personlista med sökning på namn, klubbnamn och kontext, filter
 för livsstatus och medlemsnivå samt ett personkort med namnformer, livsuppgifter
-och direkta relationer. Den är ännu skrivskyddad och visar inte det äldre
-landskapet med familj, släktväv och fastigheter.
+och direkta relationer. Den lokalt verifierade utökningen visar en sekundär
+familjevy, begripliga träd från faktiska relationer och stabila länkar till
+övriga sakmastrar. Den är ännu skrivskyddad.
 
 ### Återta eller bygg nu
 
-1. **Visuellt släktträd från faktiska relationer.** Det ska ritas som den
+1. **Visuellt släktträd från faktiska relationer — byggt lokalt.** Det ritas som den
    begripliga trädmodell som tidigare användes vid person- och
    fastighetsgranskningen: partner tydligt sida vid sida, barn under paret och
    biologisk släktgren konsekvent placerad. Det ska inte kräva manuella
@@ -68,7 +69,7 @@ landskapet med familj, släktväv och fastigheter.
 3. **Enkel relationsredigering.** Partner/tidigare partner, förälder–barn och
    syskon ska kunna läggas till eller rättas. Bekräftad/ej bekräftad räcker som
    vardagsstatus.
-4. **Navigation till personens sammanhang.** Visa länkar till de fastigheter,
+4. **Navigation till personens sammanhang — byggt lokalt.** Visa länkar till de fastigheter,
    båtar, matrikeluppgifter, dokument och tävlingsresultat som faktiskt pekar
    på personens stabila ID. Sakuppgifterna redigeras fortfarande i ägarappen.
 5. **Filter för verkliga kontrollbehov.** Visa personer med okänd livsstatus,
@@ -397,9 +398,8 @@ Matrikel skulle vara, men all redigering sker i rätt ägarapp.
 
 ## Rekommenderad byggordning
 
-1. **Personer & familjer:** släktträd, person-/relationseditor och
-   tvärlänkar. Det är den största nuvarande funktionsluckan och påverkar alla
-   andra appar.
+1. **Personer & familjer:** publicera den lokalt verifierade läsversionen och
+   bygg därefter person-/relationseditorn som ett separat, säkert writer-byte.
 2. **Dokumentarkiv:** typfilter, dokumentpaket, kompakta kopplingar och
    versionsspår. Detta stöder det fortsatta dokumentarbetet utan writer-byte.
 3. **Kartdata:** enkel V2-editor för poster, namnformer och strukturlänkar.
@@ -419,10 +419,9 @@ andra appar bättre förutsättningar.
 Innan kod flyttas eller skrivs om görs en kort tabell med den appens konkreta
 V1-funktioner:
 
-| Funktion | Behåll | Bygg om | Gallra | Kommentar |
+| Funktion | Ta tillbaka oförändrad | Bygg om i V2 | Ta inte tillbaka | Kommentar/motiv |
 |---|---|---|---|---|
 
 Simon behöver bara avgöra de verkliga vägvalen. Självklar teknisk anpassning,
 testning och koppling till rätt V2-master görs utan att lägga över en
 rad-för-rad-inventering på honom.
-
