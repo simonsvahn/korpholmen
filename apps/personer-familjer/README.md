@@ -1,17 +1,30 @@
 # Personer & familjer — V2
 
 Appen är en skrivskyddad V2-läsare för den aktiva Personmastern. Personer är
-standardvyn. Den gemensamma undermenyn innehåller **Släkter · Familjer ·
-Personer**. Släkter ritar sammanhängande flergenerationsträd och Familjer visar
-stabila familje-ID:n. Båda räknas från faktiska partner- och
-förälder–barn-relationer.
+standardvyn. Den gemensamma undermenyn innehåller **Släkter · Släktträd ·
+Familjer · Personer**. Släkter behåller den sammanhängande relationsvyn.
+Släktträd är en parallell, V1-inspirerad vy som grupperar flera stabila
+familjeenheter över flera led. Familjer visar de stabila familje-ID:na. Alla
+tre räknas från faktiska partner- och förälder–barn-relationer.
+
+Släktträd är en härledd presentation. Den grupperar de stabila
+familjeenheterna i sammanhängande släktgrenar och räknar hur många led varje
+gren omfattar. När en person är barn i en familjeenhet och senare ankare i en
+annan binds familjerna ihop automatiskt. Ingen separat medlemslista för
+släktgrenen sparas. **Översta led** och **Visa djup** ändrar bara
+presentationen; de skriver inte masterdata. En person som är ankare i flera
+familjer ger en gemensam gren i stället för dubblerade nästan likadana träd.
+Om en namngiven släkt eller stamlinje senare behöver
+avgränsas används ankarpersoner eller ankarfamiljer enligt
+[`FAMILJEMODELL.md`](../../FAMILJEMODELL.md), aldrig efternamn eller en kopierad
+lista över alla efterkommande.
 
 Personakten visar livsuppgifter, medlemsnivå, namnformer, direkta relationer
 och länkar via stabila ID:n till Matrikel, Båtregister, Fastigheter,
 Dokumentarkiv och Korpholmen runt. Sakuppgifter redigeras i respektive ägarapp.
 Gamla släktkretsar och kopierade fastighets- eller medlemsuppgifter används
 inte som masterdata. Personpanelen visar bara den närmaste familjen i ett
-kompakt format; det fulla sammanhanget visas i Släkter.
+kompakt format; det fulla sammanhanget visas i Släkter eller Släktträd.
 
 Personmasterns roll som identitetsmaster och dess gränser mot övriga appar finns i
 den gemensamma [`ARKITEKTUR.md`](../../ARKITEKTUR.md). Familje- och

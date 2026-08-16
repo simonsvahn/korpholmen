@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/harness.mjs",
+    "test": "node test/harness.mjs && node test/people-v2-runtime.mjs",
     "build:publish": "node verktyg/bygg-publicering.mjs",
     "build:approved-data": "node verktyg/bygg-godkand-excelimport.mjs"
   }
