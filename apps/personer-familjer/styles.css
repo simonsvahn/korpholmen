@@ -366,13 +366,18 @@ html[data-people-v2="true"] .toolbar { display: grid; gap: .65rem; padding: .8re
 .v2-kinship-register { max-width: none; }
 .v2-kinship-forest { display: grid; gap: 1rem; }
 .v2-kinship-component { overflow: hidden; border: 1px solid var(--line); border-radius: .8rem; background: #fffdf9; }
+.v2-lineage-register .v2-kinship-component { border-left: 4px solid var(--tree-accent, var(--navy-2)); }
 .v2-kinship-component > header { display: flex; justify-content: space-between; gap: 1rem; align-items: end; padding: .75rem .9rem; border-bottom: 1px solid var(--line); }
 .v2-kinship-component > header small { color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .v2-kinship-component > header h3 { margin: .12rem 0 0; color: var(--navy); font: 700 1rem/1.2 Helvetica, Arial, sans-serif; }
 .v2-kinship-component > header span { color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .v2-kinship-canvas { display: flex; gap: 2rem; align-items: flex-start; overflow-x: auto; padding: 1rem; }
-.v2-kinship-node { display: grid; justify-items: center; min-width: max-content; }
-.v2-kinship-node.uncertain > .v2-kinship-household { outline: 1px dashed #a8662a; outline-offset: .2rem; }
+.v2-kinship-node { position: relative; display: grid; justify-items: center; min-width: max-content; }
+.v2-kinship-node.uncertain > .v2-kinship-household-block .v2-kinship-household { outline: 1px dashed #a8662a; outline-offset: .2rem; }
+.v2-kinship-household-block { display: grid; justify-items: center; gap: .22rem; }
+.v2-kinship-family-labels { display: flex; justify-content: center; gap: .25rem; flex-wrap: wrap; }
+.v2-kinship-family-labels button { border: 0; border-radius: 999px; background: color-mix(in srgb, var(--tree-accent, var(--navy-2)) 11%, var(--surface)); color: var(--muted); padding: .16rem .42rem; font: 700 .62rem/1.2 Helvetica, Arial, sans-serif; }
+.v2-kinship-family-labels button:hover { color: var(--navy); }
 .v2-kinship-household { display: flex; align-items: center; justify-content: center; min-width: max-content; }
 .v2-kinship-person { display: grid; gap: .08rem; width: 8.5rem; min-height: 3rem; border: 1px solid var(--line-strong); border-radius: .5rem; background: #fff; color: var(--navy); padding: .42rem .48rem; text-align: left; }
 .v2-kinship-person:hover { border-color: var(--navy); box-shadow: var(--shadow); }
@@ -406,7 +411,19 @@ html[data-people-v2="true"] .v2-tree-person.compact { width: 7.4rem; min-height:
   .v2-family-row > span:nth-child(2), .v2-family-row > span:nth-child(3) { grid-column: 1 / -1; }
   .v2-tree-person { width: 8rem; }
   .v2-tree-person.compact { width: 7.2rem; }
-  .v2-kinship-canvas { padding: .75rem; }
-  .v2-kinship-person { width: 7.6rem; }
+  .v2-lineage-register .v2-kinship-component > header { display: block; }
+  .v2-lineage-register .v2-kinship-component > header > span { display: block; margin-top: .25rem; white-space: normal; }
+  .v2-lineage-register .v2-kinship-canvas { display: grid; gap: .75rem; overflow: visible; padding: .75rem .65rem; }
+  .v2-lineage-register .v2-kinship-node { width: 100%; min-width: 0; justify-items: stretch; }
+  .v2-lineage-register .v2-kinship-node + .v2-kinship-node { margin-top: .42rem; }
+  .v2-lineage-register .v2-kinship-household-block { width: 100%; justify-items: start; }
+  .v2-lineage-register .v2-kinship-family-labels { justify-content: flex-start; }
+  .v2-lineage-register .v2-kinship-household { width: 100%; min-width: 0; justify-content: flex-start; flex-wrap: wrap; }
+  .v2-lineage-register .v2-kinship-person { width: 8rem; min-width: 7.35rem; max-width: 9.25rem; flex: 1 1 7.35rem; }
+  .v2-lineage-register .v2-kinship-stem { display: none; }
+  .v2-lineage-register .v2-kinship-children { display: block; width: auto; min-width: 0; margin: .42rem 0 .05rem .72rem; padding: .05rem 0 .05rem .78rem; border-top: 0; border-left: 2px solid var(--line-strong); }
+  .v2-lineage-register .v2-kinship-children > .v2-kinship-node { margin-top: .42rem; }
+  .v2-lineage-register .v2-kinship-children > .v2-kinship-node::before { position: absolute; left: -.78rem; top: 1.7rem; width: .6rem; height: 0; margin: 0; border-top: 2px solid var(--line-strong); background: none; }
+  .v2-lineage-register .v2-kinship-children > .v2-kinship-node.uncertain::before { border-top-style: dashed; border-color: #a8662a; }
   html[data-people-v2="true"] #person-drawer { height: 82vh; }
 }

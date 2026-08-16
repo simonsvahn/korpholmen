@@ -44,18 +44,175 @@ export function familyUnitView(family, people = [], relations = []) {
   };
 }
 
-export function kinshipView(people = [], relations = []) {
+function componentStructure(component, graph, families = [], index = 0, options = {}) {
+  const rootIds = unique(options.rootPersonIds || []).filter(personId => component.has(personId));
+  if (!rootIds.length) rootIds.push(...[...component]
+    .filter(personId => !(graph.parents.get(personId) || []).some(link => component.has(link.id)))
+    .sort((left, right) => String(graph.byId.get(left)?.display_name || left).localeCompare(String(graph.byId.get(right)?.display_name || right), 'sv')));
+  const starts = rootIds.length ? rootIds : [...component].sort();
+  const depths = new Map(starts.map(personId => [personId, 1]));
+  const queue = [...starts];
+  let steps = 0;
+  const maxSteps = Math.max(1, component.size * component.size);
+  while (queue.length && steps < maxSteps) {
+    steps += 1;
+    const personId = queue.shift();
+    const currentDepth = depths.get(personId) || 1;
+    for (const partner of graph.partners.get(personId) || []) {
+      if (!component.has(partner.id) || currentDepth <= (depths.get(partner.id) || 0)) continue;
+      depths.set(partner.id, currentDepth);
+      queue.push(partner.id);
+    }
+    const nextDepth = currentDepth + 1;
+    for (const child of graph.children.get(personId) || []) {
+      if (!component.has(child.id) || nextDepth <= (depths.get(child.id) || 0)) continue;
+      depths.set(child.id, nextDepth);
+      queue.push(child.id);
+    }
+  }
+  const componentFamilies = families.filter(family => (family.member_ids || family.anchor_person_ids || []).some(personId => component.has(personId)));
+  return {
+    id: options.id || `derived-kinship-${index + 1}`,
+    title: options.title || null,
+    component,
+    root_ids: rootIds,
+    families: componentFamilies,
+    family_count: componentFamilies.length,
+    generation_count: Math.max(1, ...[...component].map(personId => depths.get(personId) || 1)),
+    depth_by_person: depths,
+  };
+}
+
+function familyLineageStructures(graph, families = []) {
+  const familyByAnchor = new Map();
+  const addAnchor = (personId, family) => {
+    if (!familyByAnchor.has(personId)) familyByAnchor.set(personId, []);
+    familyByAnchor.get(personId).push(family);
+  };
+  for (const family of families) for (const personId of family.anchor_person_ids || []) addAnchor(personId, family);
+
+  const hasEarlierFamily = family => (family.anchor_person_ids || []).some(personId =>
+    (graph.parents.get(personId) || []).some(parent => (familyByAnchor.get(parent.id) || []).some(candidate => candidate.id !== family.id)));
+  const roots = families.filter(family => !hasEarlierFamily(family));
+  const unclusteredRoots = [...roots];
+  const rootGroups = [];
+  while (unclusteredRoots.length) {
+    const group = [unclusteredRoots.shift()];
+    const anchorIds = new Set(group[0].anchor_person_ids || []);
+    let foundAnother = true;
+    while (foundAnother) {
+      foundAnother = false;
+      for (let index = unclusteredRoots.length - 1; index >= 0; index -= 1) {
+        const candidate = unclusteredRoots[index];
+        if (!(candidate.anchor_person_ids || []).some(personId => anchorIds.has(personId))) continue;
+        group.push(...unclusteredRoots.splice(index, 1));
+        for (const personId of candidate.anchor_person_ids || []) anchorIds.add(personId);
+        foundAnother = true;
+      }
+    }
+    rootGroups.push(group);
+  }
+  const seeds = rootGroups.length ? rootGroups : families.map(family => [family]);
+  const structures = [];
+  const coveredFamilyIds = new Set();
+
+  for (const rootGroup of seeds) {
+    const root = rootGroup[0];
+    const lineageIds = new Set(rootGroup.flatMap(family => [...(family.anchor_person_ids || []), ...(family.children || []).map(person => person.id)]));
+    const component = new Set(lineageIds);
+    const familyIds = new Set();
+    const personQueue = [...lineageIds];
+    for (let cursor = 0; cursor < personQueue.length; cursor += 1) {
+      const personId = personQueue[cursor];
+      for (const child of graph.children.get(personId) || []) {
+        if (lineageIds.has(child.id)) continue;
+        lineageIds.add(child.id);
+        component.add(child.id);
+        personQueue.push(child.id);
+      }
+      for (const family of familyByAnchor.get(personId) || []) {
+        if (familyIds.has(family.id)) continue;
+        familyIds.add(family.id);
+        coveredFamilyIds.add(family.id);
+        for (const anchorId of family.anchor_person_ids || []) component.add(anchorId);
+        for (const child of family.children || []) {
+          component.add(child.id);
+          if (lineageIds.has(child.id)) continue;
+          lineageIds.add(child.id);
+          personQueue.push(child.id);
+        }
+      }
+    }
+    const branchFamilies = families.filter(family => familyIds.has(family.id));
+    if (!branchFamilies.length || component.size < 2) continue;
+    const rootAnchorCounts = new Map();
+    for (const family of rootGroup) for (const personId of family.anchor_person_ids || []) rootAnchorCounts.set(personId, (rootAnchorCounts.get(personId) || 0) + 1);
+    const sharedRootNames = [...rootAnchorCounts]
+      .filter(([, count]) => count > 1)
+      .map(([personId]) => graph.byId.get(personId)?.display_name)
+      .filter(Boolean);
+    structures.push(componentStructure(component, graph, branchFamilies, structures.length, {
+      id: `derived-lineage:${root.id}`,
+      rootPersonIds: rootGroup.flatMap(family => family.anchor_person_ids || []),
+      title: rootGroup.length > 1 && sharedRootNames.length
+        ? `${sharedRootNames.join(' och ')} med familjer`
+        : familyLabelForStructure(root),
+    }));
+  }
+
+  for (const family of families) {
+    if (coveredFamilyIds.has(family.id)) continue;
+    const component = new Set(family.member_ids || family.anchor_person_ids || []);
+    if (component.size < 2) continue;
+    structures.push(componentStructure(component, graph, [family], structures.length, {
+      id: `derived-lineage:${family.id}`,
+      rootPersonIds: family.anchor_person_ids || [],
+      title: familyLabelForStructure(family),
+    }));
+  }
+  return structures;
+}
+
+function familyLabelForStructure(family) {
+  return family.display_name || family.reference_code || 'Namnlös familj';
+}
+
+export function kinshipView(people = [], relations = [], families = []) {
   const normalizedRelations = relations.map(relation => ({
     ...relation,
     kind: relationType(relation),
   }));
   const graph = buildGraph(people, normalizedRelations);
   const components = componentSets(people, normalizedRelations);
+  const connected = components.filter(component => component.size > 1);
+  const lineages = familyLineageStructures(graph, families);
   return {
     graph,
     relations: normalizedRelations,
-    connected: components.filter(component => component.size > 1),
+    connected,
+    lineages: lineages
+      .sort((left, right) => right.component.size - left.component.size || String(left.title || left.id).localeCompare(String(right.title || right.id), 'sv')),
     isolated: components.filter(component => component.size === 1),
+  };
+}
+
+export function lineageWindow(group, { startGeneration = 1, generationDepth = null } = {}) {
+  const start = Math.max(1, Number(startGeneration) || 1);
+  const depth = generationDepth === null || generationDepth === '' ? null : Math.max(1, Number(generationDepth) || 1);
+  const end = depth === null ? Number.POSITIVE_INFINITY : start + depth - 1;
+  const component = new Set([...group.component].filter(personId => {
+    const generation = group.depth_by_person?.get(personId) || 1;
+    return generation >= start && generation <= end;
+  }));
+  const families = (group.families || []).filter(family => (family.member_ids || family.anchor_person_ids || []).some(personId => component.has(personId)));
+  const visibleGenerations = [...component].map(personId => group.depth_by_person?.get(personId) || start);
+  return {
+    ...group,
+    component,
+    families,
+    family_count: families.length,
+    generation_count: visibleGenerations.length ? Math.max(...visibleGenerations) - Math.min(...visibleGenerations) + 1 : 0,
+    visible_generation_start: start,
   };
 }
 
@@ -105,7 +262,9 @@ export class PeopleV2Runtime {
 
   familiesFor(personId) { return this.listFamilies().filter(family => family.member_ids.includes(personId)); }
 
-  kinship() { return kinshipView(this.listPeople(), this.listRelations()); }
+  kinship() { return kinshipView(this.listPeople(), this.listRelations(), this.listFamilies()); }
+
+  lineageWindow(group, options) { return lineageWindow(group, options); }
 
   contextList(source, collection) { return this.context?.list(source, collection) || []; }
 

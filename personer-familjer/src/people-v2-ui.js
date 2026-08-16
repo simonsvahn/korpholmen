@@ -20,6 +20,17 @@ function kinshipPersonButton(person) {
   return `<button type="button" class="v2-kinship-person" data-v2-person="${escapeHtml(person.id)}" aria-label="Öppna ${escapeHtml(person.display_name)}"><b>${escapeHtml(person.display_name)}</b>${person.club_name ? `<i>${escapeHtml(person.club_name)}</i>` : ''}</button>`;
 }
 
+function sameHousehold(family, householdIds) {
+  const anchors = family.anchor_person_ids || [];
+  return anchors.length > 1 && anchors.every(personId => householdIds.includes(personId));
+}
+
+function householdFamilyLabels(families, householdIds) {
+  const matching = families.filter(family => sameHousehold(family, householdIds));
+  if (!matching.length) return '';
+  return `<div class="v2-kinship-family-labels" aria-label="Familjeenheter">${matching.map(family => `<button type="button" data-v2-family="${escapeHtml(family.id)}">${escapeHtml(familyLabel(family))}</button>`).join('')}</div>`;
+}
+
 function kinshipRootPeople(component, graph) {
   return [...component]
     .map(id => graph.byId.get(id))
@@ -35,7 +46,7 @@ function kinshipComponentTitle(component, graph) {
   return `${names.join(' · ')}${people.length > 3 ? ` · +${people.length - 3}` : ''}`;
 }
 
-function renderKinshipBranch(personId, component, visited, graph, uncertain = false) {
+function renderKinshipBranch(personId, component, visited, graph, families, uncertain = false) {
   if (visited.has(personId)) return '';
   const person = graph.byId.get(personId);
   if (!person) return '';
@@ -50,23 +61,28 @@ function renderKinshipBranch(personId, component, visited, graph, uncertain = fa
     .sort((left, right) => graph.byId.get(left).display_name.localeCompare(graph.byId.get(right).display_name, 'sv'));
   const childHtml = childIds.map(childId => {
     const links = householdIds.flatMap(parentId => (graph.children.get(parentId) || []).filter(link => link.id === childId));
-    return renderKinshipBranch(childId, component, visited, graph, links.some(link => link.relation.needs_review));
+    return renderKinshipBranch(childId, component, visited, graph, families, links.some(link => link.relation.needs_review));
   }).join('');
-  const household = `<div class="v2-kinship-household">${kinshipPersonButton(person)}${partnerLinks.map(link => {
+  const household = `<div class="v2-kinship-household-block">${householdFamilyLabels(families, householdIds)}<div class="v2-kinship-household">${kinshipPersonButton(person)}${partnerLinks.map(link => {
     const marker = link.relation.kind === 'tidigare' ? 'förr' : link.relation.kind === 'coparent' ? '+' : '—';
     const label = link.relation.kind === 'tidigare' ? 'tidigare partner' : link.relation.kind === 'coparent' ? 'har barn tillsammans' : 'partner';
     return `<span class="v2-kinship-partner ${escapeHtml(link.relation.kind)}" aria-label="${label}">${marker}</span>${kinshipPersonButton(graph.byId.get(link.id))}`;
-  }).join('')}</div>`;
+  }).join('')}</div></div>`;
   return `<div class="v2-kinship-node${uncertain ? ' uncertain' : ''}">${household}${childHtml ? `<div class="v2-kinship-stem" aria-hidden="true"></div><div class="v2-kinship-children">${childHtml}</div>` : ''}</div>`;
 }
 
-function renderKinshipComponent(component, graph, index) {
+function renderKinshipComponent(group, graph, index) {
+  const { component, families = [], family_count: familyCount = 0, generation_count: generationCount = null } = group;
   const visited = new Set();
   const roots = kinshipRootPeople(component, graph);
   const branches = [];
-  for (const root of roots) if (!visited.has(root.id)) branches.push(renderKinshipBranch(root.id, component, visited, graph));
-  for (const id of component) if (!visited.has(id)) branches.push(renderKinshipBranch(id, component, visited, graph));
-  return `<article class="v2-kinship-component"><header><div><small>Släktträd ${index + 1}</small><h3>${escapeHtml(kinshipComponentTitle(component, graph))}</h3></div><span>${component.size} personer</span></header><div class="v2-kinship-canvas">${branches.join('')}</div></article>`;
+  for (const root of roots) if (!visited.has(root.id)) branches.push(renderKinshipBranch(root.id, component, visited, graph, families));
+  for (const id of component) if (!visited.has(id)) branches.push(renderKinshipBranch(id, component, visited, graph, families));
+  const familySummary = familyCount ? `${familyCount} ${familyCount === 1 ? 'familj' : 'familjer'} · ` : '';
+  const title = group.title || kinshipComponentTitle(component, graph);
+  const label = group.title ? `Släktgren ${index + 1}` : `Släktträd ${index + 1}`;
+  const summary = group.title ? `${familySummary}${generationCount} led · ${component.size} personer` : `${component.size} personer`;
+  return `<article class="v2-kinship-component" style="--tree-accent:hsl(${[205, 145, 18, 278, 188, 332][index % 6]} 42% 42%)"><header><div><small>${label}</small><h3>${escapeHtml(title)}</h3></div><span>${summary}</span></header><div class="v2-kinship-canvas">${branches.join('')}</div></article>`;
 }
 
 export class PeopleV2Controller {
@@ -79,6 +95,8 @@ export class PeopleV2Controller {
     this.search = '';
     this.life = '';
     this.level = '';
+    this.lineageStart = 1;
+    this.lineageDepth = '';
     this.mode = 'people';
   }
 
@@ -89,16 +107,18 @@ export class PeopleV2Controller {
     document.querySelector('.family-model')?.setAttribute('hidden', '');
     document.querySelector('main .legend')?.setAttribute('hidden', '');
     const requestedMode = new URL(location.href).searchParams.get('view');
-    if (['people', 'families', 'kinship'].includes(requestedMode)) this.mode = requestedMode;
+    if (['people', 'families', 'kinship', 'lineages'].includes(requestedMode)) this.mode = requestedMode;
     const subnav = document.querySelector('.app-subnav .kh-tabs');
     subnav.setAttribute('role', 'tablist');
     subnav.setAttribute('aria-label', 'Välj vy');
-    subnav.innerHTML = `<button type="button" role="tab" data-v2-mode="kinship">Släkter</button><button type="button" role="tab" data-v2-mode="families">Familjer</button><button type="button" role="tab" data-v2-mode="people">Personer</button>`;
+    subnav.innerHTML = `<button type="button" role="tab" data-v2-mode="kinship">Släkter</button><button type="button" role="tab" data-v2-mode="lineages">Släktträd</button><button type="button" role="tab" data-v2-mode="families">Familjer</button><button type="button" role="tab" data-v2-mode="people">Personer</button>`;
     const toolbar = document.querySelector('.toolbar');
-    toolbar.innerHTML = `<div class="v2-people-toolbar"><label>Sök<input id="v2-people-search" type="search" placeholder="Namn eller klubbnamn …"></label><label class="v2-person-filter">Livsstatus<select id="v2-people-life"><option value="">Alla</option><option value="living">Levande</option><option value="dead">Avlidna</option><option value="unknown">Okänd</option></select></label><label class="v2-person-filter">Medlemsnivå<select id="v2-people-level"><option value="">Alla</option><option value="senior">Seniorer</option><option value="junior">Juniorer</option><option value="none">Ej angivet</option></select></label><output id="v2-people-count"></output></div>`;
+    toolbar.innerHTML = `<div class="v2-people-toolbar"><label>Sök<input id="v2-people-search" type="search" placeholder="Namn eller klubbnamn …"></label><label class="v2-person-filter">Livsstatus<select id="v2-people-life"><option value="">Alla</option><option value="living">Levande</option><option value="dead">Avlidna</option><option value="unknown">Okänd</option></select></label><label class="v2-person-filter">Medlemsnivå<select id="v2-people-level"><option value="">Alla</option><option value="senior">Seniorer</option><option value="junior">Juniorer</option><option value="none">Ej angivet</option></select></label><label class="v2-lineage-filter" hidden>Översta led<select id="v2-lineage-start"><option value="1">Äldsta kända</option><option value="2">Led 2</option><option value="3">Led 3</option><option value="4">Led 4</option><option value="5">Led 5</option></select></label><label class="v2-lineage-filter" hidden>Visa djup<select id="v2-lineage-depth"><option value="">Alla återstående</option><option value="1">1 led</option><option value="2">2 led</option><option value="3">3 led</option></select></label><output id="v2-people-count"></output></div>`;
     toolbar.querySelector('#v2-people-search').addEventListener('input', event => { this.search = event.target.value; this.render(); });
     toolbar.querySelector('#v2-people-life').addEventListener('change', event => { this.life = event.target.value; this.render(); });
     toolbar.querySelector('#v2-people-level').addEventListener('change', event => { this.level = event.target.value; this.render(); });
+    toolbar.querySelector('#v2-lineage-start').addEventListener('change', event => { this.lineageStart = Number(event.target.value) || 1; this.render(); });
+    toolbar.querySelector('#v2-lineage-depth').addEventListener('change', event => { this.lineageDepth = event.target.value; this.render(); });
     subnav.addEventListener('click', event => {
       const button = event.target.closest('[data-v2-mode]');
       if (!button) return;
@@ -150,6 +170,7 @@ export class PeopleV2Controller {
     return {
       ...kinship,
       connected: kinship.connected.filter(component => [...component].some(id => matchingIds.has(id))),
+      lineages: kinship.lineages.filter(group => [...group.component].some(id => matchingIds.has(id))),
       isolated: kinship.isolated.filter(component => [...component].some(id => matchingIds.has(id))),
     };
   }
@@ -164,13 +185,15 @@ export class PeopleV2Controller {
       else button.removeAttribute('aria-current');
     });
     document.querySelectorAll('.v2-person-filter').forEach(node => { node.hidden = this.mode !== 'people'; });
+    document.querySelectorAll('.v2-lineage-filter').forEach(node => { node.hidden = this.mode !== 'lineages'; });
     const search = document.querySelector('#v2-people-search');
-    if (search) search.placeholder = this.mode === 'kinship' ? 'Hitta en person i släktträden …' : this.mode === 'families' ? 'Familj eller person …' : 'Namn, klubbnamn eller kontext …';
+    if (search) search.placeholder = ['kinship', 'lineages'].includes(this.mode) ? 'Hitta en person i släktträden …' : this.mode === 'families' ? 'Familj eller person …' : 'Namn, klubbnamn eller kontext …';
     if (!all.length) {
       this.content.innerHTML = '<section class="empty"><h2>Ingen verifierad Personmaster på enheten ännu</h2><p>Anslut Dropbox för att läsa den aktiva V2-mastern.</p></section>';
       return;
     }
-    if (this.mode === 'kinship') this.renderKinship();
+    if (this.mode === 'lineages') this.renderLineages();
+    else if (this.mode === 'kinship') this.renderKinship();
     else if (this.mode === 'families') this.renderFamilies();
     else this.renderPeople();
   }
@@ -197,7 +220,18 @@ export class PeopleV2Controller {
     const isolatedPeople = kinship.isolated.flatMap(component => [...component].map(id => kinship.graph.byId.get(id)).filter(Boolean));
     const count = document.querySelector('#v2-people-count');
     if (count) count.textContent = `${kinship.connected.length} träd · ${connectedPeople} kopplade`;
-    this.content.innerHTML = `<section class="v2-people-register v2-kinship-register"><header><div><p class="eyebrow dark">Faktiska relationer</p><h2>Släkter</h2></div><p>Partner visas tillsammans och barn under sina föräldrar. Inga gamla släktkretsar styr träden.</p></header><div class="v2-kinship-forest">${kinship.connected.map((component, index) => renderKinshipComponent(component, kinship.graph, index)).join('') || '<p>Inga sammanhängande släktträd matchar sökningen.</p>'}</div>${isolatedPeople.length ? `<section class="v2-kinship-isolated"><h3>Utan registrerad personrelation <span>${isolatedPeople.length}</span></h3><div>${isolatedPeople.sort((left, right) => left.display_name.localeCompare(right.display_name, 'sv')).map(kinshipPersonButton).join('')}</div></section>` : ''}</section>`;
+    this.content.innerHTML = `<section class="v2-people-register v2-kinship-register"><header><div><p class="eyebrow dark">Faktiska relationer</p><h2>Släkter</h2></div><p>Partner visas tillsammans och barn under sina föräldrar. Inga gamla släktkretsar styr träden.</p></header><div class="v2-kinship-forest">${kinship.connected.map((component, index) => renderKinshipComponent({ component }, kinship.graph, index)).join('') || '<p>Inga sammanhängande släktträd matchar sökningen.</p>'}</div>${isolatedPeople.length ? `<section class="v2-kinship-isolated"><h3>Utan registrerad personrelation <span>${isolatedPeople.length}</span></h3><div>${isolatedPeople.sort((left, right) => left.display_name.localeCompare(right.display_name, 'sv')).map(kinshipPersonButton).join('')}</div></section>` : ''}</section>`;
+  }
+
+  renderLineages() {
+    const kinship = this.visibleKinship();
+    const lineages = kinship.lineages
+      .map(group => this.runtime.lineageWindow(group, { startGeneration: this.lineageStart, generationDepth: this.lineageDepth }))
+      .filter(group => group.component.size);
+    const peopleIds = new Set(lineages.flatMap(group => [...group.component]));
+    const count = document.querySelector('#v2-people-count');
+    if (count) count.textContent = `${lineages.length} grenar · ${peopleIds.size} personer`;
+    this.content.innerHTML = `<section class="v2-people-register v2-kinship-register v2-lineage-register"><header><div><p class="eyebrow dark">Familjer över flera led</p><h2>Släktträd</h2></div><p>Ett barn som senare bildar en ny familj förbinder familjerna till en läsbar släktgren.</p></header><div class="v2-kinship-forest">${lineages.map((group, index) => renderKinshipComponent(group, kinship.graph, index)).join('') || '<p>Inga familjebaserade släktgrenar matchar inställningen.</p>'}</div></section>`;
   }
 
   contextHtml(personId) {

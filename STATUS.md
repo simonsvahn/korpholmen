@@ -63,13 +63,14 @@ Den utökade läsversionen publicerades genom PR 63–64. Personer är standardv
 och Familjer visar 62 stabila familjeenheter. Personakten länkar med stabila
 ID:n till Matrikel, Båtregister, Fastigheter, Dokumentarkiv och Korpholmen runt.
 
-Arbetsgrenen `codex/slaktvav-v2` innehåller nästa lokalt verifierade steg:
-undermenyn **Släkter · Familjer · Personer**, V1-liknande flergenerationsträd
-från V2:s faktiska relationer samt en bredare personpanel med kompakt närmaste
-familj. Den aktiva mastern ger 17 sammanhängande träd med 220 personer och 93
-personer utan registrerad personrelation. Gamla släktkretsar, kopierad sakdata
-och generation 1-writer används inte. Denna senaste arbetsgren är ännu inte
-publicerad.
+Arbetsgrenen `codex/slaktvav-mobile-v2` innehåller nästa verifierade steg:
+undermenyn **Släkter · Släktträd · Familjer · Personer**. Nuvarande Släkter
+behålls. Släktträd grupperar 62 stabila familjeenheter till 18 härledda grenar
+med upp till fem led och 199 unika personer. Översta led och visat djup kan
+ändras utan att något skrivs till mastern. Mobilvyn följer V1:s lodräta
+grenstruktur, men all data kommer från V2:s familjeenheter och faktiska
+relationer. Gamla släktkretsar, kopierad sakdata och generation 1-writer
+används inte. Arbetsgrenen är ännu inte publicerad.
 
 De historiska Dropbox-namnrymderna `/matrikel/ops` för personmasterns
 generation 1 och `/klubbhistorik/ops` för medlemsmasterns generation 1 är

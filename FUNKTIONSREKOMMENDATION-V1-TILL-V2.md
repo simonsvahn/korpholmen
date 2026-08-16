@@ -59,11 +59,14 @@ fortsatt skrivskyddad.
 
 ### Återta eller bygg nu
 
-1. **Visuellt släktträd från faktiska relationer — byggt lokalt.** Det ritas som den
+1. **Visuellt släktträd från faktiska relationer — byggt för parallell publicering.** Nuvarande
+   **Släkter** behålls och den V1-inspirerade flergenerationsvyn ligger bredvid
+   som **Släktträd**. Den ritas som den
    begripliga trädmodell som tidigare användes vid person- och
    fastighetsgranskningen: partner tydligt sida vid sida, barn under paret och
    biologisk släktgren konsekvent placerad. Det ska inte kräva manuella
-   släktkretsar för att fungera.
+   släktkretsar för att fungera. Översta led och synligt djup kan ändras utan
+   att masterdata påverkas.
 2. **Enkel personredigering.** Lägg till och ändra riktigt namn, namnperiod,
    livsstatus, födelse-/dödstid och kontext. Livsstatus ska kräva ett aktivt val
    när en ny person skapas. Spara ska skapa en ny V2-revision och ett kvitto.
