@@ -1,4 +1,5 @@
 import { createActiveAppBundle } from '../../../packages/core/active-app-bundle.js';
+import { buildRecordViewModel, recordTimeLabel } from './record-ranking.js';
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const normalize = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('sv');
@@ -21,6 +22,7 @@ export class RaceActiveV2 {
     this.mode = 'oversikt';
     this.duelLeft = '';
     this.duelRight = '';
+    this.expandedRecordGroups = new Set();
   }
 
   async init() {
@@ -57,6 +59,12 @@ export class RaceActiveV2 {
       }
       const profile = event.target.closest('[data-v2-race-profile]')?.dataset.v2RaceProfile;
       if (profile) this.renderProfile(profile);
+      const recordToggle = event.target.closest('[data-v2-record-toggle]')?.dataset.v2RecordToggle;
+      if (recordToggle) {
+        if (this.expandedRecordGroups.has(recordToggle)) this.expandedRecordGroups.delete(recordToggle);
+        else this.expandedRecordGroups.add(recordToggle);
+        this.render();
+      }
     });
     this.view.addEventListener('change', event => {
       if (event.target.matches('[data-v2-duel-left]')) { this.duelLeft = event.target.value; this.render(); }
@@ -133,18 +141,12 @@ export class RaceActiveV2 {
   }
 
   renderRecords(rows) {
-    const eligible = rows.filter(row => Number.isFinite(row.duration_seconds));
-    const groups = new Map();
-    eligible.forEach(row => {
-      const key = `${row.course_code || '—'}|${row.class_name || row.class_raw || 'Okänd klass'}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(row);
-    });
-    const cards = [...groups].sort((a, b) => compare(a[0], b[0])).map(([key, items]) => {
-      const [course, klass] = key.split('|');
-      return `<article class="v2-record-card"><header><h3>${escapeHtml(klass)}</h3><span>Bana ${escapeHtml(course)}</span></header>${items.sort((a, b) => a.duration_seconds - b.duration_seconds).slice(0, 10).map((row, index) => `<div><b>${index + 1}</b><time>${escapeHtml(row.time_raw)}</time><span>${this.participantsFor(row).map(person => this.personLink(person)).join(', ') || '—'}<small>${this.boatLink(row)} · ${row.year}</small></span></div>`).join('')}</article>`;
-    });
-    this.view.innerHTML = cards.length ? `<section class="v2-record-grid">${cards.join('')}</section>` : '<section class="tom"><h2>Inga jämförbara tider</h2><p>Valda filter saknar strukturerade tider.</p></section>';
+    const model = buildRecordViewModel(rows, { expandedGroups: this.expandedRecordGroups });
+    const resultRow = item => `<div class="v2-record-row"><b>${item.rank || '—'}</b><time>${escapeHtml(recordTimeLabel(item))}${item.timeStatusLabel && item.timeStatus !== 'fusk' ? `<small>${escapeHtml(item.timeStatusLabel)}</small>` : ''}</time><span>${this.participantsFor(item.result).map(person => this.personLink(person)).join(', ') || '—'}<small>${this.boatLink(item.result)} · ${item.result.year}</small></span></div>`;
+    const sections = model.sections.map(section => `<section class="v2-record-course" data-course="${escapeHtml(section.courseCode)}"><header><p>Resultat per klass</p><h2>${escapeHtml(section.courseName)}</h2></header><div class="v2-record-grid">${section.groups.map(group => `<article class="v2-record-card"><header><div><h3>${escapeHtml(group.className)}</h3><span>${group.total} resultat</span></div></header>${group.items.map(resultRow).join('')}${group.total > model.limit ? `<button class="v2-record-toggle" type="button" data-v2-record-toggle="${escapeHtml(group.key)}" aria-expanded="${group.expanded}">${group.expanded ? 'Visa topp 10' : `Visa alla ${group.total}`}</button>` : ''}</article>`).join('')}</div></section>`).join('');
+    const ungrouped = model.ungrouped.length ? `<details class="v2-record-review"><summary><b>${model.ungrouped.length} resultat saknar fullständig bana eller klass</b><span>De är inte bortfiltrerade utan visas här eftersom de inte kan placeras i en bestämd topplista.</span></summary><div class="v2-record-review-list">${model.ungrouped.map(item => `<article><strong>${escapeHtml(item.reasonLabel)}</strong><span>${item.result.year} · ${escapeHtml(item.result.class_name || item.result.class_raw || 'Okänd klass')} · ${this.participantsFor(item.result).map(person => this.personLink(person)).join(', ') || '—'}</span><span>${this.boatLink(item.result)}</span><time>${escapeHtml(recordTimeLabel(item))}${item.timeStatusLabel && item.timeStatus !== 'fusk' ? ` · ${escapeHtml(item.timeStatusLabel)}` : ''}</time></article>`).join('')}</div></details>` : '';
+    const summary = `<header class="v2-record-summary"><div><p class="overrad">Topptider</p><h2>Alla resultat visas inom sin bana och klass</h2></div><p><b>${model.total}</b> resultat totalt. ${model.rankable} har en numerisk tid och rangordnas; ${model.withoutNumericTime} saknar exakt numerisk tid men visas ändå. Varje klass visar först tio rader; välj <i>Visa alla</i> för hela klassen.${model.derivedTimes ? ` ${model.derivedTimes} tydliga tider läses tillfälligt direkt från tidsfältet och är förberedda för nästa masterrevision.` : ''}</p></header>`;
+    this.view.innerHTML = sections ? `<section class="v2-records">${summary}${sections}${ungrouped}</section>` : `<section class="v2-records">${summary}<section class="tom"><h2>Inga klassindelade resultat</h2><p>Valda filter saknar resultat med både bana och strukturerad klass.</p></section>${ungrouped}</section>`;
   }
 
   profileEntries(rows) {
