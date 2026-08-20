@@ -351,7 +351,7 @@ async function setupRevisionStorage(app = 'boats') {
     id: 'membership:bo',
     person_ref: { master: 'people', entity_type: 'person', entity_id: 'bo' },
     membership_level: 'senior',
-    historical_club_names: [{ name: 'Broder Bo-Alexander', release_ids: ['matrikel-1987'] }],
+    historical_club_names: [{ name: 'Broder Test-Alexander', release_ids: ['matrikel-1987'] }],
   }];
   assertWriterDomainFields(seniorWithoutClubName);
   const invalidHistoricalClubName = structuredClone(seniorWithoutClubName);
@@ -380,11 +380,11 @@ async function setupRevisionStorage(app = 'boats') {
 
   const batregister = createEmptyMaster('batregister');
   batregister.data.boats = [{
-    id: 'höstsol',
-    display_name: 'Höstsol',
+    id: 'testbaten',
+    display_name: 'Testbåten',
     category: 'motorboat',
     vessel_designation: 'M/S',
-    vessel_type: 'Söderöra-snipa',
+    vessel_type: 'Skärgårdssnipa',
   }];
   batregister.data.identity_redirects = [];
   assertWriterDomainFields(batregister);

@@ -11,6 +11,16 @@ export const CATEGORY_LABELS = Object.freeze({
   other: 'Övrigt',
 });
 
+export const VESSEL_DESIGNATIONS = Object.freeze([
+  'M/S',
+  'S/S',
+  'R/S',
+  'M/Y',
+  'M/F',
+  'b/s',
+  'r/j',
+]);
+
 export const EVENT_LABELS = Object.freeze({
   observed: 'Belagd',
   manufactured: 'Tillverkad',
@@ -27,6 +37,12 @@ export const EVENT_LABELS = Object.freeze({
 const OWNER_EVENTS = new Set(['ownership', 'purchased', 'sold', 'registered']);
 const LEGACY_SPEC_LABELS = Object.freeze({ category: 'Kategori', model: 'Modell', construction_year: 'Tillverkad', sail_number: 'Segelnummer', length_m: 'Längd', width_m: 'Bredd', draft_m: 'Djupgående', weight_kg: 'Vikt', displacement_t: 'Deplacement', construction_material: 'Material', engine_brand: 'Motormärke', engine_model: 'Motormodell', engine_count: 'Antal motorer', horsepower: 'Motorstyrka', engine_power_kw: 'Motoreffekt', fuel: 'Drivmedel', propulsion: 'Framdrivning', color: 'Färg', race_class: 'Tävlingsklass' });
 const option = (value, label, selected = false) => `<option value="${escapeAttribute(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+const vesselDesignationOptions = current => {
+  const values = current && !VESSEL_DESIGNATIONS.includes(current) ? [current, ...VESSEL_DESIGNATIONS] : VESSEL_DESIGNATIONS;
+  return `${option('', 'Ej angiven', !current)}${values.map(value => option(value, value, current === value)).join('')}`;
+};
+const vesselDesignation = boat => boat?.vessel_designation || (VESSEL_DESIGNATIONS.includes(boat?.vessel_type) ? boat.vessel_type : '');
+const vesselType = boat => (boat?.vessel_designation || !VESSEL_DESIGNATIONS.includes(boat?.vessel_type)) ? (boat?.vessel_type || '') : '';
 
 function numeric(value) {
   if (value === '' || value === null || value === undefined) return null;
@@ -53,8 +69,9 @@ function boatSearch(runtime, boat) {
   const legacy = runtime.legacySummary(boat);
   return normalize([
     boat.display_name,
+    vesselDesignation(boat),
     boat.model,
-    boat.vessel_type,
+    vesselType(boat),
     boat.material,
     boat.notes,
     CATEGORY_LABELS[boat.category],
@@ -226,7 +243,7 @@ export class BatregisterV2Controller {
       const owners = ownerNames(this.runtime, boat);
       const legacy = this.runtime.legacySummary(boat);
       const legacyOwners = legacy?.ownerships.filter(row => !row.status || row.status === 'accepted').map(row => legacyOwner(this.runtime, row)).filter(Boolean) || [];
-      const summary = [CATEGORY_LABELS[boat.category] || CATEGORY_LABELS[legacy?.effectiveSpecs.category], boat.model || legacy?.effectiveSpecs.model || legacy?.base?.modell].filter(Boolean);
+      const summary = [vesselDesignation(boat), CATEGORY_LABELS[boat.category] || CATEGORY_LABELS[legacy?.effectiveSpecs.category], vesselType(boat), boat.model || legacy?.effectiveSpecs.model || legacy?.base?.modell].filter(Boolean);
       return `<button class="boat-card" type="button" data-v2-boat="${escapeAttribute(boat.id)}">${this.renderImage(boat)}<span class="boat-copy"><h3>${escapeHtml(boat.display_name)}</h3>${summary.length ? `<p>${escapeHtml(summary.join(' · '))}</p>` : ''}${owners || legacyOwners.length ? `<p>${escapeHtml(owners || [...new Set(legacyOwners)].join(', '))}</p>` : ''}<span class="chips">${legacy ? '<span class="chip">Äldre struktur finns</span>' : ''}${boat.needs_review || legacy?.reviews.length ? '<span class="chip warn">Se över</span>' : ''}</span></span></button>`;
     }).join('')}</div>${boats.length ? '' : '<p class="empty-row">Inga båtar matchar filtren.</p>'}</section>` : '<section class="empty"><h2>Ingen Båtmaster på den här enheten ännu</h2><p>Anslut Dropbox för att läsa generation 2.</p></section>';
     this.hydrateImages(this.content);
@@ -239,8 +256,9 @@ export class BatregisterV2Controller {
     const events = this.runtime.eventsFor(boat);
     const details = [
       valueLine('Kategori', CATEGORY_LABELS[boat.category]),
+      valueLine('Fartygsbeteckning', vesselDesignation(boat)),
+      valueLine('Båttyp', vesselType(boat)),
       valueLine('Modell', boat.model),
-      valueLine('Båttyp/beteckning', boat.vessel_type),
       valueLine('Material', boat.material),
       valueLine('Mått', dimensionText(boat.dimensions)),
       valueLine('Motor', engineText(boat.engine)),
@@ -280,7 +298,7 @@ export class BatregisterV2Controller {
     const dialog = document.createElement('dialog');
     dialog.className = 'v2-editor';
     dialog.dataset.boatId = boat?.id || `boat-${crypto.randomUUID()}`;
-    dialog.innerHTML = `<form method="dialog"><header><div><p class="eyebrow dark">${boat ? 'Båt' : 'Ny båt'}</p><h2>${boat ? 'Redigera båten' : 'Lägg till båt'}</h2></div><button type="button" data-v2-close-editor aria-label="Stäng">×</button></header><div class="v2-editor-grid"><label><span>Namn</span><input data-v2-display-name required value="${escapeAttribute(boat?.display_name || '')}"></label><label><span>Kategori</span><select data-v2-category>${option('', 'Ej angiven', !boat?.category)}${Object.entries(CATEGORY_LABELS).map(([value, label]) => option(value, label, boat?.category === value)).join('')}</select></label><label><span>Modell</span><input data-v2-model value="${escapeAttribute(boat?.model || '')}"></label><label><span>Båttyp/beteckning</span><input data-v2-vessel-type value="${escapeAttribute(boat?.vessel_type || '')}"></label><label><span>Material</span><input data-v2-material value="${escapeAttribute(boat?.material || '')}"></label><label><span>Längd, m</span><input data-v2-length type="number" step="0.01" value="${escapeAttribute(dimensions.length_m ?? '')}"></label><label><span>Bredd, m</span><input data-v2-width type="number" step="0.01" value="${escapeAttribute(dimensions.width_m ?? '')}"></label><label><span>Djupgående, m</span><input data-v2-draft type="number" step="0.01" value="${escapeAttribute(dimensions.draft_m ?? '')}"></label><label><span>Vikt, kg</span><input data-v2-weight type="number" step="0.1" value="${escapeAttribute(dimensions.weight_kg ?? '')}"></label><label><span>Motormärke</span><input data-v2-engine-brand value="${escapeAttribute(engine.brand || '')}"></label><label><span>Motormodell</span><input data-v2-engine-model value="${escapeAttribute(engine.model || '')}"></label><label><span>Hästkrafter</span><input data-v2-horsepower type="number" step="0.1" value="${escapeAttribute(engine.horsepower ?? '')}"></label><label><span>Effekt, kW</span><input data-v2-power-kw type="number" step="0.1" value="${escapeAttribute(engine.power_kw ?? '')}"></label><label><span>Bränsle/drivning</span><input data-v2-fuel value="${escapeAttribute(engine.fuel || '')}"></label><label class="v2-editor-wide"><span>Not</span><textarea data-v2-notes>${escapeHtml(boat?.notes || '')}</textarea></label></div><label class="v2-review-check"><input data-v2-needs-review type="checkbox"${boat?.needs_review ? ' checked' : ''}><span>Det finns något jag vill se över senare</span></label><label class="v2-review-comment"><span>Kort granskningsnot</span><input data-v2-review-comment value="${escapeAttribute(boat?.review_comment || '')}"></label><footer><button type="button" data-v2-close-editor>Stäng</button><button class="primary" type="submit">Spara</button></footer></form>`;
+    dialog.innerHTML = `<form method="dialog"><header><div><p class="eyebrow dark">${boat ? 'Båt' : 'Ny båt'}</p><h2>${boat ? 'Redigera båten' : 'Lägg till båt'}</h2></div><button type="button" data-v2-close-editor aria-label="Stäng">×</button></header><div class="v2-editor-grid"><label><span>Namn</span><input data-v2-display-name required value="${escapeAttribute(boat?.display_name || '')}"></label><label><span>Kategori</span><select data-v2-category>${option('', 'Ej angiven', !boat?.category)}${Object.entries(CATEGORY_LABELS).map(([value, label]) => option(value, label, boat?.category === value)).join('')}</select></label><label><span>Fartygsbeteckning</span><select data-v2-vessel-designation>${vesselDesignationOptions(vesselDesignation(boat))}</select></label><label><span>Båttyp</span><input data-v2-vessel-type value="${escapeAttribute(vesselType(boat))}" placeholder="t.ex. Söderöra-snipa"></label><label><span>Modell</span><input data-v2-model value="${escapeAttribute(boat?.model || '')}"></label><label><span>Material</span><input data-v2-material value="${escapeAttribute(boat?.material || '')}"></label><label><span>Längd, m</span><input data-v2-length type="number" step="0.01" value="${escapeAttribute(dimensions.length_m ?? '')}"></label><label><span>Bredd, m</span><input data-v2-width type="number" step="0.01" value="${escapeAttribute(dimensions.width_m ?? '')}"></label><label><span>Djupgående, m</span><input data-v2-draft type="number" step="0.01" value="${escapeAttribute(dimensions.draft_m ?? '')}"></label><label><span>Vikt, kg</span><input data-v2-weight type="number" step="0.1" value="${escapeAttribute(dimensions.weight_kg ?? '')}"></label><label><span>Motormärke</span><input data-v2-engine-brand value="${escapeAttribute(engine.brand || '')}"></label><label><span>Motormodell</span><input data-v2-engine-model value="${escapeAttribute(engine.model || '')}"></label><label><span>Hästkrafter</span><input data-v2-horsepower type="number" step="0.1" value="${escapeAttribute(engine.horsepower ?? '')}"></label><label><span>Effekt, kW</span><input data-v2-power-kw type="number" step="0.1" value="${escapeAttribute(engine.power_kw ?? '')}"></label><label><span>Bränsle/drivning</span><input data-v2-fuel value="${escapeAttribute(engine.fuel || '')}"></label><label class="v2-editor-wide"><span>Not</span><textarea data-v2-notes>${escapeHtml(boat?.notes || '')}</textarea></label></div><label class="v2-review-check"><input data-v2-needs-review type="checkbox"${boat?.needs_review ? ' checked' : ''}><span>Det finns något jag vill se över senare</span></label><label class="v2-review-comment"><span>Kort granskningsnot</span><input data-v2-review-comment value="${escapeAttribute(boat?.review_comment || '')}"></label><footer><button type="button" data-v2-close-editor>Stäng</button><button class="primary" type="submit">Spara</button></footer></form>`;
     this.installDialog(dialog, event => this.saveBoatEditor(event, boat));
   }
 
@@ -337,6 +355,7 @@ export class BatregisterV2Controller {
       display_name: name,
       base_name_id: existing?.base_name_id || dialog.dataset.boatId,
       category: dialog.querySelector('[data-v2-category]').value || null,
+      vessel_designation: dialog.querySelector('[data-v2-vessel-designation]').value || null,
       model: dialog.querySelector('[data-v2-model]').value.trim() || null,
       vessel_type: dialog.querySelector('[data-v2-vessel-type]').value.trim() || null,
       material: dialog.querySelector('[data-v2-material]').value.trim() || null,
