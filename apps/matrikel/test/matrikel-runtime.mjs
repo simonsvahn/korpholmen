@@ -52,13 +52,14 @@ await addMaster(files, {
   revision: 3,
   data: { boats: [{ id: 'boat-one', display_name: 'Testbåten', category: 'rowboat', events: [] }] },
 });
-await addMaster(files, {
+const matrikel = await addMaster(files, {
   root: '/matrikel-generation2',
   app: 'matrikel',
   revision: 10,
   pointerFields: {
     person_master_revision: people.pointer.master_revision,
     person_master_sha256: people.masterHash,
+    manifest_relative_path: 'revision-10/manifest.json',
   },
   data: {
     memberships: [{
@@ -90,6 +91,68 @@ await addMaster(files, {
   },
 });
 
+const sourceArchive = {
+  ...createEmptyMaster('matrikel'),
+  master_revision: 8,
+  data: {
+    source_rows: [
+      {
+        id: 'source-row:member:one',
+        release_id: 'release-one',
+        source_document_id: 'source-document:release-one',
+        kind: 'person',
+        order: 1,
+        source_page: 1,
+        raw_text: '1953   Person Ett',
+        retained: true,
+      },
+      {
+        id: 'source-row:boat:one',
+        release_id: 'release-one',
+        source_document_id: 'source-document:release-one',
+        kind: 'boat',
+        order: 1,
+        source_page: 1,
+        raw_text: 'M/S Testbåten (1962)',
+        retained: true,
+      },
+      {
+        id: 'source-row:archived',
+        release_id: 'release-one',
+        kind: 'person',
+        order: 2,
+        raw_text: 'Arkiverad variant',
+        retained: false,
+        lifecycle_status: 'archived_variant',
+      },
+    ],
+    source_layout_rows: [{
+      id: 'source-layout-row:one',
+      release_id: 'release-one',
+      source_document_id: 'source-document:release-one',
+      order: 1,
+      source_page: 1,
+      kind: 'member',
+      member_source_row_id: 'source-row:member:one',
+      boat_source_row_ids: ['source-row:boat:one'],
+      retained: true,
+    }],
+  },
+};
+const sourceArchiveBytes = encoder.encode(JSON.stringify(sourceArchive));
+const sourceArchiveHash = await sha256(sourceArchiveBytes);
+files.set('/matrikel-generation2/revision-8/master.json', sourceArchiveBytes);
+files.set('/matrikel-generation2/revision-10/manifest.json', encoder.encode(JSON.stringify({
+  schema_version: 1,
+  app: 'matrikel',
+  master_revision: matrikel.master.master_revision,
+  master_sha256: matrikel.masterHash,
+  source_archive: {
+    master_relative_path: 'revision-8/master.json',
+    master_sha256: sourceArchiveHash,
+  },
+})));
+
 const transport = {
   getBytes: async path => {
     const bytes = files.get(path);
@@ -106,9 +169,15 @@ assert.equal(synced.matrikelRevision, 10);
 assert.equal(synced.peopleRevision, 2);
 assert.equal(synced.boatRevision, 3);
 assert.equal(synced.writable, false);
+assert.equal(synced.sourceRows, 2);
+assert.equal(synced.sourceLayoutRows, 1);
 assert.equal(runtime.repository.listEntities('membership').length, 1);
 assert.equal(runtime.repository.listEntities('person-occurrence').length, 1);
 assert.equal(runtime.repository.listEntities('boat-occurrence').length, 1);
+assert.equal(runtime.repository.listEntities('source-row').length, 2);
+assert.equal(runtime.repository.listEntities('source-layout-row').length, 1);
+assert.deepEqual(runtime.repository.getEntity('source-layout-row', 'source-layout-row:one').fields.boat_source_row_ids, ['source-row:boat:one']);
+assert.equal(runtime.repository.getEntity('source-row', 'source-row:boat:one').fields.raw_text, 'M/S Testbåten (1962)');
 assert.equal(runtime.repository.listEntities('person-ref').length, 2);
 assert.equal(runtime.repository.listEntities('boat-ref').length, 1);
 assert.ok(runtime.personMaster.getEntity('person', 'person-one'));
@@ -116,5 +185,7 @@ assert.ok(runtime.personMaster.getEntity('person', 'person-one'));
 const offline = await createMatrikelActiveRuntime({ store }).init();
 assert.equal(offline.hasData(), true);
 assert.equal(offline.repository.listEntities('membership').length, 1);
+assert.equal(offline.repository.listEntities('source-row').length, 2);
+assert.equal(offline.repository.listEntities('source-layout-row').length, 1);
 assert.equal(offline.repository.getEntity('boat-occurrence', 'boat-occurrence-one').fields.boat_ref.entity_id, 'boat-one');
 console.log('Matrikel V2-runtime: ren master, personer, båtar och offlinecache godkända');

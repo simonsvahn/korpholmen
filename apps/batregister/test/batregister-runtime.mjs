@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { MemoryRemoteTransport, MemoryStore, createClock, createRestoreOperation, createSetOperation } from '../../../packages/core/data-layer.js';
 import { createBatregisterActiveRuntime } from '../src/batregister-runtime.js';
-import { boatTimeLabel, CATEGORY_LABELS, EVENT_LABELS } from '../src/batregister-v2-ui.js';
+import { boatTimeLabel, CATEGORY_LABELS, EVENT_LABELS, VESSEL_DESIGNATIONS } from '../src/batregister-v2-ui.js';
 
 const record = value => ({ updated_at: '2026-08-15T00:00:00.000Z', updated_by: 'test', ...value });
 const people = {
@@ -57,6 +57,7 @@ assert.equal(runtime.resolveParty({ master: 'people', entity_type: 'family_unit'
 assert.deepEqual(runtime.partyOptions().map(row => row.label), ['Familjen Test', 'Testperson']);
 assert.equal(boatTimeLabel({ kind: 'period', start_min: 1970, end_max: 1979 }), '1970–1979');
 assert.equal(CATEGORY_LABELS.rowboat, 'Rodbåt');
+assert.deepEqual(VESSEL_DESIGNATIONS.slice(0, 5), ['M/S', 'S/S', 'R/S', 'M/Y', 'M/F']);
 assert.equal(EVENT_LABELS.registered, 'Inregistrerad');
 
 const legacyClock = createClock('legacy-supplement-test', () => 1_786_000_000_000);

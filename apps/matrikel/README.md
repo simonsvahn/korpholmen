@@ -41,6 +41,11 @@ rullbar tidsaxel. Tom ruta betyder alltid »inte observerad«, inte utträde.
 - osäkra träffar ligger kvar i granskningskön;
 - generation 1:s ändringar finns oföränderliga under `/klubbhistorik/ops`;
 - generation 2:s aktiva master ligger under `/matrikel-generation2/`;
+- den rena skrivmastern innehåller bara vardagsfälten; **Som källan
+  skrevs** läser det kontrollsummerade `source_archive` som anges i den
+  aktiva revisionens manifest. Appen cachelagrar bara de 2 092 källrader som
+  används av de 1 738 aktiva layoutraderna. Om källarkivet saknas får appen
+  aldrig para separata person- och båtlistor efter radnummer;
 - publiceringspaketet innehåller endast det datafria appskalet.
 
 ## Privat master
