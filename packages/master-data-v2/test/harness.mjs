@@ -347,8 +347,16 @@ async function setupRevisionStorage(app = 'boats') {
   matrikel.data.memberships = [{ id: 'membership:anna', person_ref: { master: 'people', entity_type: 'person', entity_id: 'anna' }, membership_level: 'junior' }];
   assertWriterDomainFields(matrikel);
   const seniorWithoutClubName = createEmptyMaster('matrikel');
-  seniorWithoutClubName.data.memberships = [{ id: 'membership:bo', person_ref: { master: 'people', entity_type: 'person', entity_id: 'bo' }, membership_level: 'senior' }];
+  seniorWithoutClubName.data.memberships = [{
+    id: 'membership:bo',
+    person_ref: { master: 'people', entity_type: 'person', entity_id: 'bo' },
+    membership_level: 'senior',
+    historical_club_names: [{ name: 'Broder Test-Alexander', release_ids: ['matrikel-1987'] }],
+  }];
   assertWriterDomainFields(seniorWithoutClubName);
+  const invalidHistoricalClubName = structuredClone(seniorWithoutClubName);
+  invalidHistoricalClubName.data.memberships[0].historical_club_names = [{ name: '', release_ids: ['matrikel-1987'] }];
+  assert.throws(() => assertWriterDomainFields(invalidHistoricalClubName), /historical_club_names/);
   const duplicateMembership = structuredClone(seniorWithoutClubName);
   duplicateMembership.data.memberships.push({ id: 'membership:bo-2', person_ref: { master: 'people', entity_type: 'person', entity_id: 'bo' }, membership_level: 'senior' });
   assert.throws(() => assertWriterDomainFields(duplicateMembership), /Dubblerad aktiv medlemsrad/);
@@ -369,6 +377,19 @@ async function setupRevisionStorage(app = 'boats') {
     related_properties: [], source_refs: [],
   }];
   assertWriterDomainFields(fastigheter);
+
+  const batregister = createEmptyMaster('batregister');
+  batregister.data.boats = [{
+    id: 'testbaten',
+    display_name: 'Testbåten',
+    category: 'motorboat',
+    vessel_designation: 'M/S',
+    vessel_type: 'Skärgårdssnipa',
+  }];
+  batregister.data.identity_redirects = [];
+  assertWriterDomainFields(batregister);
+  batregister.data.boats[0].vessel_designation = 17;
+  assert.throws(() => assertWriterDomainFields(batregister), /vessel_designation måste vara text/);
 }
 
 process.stdout.write('master-data-v2: 14 testgrupper godkända\n');

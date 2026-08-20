@@ -261,6 +261,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+.historiskt-klubbnamn {
+  display: block;
+  margin-top: .16rem;
+  color: var(--muted, #6f6a60);
+  font-size: .76em;
+  font-style: italic;
+  white-space: normal;
+}
+
 .personlivssynk {
   margin: 0 0 .75rem;
   padding: .7rem .85rem;

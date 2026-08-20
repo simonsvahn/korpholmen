@@ -16,7 +16,7 @@ const contract = collections => Object.freeze(Object.fromEntries(
 ));
 
 export const MATRIKEL_WRITER_CONTRACT = contract({
-  memberships: ['person_ref', 'membership_level', 'club_name', 'induction_year', 'membership_form', 'participation', 'membership_ended', 'membership_end_decision_id', 'source_refs'],
+  memberships: ['person_ref', 'membership_level', 'club_name', 'historical_club_names', 'induction_year', 'membership_form', 'participation', 'membership_ended', 'membership_end_decision_id', 'source_refs'],
   releases: ['display_name', 'year', 'as_of', 'release_type', 'is_reconstruction', 'document_ref', 'sort_order'],
   person_occurrences: ['release_id', 'order', 'raw_name', 'person_ref', 'club_name_raw', 'category_raw', 'induction_year', 'birth_year', 'place_raw', 'relation_raw', 'raw_text', 'source_locator'],
   boat_occurrences: ['release_id', 'order', 'raw_name', 'boat_ref', 'registry_year', 'category_raw', 'raw_text', 'source_locator'],
@@ -36,7 +36,7 @@ export const FASTIGHETER_WRITER_CONTRACT = contract({
 });
 
 export const BATREGISTER_WRITER_CONTRACT = contract({
-  boats: ['display_name', 'category', 'model', 'base_name_id', 'events', 'vessel_type', 'dimensions', 'material', 'engine', 'additional_specs', 'images', 'source_ids', 'notes'],
+  boats: ['display_name', 'category', 'vessel_designation', 'vessel_type', 'model', 'base_name_id', 'events', 'dimensions', 'material', 'engine', 'additional_specs', 'images', 'source_ids', 'notes'],
   identity_redirects: ['target_boat_id', 'decision_document'],
 });
 
@@ -74,6 +74,17 @@ function assertMatrikelMembershipRows(rows) {
     if (row.membership_ended !== undefined && row.membership_ended !== true) throw new MasterValidationError(`${label}.membership_ended får endast vara true eller utelämnat`);
     if (row.induction_year !== undefined && (!Number.isSafeInteger(row.induction_year) || row.induction_year < 1900 || row.induction_year > 2200)) throw new MasterValidationError(`${label}.induction_year är ogiltigt`);
     if (row.club_name !== undefined && (typeof row.club_name !== 'string' || !row.club_name.trim())) throw new MasterValidationError(`${label}.club_name måste vara text eller utelämnat`);
+    if (row.historical_club_names !== undefined) {
+      if (!Array.isArray(row.historical_club_names)) throw new MasterValidationError(`${label}.historical_club_names måste vara en lista`);
+      for (const [index, historical] of row.historical_club_names.entries()) {
+        if (!historical || typeof historical !== 'object' || Array.isArray(historical)
+          || typeof historical.name !== 'string' || !historical.name.trim()
+          || !Array.isArray(historical.release_ids)
+          || historical.release_ids.some(id => typeof id !== 'string' || !id.trim())) {
+          throw new MasterValidationError(`${label}.historical_club_names[${index}] är ogiltigt`);
+        }
+      }
+    }
     if (row.source_refs !== undefined && !Array.isArray(row.source_refs)) throw new MasterValidationError(`${label}.source_refs måste vara en lista`);
   }
 }
@@ -187,7 +198,7 @@ function assertBatregisterRows(data) {
     if (typeof row.display_name !== 'string' || !row.display_name.trim()) throw new MasterValidationError(`${label}.display_name saknas`);
     if (row.base_name_id !== undefined && (typeof row.base_name_id !== 'string' || !row.base_name_id.trim())) throw new MasterValidationError(`${label}.base_name_id måste vara text eller utelämnat`);
     if (row.category !== undefined) assertBoatCategory(row.category, `${label}.category`);
-    for (const field of ['model', 'vessel_type', 'material', 'notes']) {
+    for (const field of ['vessel_designation', 'vessel_type', 'model', 'material', 'notes']) {
       if (row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string') throw new MasterValidationError(`${label}.${field} måste vara text`);
     }
     for (const field of ['dimensions', 'engine', 'additional_specs']) {

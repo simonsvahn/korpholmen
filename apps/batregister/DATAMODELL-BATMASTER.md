@@ -63,6 +63,20 @@ ungefärlighet i `qualifiers`; en uppgift som »100/115 hkr« får alltså inte
 godtyckligt bli ett enda numeriskt värde. Två registerkort med olika mått blir
 två observationer och markeras diskret som avvikande i läsvyn.
 
+Båtens sammanfattning skiljer uttryckligen mellan fyra olika uppgifter:
+
+- `category` är den breda kategorin, exempelvis motorbåt eller segelbåt;
+- `vessel_designation` är klubbens strukturerade fartygsbeteckning, exempelvis
+  `M/S`, `S/S` eller `R/S`;
+- `vessel_type` är faktisk båttyp, exempelvis Söderöra-snipa, Blekingeeka,
+  Örnjolle eller K1;
+- `model` är fabrikatets eller tillverkarens modellbeteckning, exempelvis
+  Buster LX.
+
+Fartygsbeteckningen får därför aldrig användas som ersättning för båttyp eller
+modell. Källans exakta skrivning i matriklar och andra dokument bevaras fortsatt
+i respektive källmaster även när sammanfattningen normaliseras strukturerat.
+
 Ett OCR-, avskrifts- eller läsfel är **inte** en källuppgift. När originalet
 kontrolleras rättas därför samma källobservation. Det fellästa värdet ska inte
 finnas kvar som konkurrerande sakdata eller visas som en motsägelse; den
